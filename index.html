@@ -187,8 +187,9 @@ let fStatus = "all", fCat = "all", fRisk = "all", fTrigUsed = "unused";
 /* ---------------- api ---------------- */
 async function api(path, opts={}) {
   const r = await fetch(URL_ + "/rest/v1/" + path, { headers:H, ...opts });
-  if (!r.ok) throw new Error(await r.text());
-  return r.status === 204 ? null : r.json();
+  const body = await r.text();                 // writes come back empty, reads do not
+  if (!r.ok) throw new Error(body || r.status);
+  return body ? JSON.parse(body) : null;
 }
 function showErr(m){ document.getElementById("err").innerHTML = `<div class="err">${m}</div>`; }
 
