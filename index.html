@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>fakesniff · ideas</title>
+<style>
+  :root{
+    --bg:#0f0f0e; --panel:#161615; --line:#262523; --ink:#ece7dd; --mut:#8b8478;
+    --green:#77c566; --warn:#d8a24a; --bad:#c9564a; --paper:#ebe5d8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{padding-bottom:80px}
+  a{color:inherit}
+
+  /* ---------- name gate ---------- */
+  #gate{position:fixed; inset:0; background:var(--bg); z-index:60;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:24px;}
+  #gate .mark{font-family:Georgia,serif; font-style:italic; font-size:34px}
+  #gate p{color:var(--mut); margin:0; font-size:15px}
+  #gate .who{display:flex; gap:12px; flex-wrap:wrap; justify-content:center}
+  #gate button{background:transparent; color:var(--ink); border:1px solid var(--line);
+    padding:14px 26px; border-radius:2px; font-size:16px; cursor:pointer; letter-spacing:.02em}
+  #gate button:hover{border-color:var(--green); color:var(--green)}
+
+  /* ---------- header ---------- */
+  header{position:sticky; top:0; z-index:40; background:rgba(15,15,14,.96);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
+  .bar{display:flex; align-items:center; gap:14px; padding:13px 16px; max-width:1100px; margin:0 auto}
+  .mark{font-family:Georgia,serif; font-style:italic; font-size:21px; line-height:1}
+  .mark small{font-style:normal; font-family:inherit; font-size:10px; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--mut); display:block; margin-top:3px}
+  .me{margin-left:auto; font-size:12px; color:var(--mut); display:flex; align-items:center; gap:8px}
+  .me b{color:var(--ink); font-weight:600}
+  .me button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:11px;
+    text-decoration:underline; padding:0}
+
+  nav{display:flex; gap:2px; padding:0 12px; max-width:1100px; margin:0 auto; overflow-x:auto}
+  nav button{background:none; border:none; border-bottom:2px solid transparent; color:var(--mut);
+    padding:11px 12px; font-size:13px; cursor:pointer; white-space:nowrap;
+    text-transform:uppercase; letter-spacing:.1em; font-weight:700}
+  nav button.on{color:var(--ink); border-bottom-color:var(--green)}
+  nav .count{color:var(--mut); font-weight:400; margin-left:5px}
+
+  main{max-width:1100px; margin:0 auto; padding:16px}
+
+  /* ---------- filters ---------- */
+  .filters{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:16px}
+  .chip{background:transparent; border:1px solid var(--line); color:var(--mut);
+    padding:6px 12px; border-radius:20px; font-size:12.5px; cursor:pointer}
+  .chip.on{border-color:var(--green); color:var(--green)}
+
+  /* ---------- idea cards ---------- */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:3px;
+    padding:16px; cursor:pointer; position:relative; transition:border-color .12s}
+  .card:hover{border-color:#3a3835}
+  .card .line{font-size:19px; font-weight:700; line-height:1.25; letter-spacing:-.01em}
+  .card .concept{color:var(--mut); font-size:13.5px; margin-top:8px; line-height:1.45}
+  .card .foot{display:flex; align-items:center; gap:8px; margin-top:13px; flex-wrap:wrap}
+  .tag{font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; padding:3px 8px;
+    border:1px solid var(--line); border-radius:2px; color:var(--mut)}
+  .tag.status{border-color:#3a3835; color:var(--ink)}
+  .tag.risk-check{border-color:var(--warn); color:var(--warn)}
+  .tag.risk-avoid{border-color:var(--bad); color:var(--bad)}
+  .by{margin-left:auto; font-size:11px; color:var(--mut)}
+
+  /* ---------- detail ---------- */
+  #detail{position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.72);
+    display:none; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto}
+  #detail.open{display:flex}
+  .sheet{background:var(--panel); border:1px solid var(--line); max-width:760px; width:100%;
+    border-radius:4px; padding:24px; margin:auto}
+  .sheet .line{font-size:27px; font-weight:800; line-height:1.2}
+  .sheet .concept{color:var(--mut); margin:10px 0 0; line-height:1.5}
+  .sheet .src{margin-top:14px; font-size:12.5px; color:var(--mut); line-height:1.5}
+  .sheet .src a{color:var(--green); word-break:break-all}
+  .shirts{display:flex; gap:14px; margin:22px 0; flex-wrap:wrap}
+  .shirtbox{flex:1; min-width:200px; text-align:center}
+  .shirtbox canvas{width:100%; height:300px; display:block; background:#0b0b0a; border:1px solid var(--line)}
+  .shirtbox span{font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:var(--mut);
+    display:block; margin-top:7px}
+  .setline{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+  .setline button{background:transparent; border:1px solid var(--line); color:var(--mut);
+    padding:8px 13px; font-size:12.5px; cursor:pointer; border-radius:2px}
+  .setline button:hover{border-color:var(--ink); color:var(--ink)}
+  .setline button.on{border-color:var(--green); color:var(--green)}
+  .lbl{font-size:10.5px; text-transform:uppercase; letter-spacing:.14em; color:var(--mut); margin:18px 0 0}
+  .close{position:absolute; top:14px; right:18px; background:none; border:none; color:var(--mut);
+    font-size:26px; cursor:pointer; line-height:1}
+
+  /* ---------- triggers ---------- */
+  .trig{border-bottom:1px solid var(--line); padding:13px 2px; display:flex; gap:12px; align-items:flex-start}
+  .trig .t{flex:1; font-size:14.5px; line-height:1.4}
+  .trig .s{font-size:11px; color:var(--mut); margin-top:5px}
+  .trig .s a{color:var(--green)}
+  .trig button{background:transparent; border:1px solid var(--line); color:var(--mut);
+    padding:6px 11px; font-size:11.5px; cursor:pointer; white-space:nowrap; border-radius:2px}
+  .trig button:hover{border-color:var(--green); color:var(--green)}
+  .trig.used{opacity:.4}
+
+  /* ---------- activity ---------- */
+  .act{border-bottom:1px solid var(--line); padding:11px 2px; font-size:13.5px; color:var(--mut)}
+  .act b{color:var(--ink); font-weight:600}
+  .act span{float:right; font-size:11px}
+
+  /* ---------- add ---------- */
+  #add{position:fixed; right:18px; bottom:18px; z-index:45; background:var(--green); color:#0f0f0e;
+    border:none; width:54px; height:54px; border-radius:50%; font-size:28px; cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.45); line-height:1}
+  form.new{display:grid; gap:11px; margin-top:6px}
+  form.new input, form.new textarea, form.new select{
+    background:#0f0f0e; border:1px solid var(--line); color:var(--ink); padding:11px 12px;
+    font-size:15px; border-radius:2px; font-family:inherit; width:100%}
+  form.new textarea{min-height:70px; resize:vertical}
+  form.new .row{display:flex; gap:10px}
+  form.new .row>*{flex:1}
+  form.new button{background:var(--green); color:#0f0f0e; border:none; padding:13px;
+    font-size:15px; font-weight:700; cursor:pointer; border-radius:2px}
+
+  .empty{color:var(--mut); text-align:center; padding:50px 20px; font-size:14.5px}
+  .err{background:#2a1a17; border:1px solid var(--bad); color:#e8a79e; padding:10px 13px;
+    font-size:13px; margin-bottom:14px; border-radius:2px}
+  @media (max-width:560px){ .sheet{padding:18px} .sheet .line{font-size:22px} }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="mark">fakesniff.</div>
+  <p>who's this?</p>
+  <div class="who">
+    <button data-who="Salman">Salman</button>
+    <button data-who="Emiel">Emiel</button>
+    <button data-who="Marco">Marco</button>
+  </div>
+</div>
+
+<header>
+  <div class="bar">
+    <div class="mark">fakesniff.<small>ideas</small></div>
+    <div class="me"><span>you're <b id="whoami"></b></span><button id="switch">switch</button></div>
+  </div>
+  <nav>
+    <button data-tab="ideas" class="on">Ideas <span class="count" id="c-ideas"></span></button>
+    <button data-tab="triggers">Raw material <span class="count" id="c-trig"></span></button>
+    <button data-tab="activity">Activity</button>
+  </nav>
+</header>
+
+<main>
+  <div id="err"></div>
+
+  <section id="tab-ideas">
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="ideas"></div>
+  </section>
+
+  <section id="tab-triggers" hidden>
+    <div class="filters" id="tfilters"></div>
+    <div id="triggers"></div>
+  </section>
+
+  <section id="tab-activity" hidden>
+    <div id="activity"></div>
+  </section>
+</main>
+
+<button id="add" title="new idea">+</button>
+
+<div id="detail"><div class="sheet" id="sheet"></div></div>
+
+<script type="module">
+const URL_ = "https://kayxejofqyxoqlberrgw.supabase.co";
+const KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtheXhlam9mcXl4b3FsYmVycmd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMDg0NDQsImV4cCI6MjEwMTg4NDQ0NH0.LFTOsUpdi7Bu9kibW1qYWYcRSLGnF-mWtDlNMYiJe2E";
+const H = { apikey:KEY, Authorization:"Bearer "+KEY, "Content-Type":"application/json" };
+
+const STATUSES = ["new","interesting","needs work","develop","rejected","in production"];
+const CATS = ["music","film","icons","social","tech","sport","travel","art","news","youth","other"];
+
+let me = localStorage.getItem("fs_who") || "";
+let ideas = [], triggers = [], activity = [];
+let fStatus = "all", fCat = "all", fRisk = "all", fTrigUsed = "unused";
+
+/* ---------------- api ---------------- */
+async function api(path, opts={}) {
+  const r = await fetch(URL_ + "/rest/v1/" + path, { headers:H, ...opts });
+  if (!r.ok) throw new Error(await r.text());
+  return r.status === 204 ? null : r.json();
+}
+function showErr(m){ document.getElementById("err").innerHTML = `<div class="err">${m}</div>`; }
+
+async function load(){
+  try{
+    [ideas, triggers, activity] = await Promise.all([
+      api("ideas?select=*&order=id.desc"),
+      api("triggers?select=*&order=id.desc&limit=400"),
+      api("activity?select=*&order=at.desc&limit=60"),
+    ]);
+    document.getElementById("err").innerHTML = "";
+    render();
+  }catch(e){ showErr("could not reach the database. " + e.message.slice(0,120)); }
+}
+
+async function log(what, idea_id){
+  try{ await api("activity", {method:"POST", body:JSON.stringify([{who:me, what, idea_id}])}); }
+  catch(e){}
+}
+
+/* ---------------- shirt preview ---------------- */
+function wrap(ctx, text, max){
+  const out=[]; let line="";
+  for(const w of text.split(/\s+/)){
+    const t = line ? line+" "+w : w;
+    if(ctx.measureText(t).width > max && line){ out.push(line); line=w; } else line=t;
+  }
+  if(line) out.push(line); return out;
+}
+function drawShirt(cv, line, sub, mode){
+  const C = mode==="cream"
+    ? {body:"#ebe5d8", ink:"#17140f", sub:"#6c6559", seam:"#ded7c7"}
+    : {body:"#141414", ink:"#ece7dd", sub:"#8b8478", seam:"#0b0b0b"};
+  const dpr = devicePixelRatio||1, w = cv.clientWidth||260, h = cv.clientHeight||300;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const x = cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+
+  const cx=w/2, shoulder=h*.15, hem=h*.93, bl=w*.25, br=w*.75;
+  x.fillStyle=C.body; x.beginPath();
+  x.moveTo(bl,shoulder);
+  x.lineTo(w*.12,h*.30); x.lineTo(w*.19,h*.47); x.lineTo(bl,h*.41);
+  x.lineTo(bl-w*.01,hem);
+  x.quadraticCurveTo(cx,hem+h*.028,br+w*.01,hem);
+  x.lineTo(br,h*.41); x.lineTo(w*.81,h*.47); x.lineTo(w*.88,h*.30);
+  x.lineTo(br,shoulder);
+  x.quadraticCurveTo(cx,h*.225,bl,shoulder);
+  x.closePath(); x.fill();
+  x.strokeStyle=C.seam; x.lineWidth=Math.max(2,w*.008);
+  x.beginPath(); x.moveTo(bl+w*.016,shoulder+h*.007);
+  x.quadraticCurveTo(cx,h*.245,br-w*.016,shoulder+h*.007); x.stroke();
+
+  const max=w*.40; let size=Math.round(w*.070), lines;
+  for(; size>7; size--){
+    x.font=`800 ${size}px "Arial Narrow","Helvetica Neue",Arial,sans-serif`;
+    lines=wrap(x,line,max);
+    if(lines.length*size*1.06 <= h*.20) break;
+  }
+  x.fillStyle=C.ink; x.textAlign="center"; x.textBaseline="top";
+  let y=h*.40;
+  for(const l of lines){ x.fillText(l,cx,y); y+=size*1.06; }
+  if(sub){
+    const ss=Math.max(8,Math.round(size*.55));
+    x.font=`italic ${ss}px Georgia,serif`; x.fillStyle=C.sub;
+    for(const l of wrap(x,sub,max)){ x.fillText(l,cx,y+ss*.35); y+=ss*1.25; }
+  }
+  x.font=`italic ${Math.max(7,Math.round(size*.42))}px Georgia,serif`;
+  x.fillStyle=C.sub; x.fillText("fakesniff.",cx,h*.79);
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  document.getElementById("c-ideas").textContent = ideas.length;
+  document.getElementById("c-trig").textContent  = triggers.filter(t=>!t.used).length;
+  renderFilters(); renderIdeas(); renderTriggers(); renderActivity();
+}
+
+function renderFilters(){
+  const counts = {}; STATUSES.forEach(s=> counts[s]=ideas.filter(i=>i.status===s).length);
+  const flagged = ideas.filter(i=>i.risk!=="clean").length;
+  const f = document.getElementById("filters");
+  f.innerHTML =
+    `<button class="chip ${fStatus==="all"?"on":""}" data-s="all">all ${ideas.length}</button>` +
+    STATUSES.filter(s=>counts[s]).map(s=>
+      `<button class="chip ${fStatus===s?"on":""}" data-s="${s}">${s} ${counts[s]}</button>`).join("") +
+    (flagged? `<button class="chip ${fRisk==="flagged"?"on":""}" data-r="flagged">⚑ for the lawyer ${flagged}</button>`:"");
+  f.querySelectorAll("[data-s]").forEach(b=> b.onclick=()=>{ fStatus=b.dataset.s; fRisk="all"; render(); });
+  const rb = f.querySelector("[data-r]");
+  if(rb) rb.onclick=()=>{ fRisk = fRisk==="flagged"?"all":"flagged"; fStatus="all"; render(); };
+}
+
+function visible(){
+  return ideas.filter(i=>
+    (fStatus==="all" || i.status===fStatus) &&
+    (fCat==="all"    || i.category===fCat) &&
+    (fRisk!=="flagged" || i.risk!=="clean"));
+}
+
+function renderIdeas(){
+  const el = document.getElementById("ideas");
+  const list = visible();
+  if(!list.length){ el.innerHTML = `<div class="empty">nothing here</div>`; return; }
+  el.innerHTML = list.map(i=>`
+    <div class="card" data-id="${i.id}">
+      <div class="line">${esc(i.line)}</div>
+      ${i.concept?`<div class="concept">${esc(i.concept)}</div>`:""}
+      <div class="foot">
+        <span class="tag status">${i.status}</span>
+        <span class="tag">${i.category}</span>
+        ${i.risk!=="clean"?`<span class="tag risk-${i.risk}">${i.risk}</span>`:""}
+        ${i.added_by?`<span class="by">${esc(i.added_by)}</span>`:""}
+      </div>
+    </div>`).join("");
+  el.querySelectorAll(".card").forEach(c=> c.onclick=()=> openIdea(+c.dataset.id));
+}
+
+function openIdea(id){
+  const i = ideas.find(x=>x.id===id); if(!i) return;
+  const sheet = document.getElementById("sheet");
+  sheet.innerHTML = `
+    <button class="close">&times;</button>
+    <div class="line">${esc(i.line)}</div>
+    ${i.concept?`<div class="concept">${esc(i.concept)}</div>`:""}
+    <div class="shirts">
+      <div class="shirtbox"><canvas id="sv-b"></canvas><span>black</span></div>
+      <div class="shirtbox"><canvas id="sv-c"></canvas><span>cream</span></div>
+    </div>
+    ${i.sparked_by?`<div class="src">sparked by: ${esc(i.sparked_by)}
+      ${i.source_url?`<br><a href="${esc(i.source_url)}" target="_blank" rel="noopener">${esc(i.source_url)}</a>`:""}</div>`:""}
+    <div class="lbl">status</div>
+    <div class="setline" id="setstatus">
+      ${STATUSES.map(s=>`<button data-v="${s}" class="${i.status===s?"on":""}">${s}</button>`).join("")}
+    </div>
+    <div class="lbl">risk</div>
+    <div class="setline" id="setrisk">
+      ${["clean","check","avoid"].map(r=>`<button data-v="${r}" class="${i.risk===r?"on":""}">${r}</button>`).join("")}
+    </div>
+    <div class="src" style="margin-top:18px">
+      added by ${esc(i.added_by||"—")}${i.updated_by?` · last touched by ${esc(i.updated_by)}`:""}
+    </div>`;
+  document.getElementById("detail").classList.add("open");
+
+  const sub = (i.concept||"").match(/^\(.*\)$/) ? i.concept : "";
+  drawShirt(document.getElementById("sv-b"), i.line, sub, "black");
+  drawShirt(document.getElementById("sv-c"), i.line, sub, "cream");
+
+  sheet.querySelector(".close").onclick = closeDetail;
+  sheet.querySelectorAll("#setstatus button").forEach(b=> b.onclick = async ()=>{
+    await update(i.id, {status:b.dataset.v, updated_by:me});
+    log(`marked "${i.line.slice(0,40)}" as ${b.dataset.v}`, i.id);
+    closeDetail(); await load();
+  });
+  sheet.querySelectorAll("#setrisk button").forEach(b=> b.onclick = async ()=>{
+    await update(i.id, {risk:b.dataset.v, updated_by:me});
+    log(`flagged "${i.line.slice(0,40)}" as ${b.dataset.v}`, i.id);
+    closeDetail(); await load();
+  });
+}
+function closeDetail(){ document.getElementById("detail").classList.remove("open"); }
+
+async function update(id, patch){
+  try{ await api(`ideas?id=eq.${id}`, {method:"PATCH", body:JSON.stringify(patch)}); }
+  catch(e){ showErr("could not save. " + e.message.slice(0,100)); }
+}
+
+function renderTriggers(){
+  const el = document.getElementById("triggers");
+  const tf = document.getElementById("tfilters");
+  const unused = triggers.filter(t=>!t.used).length;
+  tf.innerHTML =
+    `<button class="chip ${fTrigUsed==="unused"?"on":""}" data-t="unused">not used ${unused}</button>
+     <button class="chip ${fTrigUsed==="all"?"on":""}" data-t="all">everything ${triggers.length}</button>`;
+  tf.querySelectorAll("[data-t]").forEach(b=> b.onclick=()=>{ fTrigUsed=b.dataset.t; render(); });
+
+  const list = fTrigUsed==="unused" ? triggers.filter(t=>!t.used) : triggers;
+  el.innerHTML = list.slice(0,150).map(t=>`
+    <div class="trig ${t.used?"used":""}">
+      <div class="t">${esc(t.title)}
+        <div class="s">${esc(t.source)} · ${t.category}
+          ${t.url?` · <a href="${esc(t.url)}" target="_blank" rel="noopener">open</a>`:""}</div>
+      </div>
+      <button data-mk="${t.id}">make an idea</button>
+    </div>`).join("") || `<div class="empty">nothing collected yet</div>`;
+  el.querySelectorAll("[data-mk]").forEach(b=> b.onclick=()=> newIdea(+b.dataset.mk));
+}
+
+function renderActivity(){
+  const el = document.getElementById("activity");
+  el.innerHTML = activity.length ? activity.map(a=>`
+    <div class="act"><b>${esc(a.who)}</b> ${esc(a.what)}
+      <span>${new Date(a.at).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>
+  `).join("") : `<div class="empty">nothing yet</div>`;
+}
+
+/* ---------------- new idea ---------------- */
+function newIdea(triggerId){
+  const t = triggerId ? triggers.find(x=>x.id===triggerId) : null;
+  const sheet = document.getElementById("sheet");
+  sheet.innerHTML = `
+    <button class="close">&times;</button>
+    <div class="line" style="font-size:20px">new idea</div>
+    ${t?`<div class="src" style="margin-top:10px">from: ${esc(t.title)}</div>`:""}
+    <form class="new" id="nf">
+      <input name="line" placeholder="the line that goes on the shirt" required autocomplete="off">
+      <textarea name="concept" placeholder="what you'd see, one sentence"></textarea>
+      <div class="row">
+        <select name="category">${CATS.map(c=>`<option ${t&&t.category===c?"selected":""}>${c}</option>`).join("")}</select>
+        <select name="risk"><option>clean</option><option>check</option><option>avoid</option></select>
+      </div>
+      <button type="submit">save</button>
+    </form>`;
+  document.getElementById("detail").classList.add("open");
+  sheet.querySelector(".close").onclick = closeDetail;
+  sheet.querySelector("#nf").onsubmit = async ev=>{
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const row = {
+      line:f.get("line"), concept:f.get("concept")||"",
+      category:f.get("category"), risk:f.get("risk"), status:"new",
+      added_by:me,
+      sparked_by: t? `${t.source}: ${t.title.slice(0,70)}` : "",
+      source_url: t? (t.url||"") : ""
+    };
+    try{
+      await api("ideas", {method:"POST", body:JSON.stringify([row])});
+      if(t) await api(`triggers?id=eq.${t.id}`, {method:"PATCH", body:JSON.stringify({used:true})});
+      log(`added "${row.line.slice(0,40)}"`);
+      closeDetail(); await load();
+    }catch(e){ showErr("could not save. " + e.message.slice(0,100)); }
+  };
+}
+
+/* ---------------- chrome ---------------- */
+function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+document.querySelectorAll("nav button").forEach(b=> b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");
+  ["ideas","triggers","activity"].forEach(t=>
+    document.getElementById("tab-"+t).hidden = (t!==b.dataset.tab));
+});
+document.getElementById("add").onclick = ()=> newIdea(null);
+document.getElementById("detail").onclick = e=>{ if(e.target.id==="detail") closeDetail(); };
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeDetail(); });
+document.getElementById("switch").onclick = ()=>{
+  localStorage.removeItem("fs_who"); location.reload();
+};
+document.querySelectorAll("#gate button").forEach(b=> b.onclick=()=>{
+  me = b.dataset.who; localStorage.setItem("fs_who", me); start();
+});
+
+function start(){
+  document.getElementById("gate").style.display="none";
+  document.getElementById("whoami").textContent = me;
+  load();
+  setInterval(load, 30000);   // stay roughly in sync with the others
+}
+if(me) start();
+</script>
+</body>
+</html>
