@@ -120,6 +120,25 @@
   form.new button{background:var(--green); color:#0f0f0e; border:none; padding:13px;
     font-size:15px; font-weight:700; cursor:pointer; border-radius:2px}
 
+  /* ---------- how it works ---------- */
+  #howbtn{background:none; border:1px solid var(--line); color:var(--mut); font-size:11px;
+    padding:5px 10px; border-radius:20px; cursor:pointer; margin-left:10px}
+  #howbtn:hover{border-color:var(--green); color:var(--green)}
+  .how h3{font-size:19px; margin:0 0 4px}
+  .how p{color:var(--mut); font-size:14px; line-height:1.55; margin:0 0 16px}
+  .how ol{color:var(--mut); font-size:14px; line-height:1.7; padding-left:20px; margin:0 0 18px}
+  .how ol b{color:var(--ink)}
+  .how .rules{background:#0f0f0e; border:1px solid var(--line); padding:14px 16px; border-radius:2px}
+  .how .rules div{font-size:13.5px; color:var(--mut); line-height:1.6}
+  .how .rules b{color:var(--ink)}
+
+  /* ---------- copy for ai ---------- */
+  .copyai{background:transparent; border:1px solid var(--green); color:var(--green);
+    padding:6px 11px; font-size:11.5px; cursor:pointer; white-space:nowrap; border-radius:2px}
+  .copyai:hover{background:var(--green); color:#0f0f0e}
+  .copyai.done{background:var(--green); color:#0f0f0e}
+  .trig .btns{display:flex; flex-direction:column; gap:6px}
+
   .empty{color:var(--mut); text-align:center; padding:50px 20px; font-size:14.5px}
   .err{background:#2a1a17; border:1px solid var(--bad); color:#e8a79e; padding:10px 13px;
     font-size:13px; margin-bottom:14px; border-radius:2px}
@@ -141,6 +160,7 @@
 <header>
   <div class="bar">
     <div class="mark">fakesniff.<small>ideas</small></div>
+    <button id="howbtn">how this works</button>
     <div class="me"><span>you're <b id="whoami"></b></span><button id="switch">switch</button></div>
   </div>
   <nav>
@@ -176,6 +196,43 @@
 const URL_ = "https://kayxejofqyxoqlberrgw.supabase.co";
 const KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtheXhlam9mcXl4b3FsYmVycmd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMDg0NDQsImV4cCI6MjEwMTg4NDQ0NH0.LFTOsUpdi7Bu9kibW1qYWYcRSLGnF-mWtDlNMYiJe2E";
 const H = { apikey:KEY, Authorization:"Bearer "+KEY, "Content-Type":"application/json" };
+
+/* The rules for writing a line. Kept here on purpose so they travel with the
+   tool instead of sitting in a file nobody opens. */
+const BRIEF = `You are writing a line for a Fakesniff t-shirt.
+
+THE BRAND
+Nothing is real. Every high we chase to feel like we're winning — money, status, the perfect
+image, the online life — is fake. Fakesniff names the fake and says it with a straight face.
+
+VOICE
+- dry, deadpan, a bit tired. never excited, never hype, no exclamation marks
+- short. readable in one glance. eight words at most
+- lowercase leaning
+- in on the joke, not above it. we are also faking it
+- funny without trying to be funny
+
+A GOOD LINE
+- says the quiet part out loud
+- works instantly, but rewards a second read
+- someone could wear it in public without having to explain it
+- specific. "everything is fake" is the category, not an idea
+
+AVOID
+- anything that sounds like a motivational quote
+- anything that needs the brand explained first
+- puns for the sake of puns
+
+THE HARD RULE
+Take the feeling or the idea. Never the title, the character, the artwork, the logo or the quote.
+Take the shape of the thing, not the thing.
+
+GIVE ME
+5 options. For each one:
+- the line (what goes on the shirt)
+- the concept (one sentence on what you'd see)
+- risk: clean if fully original / check if it leans on something real / avoid if it uses a real
+  name, title, character, logo or quote`;
 
 const STATUSES = ["new","interesting","needs work","develop","rejected","in production"];
 const CATS = ["music","film","tv","icons","social","tech","sport","travel","art","news","youth","other"];
@@ -370,9 +427,13 @@ function renderTriggers(){
         <div class="s">${esc(t.source)} · ${t.category}
           ${t.url?` · <a href="${esc(t.url)}" target="_blank" rel="noopener">open</a>`:""}</div>
       </div>
-      <button data-mk="${t.id}">make an idea</button>
+      <div class="btns">
+        <button class="copyai" data-ai="${t.id}">copy for AI</button>
+        <button data-mk="${t.id}">write it myself</button>
+      </div>
     </div>`).join("") || `<div class="empty">nothing collected yet</div>`;
   el.querySelectorAll("[data-mk]").forEach(b=> b.onclick=()=> newIdea(+b.dataset.mk));
+  el.querySelectorAll("[data-ai]").forEach(b=> b.onclick=()=> copyForAI(+b.dataset.ai, b));
 }
 
 function renderActivity(){
@@ -421,6 +482,65 @@ function newIdea(triggerId){
   };
 }
 
+/* ---------------- copy for AI ---------------- */
+/* Puts the trigger and the whole brief on the clipboard, ready to paste into
+   whatever AI you already use. No key, no cost, no waiting on anyone. */
+async function copyForAI(triggerId, btn){
+  const t = triggers.find(x=>x.id===triggerId); if(!t) return;
+  const text =
+`${BRIEF}
+
+WHAT SPARKED THIS
+"${t.title}"
+source: ${t.source}${t.url? "\n"+t.url : ""}`;
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta=document.createElement("textarea");
+    ta.value=text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  const was = btn.textContent;
+  btn.textContent = "copied, now paste it into an AI";
+  btn.classList.add("done");
+  setTimeout(()=>{ btn.textContent = was; btn.classList.remove("done"); }, 2600);
+}
+
+/* ---------------- how it works ---------------- */
+function showHow(){
+  const sheet = document.getElementById("sheet");
+  sheet.innerHTML = `
+    <button class="close">&times;</button>
+    <div class="how">
+      <h3>What this is</h3>
+      <p>A machine goes out every morning and collects what is happening in film, music, tv,
+         culture and the internet. That is the raw material. We turn the good bits into lines
+         for shirts. It collects everything and judges nothing, we do the filtering.</p>
+
+      <h3>What to do</h3>
+      <ol>
+        <li><b>Raw material</b> — have a scroll. Something will spark an idea.</li>
+        <li><b>Copy for AI</b> — one click puts the trigger and our house rules on your
+            clipboard. Paste it into ChatGPT or whatever you use and it writes lines in our voice.
+            Paste the good ones back in here.</li>
+        <li><b>Ideas</b> — open one to see it on an actual shirt, then mark it
+            interesting, develop, or rejected.</li>
+      </ol>
+      <p><b>Nothing gets deleted.</b> Rejected stays rejected, so the same idea does not come back
+         round in three weeks.</p>
+
+      <h3>The one hard rule</h3>
+      <div class="rules">
+        <div>Take the <b>feeling</b> or the <b>idea</b>. Never the title, the character, the
+        artwork, the logo or the quote. Take the shape of the thing, not the thing.<br><br>
+        If a line leans on something real, mark it <b>check</b> and the lawyer sees it before
+        we produce anything.</div>
+      </div>
+    </div>`;
+  document.getElementById("detail").classList.add("open");
+  sheet.querySelector(".close").onclick = closeDetail;
+}
+
 /* ---------------- chrome ---------------- */
 function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -440,11 +560,18 @@ document.querySelectorAll("#gate button").forEach(b=> b.onclick=()=>{
   me = b.dataset.who; localStorage.setItem("fs_who", me); start();
 });
 
+document.getElementById("howbtn").onclick = showHow;
+
 function start(){
   document.getElementById("gate").style.display="none";
   document.getElementById("whoami").textContent = me;
   load();
   setInterval(load, 30000);   // stay roughly in sync with the others
+  // first time someone opens it, explain what they are looking at
+  if(!localStorage.getItem("fs_seen_how")){
+    localStorage.setItem("fs_seen_how","1");
+    setTimeout(showHow, 500);
+  }
 }
 if(me) start();
 </script>
