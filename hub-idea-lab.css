@@ -75,3 +75,52 @@
 .ilab-mt10{margin-top:10px}
 .ilab-dline-sm{font-size:20px}
 .ilab-readonly #ilab-add{display:none}
+
+/* ---------------------------------------------------------------------------
+   Phone / iPhone. Salman works remote from his phone and Marco and Emiel will
+   mostly open this on mobile, so the small screen is a first-class layout.
+   --------------------------------------------------------------------------- */
+
+/* never let a card grid force a horizontal scroll on a narrow screen */
+.ilab-grid{grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))}
+
+@media (max-width:640px){
+  /* one clear column of ideas */
+  .ilab-grid{grid-template-columns:1fr;gap:10px}
+  .ilab-line{font-size:18px}
+
+  /* raw material: title above, actions below, both full width and thumb-sized */
+  .ilab-trig{flex-direction:column;gap:10px;padding:15px 2px}
+  .ilab-btns{flex-direction:row;width:100%;gap:8px}
+  .ilab-btns button{flex:1;padding:12px 10px;font-size:13px;min-height:44px}
+
+  /* Apple's minimum comfortable touch target is 44px */
+  .ilab-tabs button{padding:13px 12px;min-height:44px}
+  .ilab-chip{padding:9px 14px;font-size:13px;min-height:38px}
+  .ilab-setline button{padding:12px 14px;font-size:13.5px;min-height:44px;flex:1 0 auto}
+  #ilab-howbtn{padding:8px 12px;font-size:12px;min-height:36px}
+
+  /* iOS zooms the page when a focused input is under 16px */
+  .ilab-search,.ilab-new input,.ilab-new textarea,.ilab-new select{font-size:16px}
+
+  /* the detail sheet becomes a full-height panel rather than a floating card */
+  #ilab-detail{padding:0}
+  .ilab-sheet{padding:18px 16px 28px;border-radius:0;min-height:100%;max-width:none}
+  .ilab-dline{font-size:22px}
+  .ilab-close{top:10px;right:12px;font-size:32px;padding:4px 10px}
+
+  /* stack the two shirts and keep them a sensible height on a phone */
+  .ilab-shirts{flex-direction:column;gap:10px;margin:18px 0}
+  .ilab-shirtbox{min-width:0}
+  .ilab-shirtbox canvas{height:250px}
+
+  /* new-idea form: stop the two selects squeezing */
+  .ilab-row{flex-direction:column;gap:11px}
+  .ilab-new button{padding:15px;min-height:48px}
+
+  /* activity timestamps below the text instead of floated into it */
+  .ilab-act span{float:none;display:block;margin-top:4px}
+
+  /* a floating action button behaves better than sticky+float on iOS */
+  #ilab-add{position:fixed;float:none;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));width:58px;height:58px;font-size:30px;z-index:55}
+}
