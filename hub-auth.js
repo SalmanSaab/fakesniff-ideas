@@ -120,6 +120,15 @@ export async function createHubAuth(config) {
     async getVerifiedUser() {
       return client.auth.getUser();
     },
+    /* Codex — 2026-08-11: module integrations receive a short-lived token
+       accessor, never a copied token that can outlive the active Hub session. */
+    async getAccessToken() {
+      const response = await client.auth.getSession();
+      if (response.error) throw response.error;
+      const token = response.data?.session?.access_token;
+      if (!token) throw new Error("No active Hub session.");
+      return token;
+    },
     async requestMagicLink(email) {
       return client.auth.signInWithOtp({
         email: String(email || "").trim().toLowerCase(),

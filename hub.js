@@ -21,6 +21,8 @@ const FLAG_LABELS = {
   missing_assets: "Missing assets"
 };
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
+const REGISTERABLE_SECTION_IDS = new Set(["idea-lab"]);
+const registeredSections = new Map();
 
 const state = {
   config: null,
@@ -38,6 +40,7 @@ const state = {
   tasks: [],
   saving: false,
   stale: false,
+  activeSectionId: "home",
   dialogOpener: null,
   dialogOpenerTaskId: ""
 };
@@ -68,6 +71,8 @@ const ownerInput = get("work-owner");
 const approverInput = get("work-approver");
 const searchInput = get("work-search");
 const ownerFilter = get("work-owner-filter");
+const primaryNav = document.querySelector(".primary-nav");
+const navLinks = [...document.querySelectorAll('.nav-link[href^="#"]')];
 
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -79,6 +84,168 @@ function createElement(tag, className, text) {
 function isLoopback() {
   return ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
 }
+
+/* Codex — 2026-08-11: authenticated module bridge. Idea Lab stays in its own
+   file and receives only the minimum session/workspace context it needs. */
+function sectionIdFromHash() {
+  const candidate = window.location.hash.replace(/^#/, "");
+  return get(candidate)?.classList.contains("page-section") ? candidate : "home";
+}
+
+function sectionContextKey() {
+  const member = state.membership;
+  if (!member || !state.user) return "";
+  return [state.generation, member.user_id, member.display_name, member.role, state.config?.workspaceId].join("|");
+}
+
+function sectionContextIsCurrent(generation, userId) {
+  return Boolean(
+    state.auth
+    && state.membership
+    && state.user?.id === userId
+    && state.membership.user_id === userId
+    && state.generation === generation
+  );
+}
+
+function buildSectionContext() {
+  const generation = state.generation;
+  const userId = state.membership.user_id;
+  const auth = state.auth;
+  const config = state.config;
+  const member = Object.freeze({
+    id: userId,
+    name: state.membership.display_name,
+    role: state.membership.role
+  });
+
+  return Object.freeze({
+    restUrl: `${config.supabaseUrl}/rest/v1`,
+    async getAccessToken() {
+      if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
+      const token = await auth.getAccessToken();
+      if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
+      return token;
+    },
+    anonKey: config.supabasePublishableKey,
+    member,
+    workspaceId: config.workspaceId
+  });
+}
+
+function cleanupFromMountResult(result) {
+  if (typeof result === "function") return result;
+  if (result && typeof result.destroy === "function") return () => result.destroy();
+  return null;
+}
+
+function clearRegisteredSection(registration) {
+  registration.sequence += 1;
+  registration.mountingKey = "";
+  registration.contextKey = "";
+  if (typeof registration.cleanup === "function") {
+    try {
+      registration.cleanup();
+    } catch {
+      // The Hub still clears the integration root even if optional cleanup fails.
+    }
+  }
+  registration.cleanup = null;
+  registration.root.replaceChildren();
+}
+
+function clearRegisteredSections() {
+  registeredSections.forEach(clearRegisteredSection);
+}
+
+function renderSectionLoadError(root) {
+  const message = createElement("div", "module-placeholder");
+  message.setAttribute("role", "alert");
+  message.append(
+    createElement("span", "preview-label", "Could not load"),
+    createElement("h2", "", "Idea Lab is temporarily unavailable."),
+    createElement("p", "", "Refresh the Hub and try again. Your existing ideas were not changed.")
+  );
+  root.replaceChildren(message);
+}
+
+async function mountRegisteredSection(sectionId) {
+  const registration = registeredSections.get(sectionId);
+  if (!registration || !state.auth || !state.user || !state.membership || !state.workspace || appShell.hidden) return;
+
+  const contextKey = sectionContextKey();
+  if (!contextKey || registration.contextKey === contextKey || registration.mountingKey === contextKey) return;
+
+  clearRegisteredSection(registration);
+  const mountSequence = registration.sequence;
+  const generation = state.generation;
+  const userId = state.user.id;
+  registration.mountingKey = contextKey;
+
+  try {
+    const mounted = await registration.module.mount(registration.root, buildSectionContext());
+    const cleanup = cleanupFromMountResult(mounted);
+    if (registration.sequence !== mountSequence || !sectionContextIsCurrent(generation, userId)) {
+      if (cleanup) {
+        try {
+          cleanup();
+        } catch {
+          // A stale module cannot prevent its root from being cleared.
+        }
+      }
+      if (registration.sequence === mountSequence) registration.root.replaceChildren();
+      return;
+    }
+    registration.cleanup = cleanup;
+    registration.contextKey = contextKey;
+  } catch {
+    if (registration.sequence === mountSequence && sectionContextIsCurrent(generation, userId)) {
+      renderSectionLoadError(registration.root);
+    }
+  } finally {
+    if (registration.sequence === mountSequence) registration.mountingKey = "";
+  }
+}
+
+function activateSection(sectionId) {
+  const normalized = get(sectionId)?.classList.contains("page-section") ? sectionId : "home";
+  state.activeSectionId = normalized;
+  navLinks.forEach((link) => {
+    const current = link.getAttribute("href") === `#${normalized}`;
+    link.classList.toggle("is-current", current);
+    if (current) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  void mountRegisteredSection(normalized);
+}
+
+function registerSection(sectionId, module) {
+  const id = String(sectionId || "").trim();
+  if (!REGISTERABLE_SECTION_IDS.has(id)) throw new Error(`Unknown Hub section: ${id}`);
+  if (!module || typeof module.mount !== "function") throw new TypeError("A Hub section needs a mount(rootEl, ctx) function.");
+  if (registeredSections.has(id)) throw new Error(`Hub section already registered: ${id}`);
+  const root = get(id);
+  if (!root) throw new Error(`Hub section root is missing: ${id}`);
+
+  registeredSections.set(id, {
+    module,
+    root,
+    sequence: 0,
+    mountingKey: "",
+    contextKey: "",
+    cleanup: null
+  });
+  const navMeta = document.querySelector(`.nav-link[href="#${id}"] .nav-meta`);
+  if (navMeta) navMeta.remove();
+  if (state.activeSectionId === id) void mountRegisteredSection(id);
+}
+
+Object.defineProperty(globalThis, "Hub", {
+  value: Object.freeze({ registerSection }),
+  configurable: false,
+  enumerable: true,
+  writable: false
+});
 
 function setAccessView({ copy, loading = false, signin = false, setup = false, retry = false, switchAccount = false, status = "" }) {
   appShell.hidden = true;
@@ -133,6 +300,7 @@ function clearWorkspaceState() {
   state.refreshSequence += 1;
   state.mutationSequence += 1;
   setSaving(false);
+  clearRegisteredSections();
   state.user = null;
   state.membership = null;
   state.workspace = null;
@@ -436,6 +604,7 @@ function renderWorkspace({ focus = false } = {}) {
   appShell.hidden = false;
   accessScreen.hidden = true;
   document.querySelector(".skip-link")?.setAttribute("href", "#main-content");
+  activateSection(sectionIdFromHash());
   setSyncState("Up to date", false);
   if (focus) window.requestAnimationFrame(() => get("main-content").focus());
 }
@@ -939,6 +1108,11 @@ function bindEvents() {
   statusInput.addEventListener("change", syncRequirements);
   searchInput.addEventListener("input", renderBoard);
   ownerFilter.addEventListener("change", renderBoard);
+  primaryNav.addEventListener("click", (event) => {
+    const link = event.target.closest('.nav-link[href^="#"]');
+    if (link) activateSection(link.getAttribute("href").slice(1));
+  });
+  window.addEventListener("hashchange", () => activateSection(sectionIdFromHash()));
   dialog.addEventListener("close", handleDialogClose);
   board.addEventListener("click", (event) => {
     const card = event.target.closest("button[data-task-id]");
