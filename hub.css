@@ -990,6 +990,47 @@ select {
   resize: vertical;
 }
 
+.form-hint {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.work-more-details {
+  border: 1px solid var(--line);
+  background: rgba(15, 15, 14, 0.45);
+}
+
+.work-more-details summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.work-more-details summary span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.work-more-details[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.form-grid-nested {
+  padding: 14px;
+}
+
 .work-control input::placeholder,
 .form-field input::placeholder,
 .form-field textarea::placeholder {

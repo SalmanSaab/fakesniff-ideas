@@ -42,6 +42,7 @@ const state = {
   stale: false,
   activeSectionId: "home",
   mobileWorkStatus: "this_week",
+  originalApproverId: "",
   dialogOpener: null,
   dialogOpenerTaskId: ""
 };
@@ -330,7 +331,9 @@ function clearWorkspaceState() {
   approverInput.replaceChildren();
   appendOption(approverInput, "", "No approver");
   get("work-workstream").replaceChildren();
-  appendOption(get("work-workstream"), "", "No workstream");
+  appendOption(get("work-workstream"), "", "No area");
+  state.originalApproverId = "";
+  get("work-more-details").open = false;
   if (board) {
     STATUSES.forEach((status) => {
       get(`${status}-items`)?.replaceChildren();
@@ -378,7 +381,7 @@ function memberName(userId, fallback = "Owner needed") {
 
 function workstreamName(workstreamId) {
   if (!workstreamId) return "General";
-  return workstreamMap().get(workstreamId)?.name || "Archived workstream";
+  return workstreamMap().get(workstreamId)?.name || "Archived area";
 }
 
 function ownerClass(userId) {
@@ -554,7 +557,7 @@ function renderSummary() {
   get("home-review-count").textContent = String(review.length).padStart(2, "0");
   get("home-waiting-count").textContent = String(waiting.length).padStart(2, "0");
 
-  renderHomeList(get("home-week-list"), week, (task) => task.next_action || "Next action not recorded", "No work has been chosen for this week.");
+  renderHomeList(get("home-week-list"), week, (task) => task.next_action || "Next step not recorded", "No work has been chosen for this week.");
   renderHomeList(
     get("home-attention-list"),
     [...review, ...waiting].slice(0, 5),
@@ -592,7 +595,7 @@ function populateReferenceControls() {
 
   const workstreamSelect = get("work-workstream");
   workstreamSelect.replaceChildren();
-  appendOption(workstreamSelect, "", "No workstream");
+  appendOption(workstreamSelect, "", "No area");
   state.workstreams
     .filter((workstream) => !workstream.archived_at && workstream.status === "active")
     .forEach((workstream) => appendOption(workstreamSelect, workstream.id, workstream.name));
@@ -618,7 +621,7 @@ function renderWorkspace({ focus = false } = {}) {
   newWorkButton.hidden = !canEdit();
   newWorkButton.disabled = !canEdit() || activeWorkstreams.length === 0;
   if (canEdit() && activeWorkstreams.length === 0) {
-    showAppError("Workstream setup is incomplete, so new work is disabled.");
+    showAppError("Area setup is incomplete, so new work is disabled.");
   }
   renderBoard();
   appShell.hidden = false;
@@ -684,16 +687,22 @@ function syncRequirements() {
   const status = statusInput.value;
   const active = ACTIVE_STATUSES.has(status);
   const done = status === "done";
+  const review = status === "review";
+  const waiting = status === "waiting";
+  if (!review && !state.originalApproverId) approverInput.value = "";
+  if (!waiting) get("work-blocker").value = "";
+  get("work-approver-field").hidden = !review && !state.originalApproverId;
+  get("work-blocker-field").hidden = !waiting;
   form.classList.toggle("is-active", active);
   form.classList.toggle("is-done", done);
-  form.classList.toggle("is-waiting", status === "waiting");
-  form.classList.toggle("is-review", status === "review");
+  form.classList.toggle("is-waiting", waiting);
+  form.classList.toggle("is-review", review);
   ownerInput.required = active || done;
   get("work-date").required = active;
   get("work-next-action").required = active;
   get("work-completion").required = active || done;
-  get("work-blocker").required = status === "waiting";
-  approverInput.required = status === "review";
+  get("work-blocker").required = waiting;
+  approverInput.required = review;
   clearFormError();
 }
 
@@ -722,6 +731,8 @@ function openNewTask() {
   state.dialogOpenerTaskId = "";
   populateReferenceControls();
   form.reset();
+  state.originalApproverId = "";
+  get("work-more-details").open = false;
   setFormReadOnly(false);
   get("work-id").value = "";
   get("work-updated-at").value = "";
@@ -741,7 +752,7 @@ function openTask(id) {
   state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.dialogOpenerTaskId = id;
   populateReferenceControls();
-  addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived workstream");
+  addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived area");
   addMissingReferenceOption(ownerInput, task.owner_id, "Former member");
   addMissingReferenceOption(approverInput, task.approver_id, "Former member");
   setFormReadOnly(!canEdit());
@@ -753,6 +764,7 @@ function openTask(id) {
   statusInput.value = task.status;
   ownerInput.value = task.owner_id || "";
   approverInput.value = task.approver_id || "";
+  state.originalApproverId = task.approver_id || "";
   get("work-priority").value = task.priority;
   get("work-date").value = task.due_on || "";
   get("work-next-action").value = task.next_action || "";
@@ -763,6 +775,7 @@ function openTask(id) {
   });
   get("work-source-url").value = task.source_url || "";
   get("work-latest-file-url").value = task.latest_file_url || "";
+  get("work-more-details").open = false;
   get("work-dialog-title").textContent = canEdit() ? "Edit work item" : "View work item";
   archiveButton.hidden = !canEdit();
   syncRequirements();
@@ -805,21 +818,21 @@ function validationError(values, editingId) {
   if (!values.title) return "Title cannot be blank.";
   if (ACTIVE_STATUSES.has(values.status)
       && (!values.ownerId || !values.dueOn || !values.nextAction || !values.completion)) {
-    return "Active work needs an owner, due date, next action and completion condition.";
+    return "To move this out of Backlog, add an owner, due date, next step, and Done when.";
   }
   if (values.status === "done" && (!values.ownerId || !values.completion)) {
-    return "Done work needs an owner and completion condition.";
+    return "Done work needs an owner and a clear Done when.";
   }
-  if (values.status === "waiting" && !values.blocker) return "Waiting work needs a written blocker.";
-  if (values.status === "review" && !values.approverId) return "Review needs an assigned approver.";
-  if (values.approverId && values.ownerId === values.approverId) return "The approver must be different from the work owner.";
+  if (values.status === "waiting" && !values.blocker) return "Say what this work is waiting for.";
+  if (values.status === "review" && !values.approverId) return "Choose another person to approve this work.";
+  if (values.approverId && values.ownerId === values.approverId) return "The owner and approver must be different people.";
   const existing = taskById(editingId);
   if (values.status === "done" && values.approverId && !isAdmin()) {
     if (!existing) return "Only a workspace admin can create approval-bound work directly as Done.";
     if (!existing.approver_id) return "Assign the approver first, save, and let that approver complete the task.";
   }
-  if (!validWebUrl(values.sourceUrl)) return "Source URL must begin with http:// or https://.";
-  if (!validWebUrl(values.latestFileUrl, true)) return "Latest file URL must be a secure https:// link.";
+  if (!validWebUrl(values.sourceUrl)) return "The source link must begin with http:// or https://.";
+  if (!validWebUrl(values.latestFileUrl, true)) return "The latest file link must begin with secure https://.";
   return capacityError(values, editingId);
 }
 
@@ -831,7 +844,7 @@ function humanRepositoryError(error) {
   if (server.includes("assigned approver") || server.includes("move this review") || server.includes("complete this task") || server.includes("archive this task")) {
     return "Only the assigned approver or a workspace admin can make that workflow change.";
   }
-  if (error.code === "23503") return "A member or workstream changed. Refresh the Hub and try again.";
+  if (error.code === "23503") return "A team member or area changed. Refresh the Hub and try again.";
   if (error.code === "23514") return "One or more fields do not meet the rules for this status.";
   if (["42501", "PGRST301"].includes(error.code)) return "Your workspace access changed. Refresh or sign in again.";
   return "The Hub could not save this change. Refresh and try again.";
@@ -911,6 +924,8 @@ async function saveTask(event) {
   if (!canEdit() || state.saving) return;
   syncRequirements();
   if (!form.checkValidity()) {
+    const invalidControl = form.querySelector("input:invalid, select:invalid, textarea:invalid");
+    if (invalidControl && get("work-more-details").contains(invalidControl)) get("work-more-details").open = true;
     showFormError("Complete the required fields for this status before saving.");
     form.reportValidity();
     return;
@@ -919,6 +934,9 @@ async function saveTask(event) {
   const values = valuesFromForm();
   const invalid = validationError(values, id);
   if (invalid) {
+    if (!validWebUrl(values.sourceUrl) || !validWebUrl(values.latestFileUrl, true)) {
+      get("work-more-details").open = true;
+    }
     showFormError(invalid);
     return;
   }

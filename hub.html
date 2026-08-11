@@ -213,7 +213,7 @@
         <div class="work-toolbar" aria-label="Work board controls">
           <div class="work-control work-search">
             <label for="work-search">Search work</label>
-            <input id="work-search" type="search" placeholder="Title, next action, flag…" autocomplete="off">
+            <input id="work-search" type="search" placeholder="Title, next step, flag…" autocomplete="off">
           </div>
           <div class="work-control">
             <label for="work-owner-filter">Owner</label>
@@ -258,18 +258,25 @@
             <input id="work-updated-at" name="work-updated-at" type="hidden">
             <div class="form-grid">
               <div class="form-field form-field-wide"><label for="work-title-input">Title <span aria-hidden="true">*</span></label><input id="work-title-input" name="title" type="text" maxlength="240" required></div>
-              <div class="form-field"><label for="work-workstream">Workstream</label><select id="work-workstream" name="workstream"><option value="">No workstream</option></select></div>
               <div class="form-field"><label for="work-status">Status</label><select id="work-status" name="status"><option value="backlog">Backlog</option><option value="this_week">This week</option><option value="doing">Doing</option><option value="review">Review / Decision</option><option value="waiting">Waiting / Blocked</option><option value="done">Done</option></select></div>
               <div class="form-field"><label for="work-owner">Owner <span class="owner-required">*</span></label><select id="work-owner" name="owner"><option value="">Owner needed</option></select></div>
-              <div class="form-field"><label for="work-approver">Approver <span class="review-required">*</span></label><select id="work-approver" name="approver"><option value="">No approver</option></select></div>
-              <div class="form-field"><label for="work-priority">Priority</label><select id="work-priority" name="priority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+              <div id="work-approver-field" class="form-field form-field-wide" hidden><label for="work-approver">Who approves this? <span class="review-required">*</span></label><select id="work-approver" name="approver"><option value="">Choose another person</option></select><small class="form-hint">Approval stays attached so the decision cannot be bypassed.</small></div>
               <div class="form-field"><label for="work-date">Due date <span class="active-required">*</span></label><input id="work-date" name="date" type="date"></div>
-              <div class="form-field form-field-wide"><label for="work-next-action">Next action <span class="active-required">*</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000"></textarea></div>
-              <div class="form-field form-field-wide"><label for="work-completion">Completion condition <span class="completion-required">*</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000"></textarea></div>
-              <div id="work-blocker-field" class="form-field form-field-wide"><label for="work-blocker">Waiting on / blocker <span class="waiting-required">*</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea></div>
-              <fieldset class="form-field form-field-wide flags-field"><legend>Flags</legend><div class="flag-options"><div class="flag-option"><input id="flag-legal" name="flags" type="checkbox" value="legal"><label for="flag-legal">Legal</label></div><div class="flag-option"><input id="flag-budget" name="flags" type="checkbox" value="budget"><label for="flag-budget">Budget</label></div><div class="flag-option"><input id="flag-supplier" name="flags" type="checkbox" value="supplier"><label for="flag-supplier">Supplier</label></div><div class="flag-option"><input id="flag-account-access" name="flags" type="checkbox" value="account_access"><label for="flag-account-access">Account access</label></div><div class="flag-option"><input id="flag-missing-assets" name="flags" type="checkbox" value="missing_assets"><label for="flag-missing-assets">Missing assets</label></div></div></fieldset>
-              <div class="form-field form-field-wide"><label for="work-source-url">Source URL</label><input id="work-source-url" name="sourceUrl" type="url" inputmode="url" placeholder="https://…"></div>
-              <div class="form-field form-field-wide"><label for="work-latest-file-url">Latest file URL</label><input id="work-latest-file-url" name="latestFileUrl" type="url" inputmode="url" placeholder="https://…"></div>
+              <div class="form-field form-field-wide"><label for="work-next-action">Next step <span class="active-required">*</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000" placeholder="What happens next?"></textarea></div>
+              <div class="form-field form-field-wide"><label for="work-completion">Done when <span class="completion-required">*</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000" placeholder="What result means this is finished?"></textarea></div>
+              <div id="work-blocker-field" class="form-field form-field-wide" hidden><label for="work-blocker">What are we waiting for? <span class="waiting-required">*</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea><small class="form-hint">Name the person, answer, file, or event needed to continue.</small></div>
+
+              <!-- Codex — 2026-08-11: secondary fields stay available without overwhelming the everyday task path. -->
+              <details id="work-more-details" class="work-more-details form-field-wide">
+                <summary>More details <span>optional</span></summary>
+                <div class="form-grid form-grid-nested">
+                  <div class="form-field"><label for="work-workstream">Area (optional)</label><select id="work-workstream" name="workstream"><option value="">No area</option></select></div>
+                  <div class="form-field"><label for="work-priority">Priority</label><select id="work-priority" name="priority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+                  <fieldset class="form-field form-field-wide flags-field"><legend>Needs attention from</legend><div class="flag-options"><div class="flag-option"><input id="flag-legal" name="flags" type="checkbox" value="legal"><label for="flag-legal">Legal</label></div><div class="flag-option"><input id="flag-budget" name="flags" type="checkbox" value="budget"><label for="flag-budget">Budget</label></div><div class="flag-option"><input id="flag-supplier" name="flags" type="checkbox" value="supplier"><label for="flag-supplier">Supplier</label></div><div class="flag-option"><input id="flag-account-access" name="flags" type="checkbox" value="account_access"><label for="flag-account-access">Account access</label></div><div class="flag-option"><input id="flag-missing-assets" name="flags" type="checkbox" value="missing_assets"><label for="flag-missing-assets">Missing assets</label></div></div></fieldset>
+                  <div class="form-field form-field-wide"><label for="work-source-url">Source link (optional)</label><input id="work-source-url" name="sourceUrl" type="url" inputmode="url" placeholder="https://…"></div>
+                  <div class="form-field form-field-wide"><label for="work-latest-file-url">Latest file link (optional)</label><input id="work-latest-file-url" name="latestFileUrl" type="url" inputmode="url" placeholder="https://…"></div>
+                </div>
+              </details>
             </div>
             <p id="work-form-error" class="form-error" role="alert" tabindex="-1" hidden></p>
             <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden>Archive item</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button">Cancel</button><button id="save-work-button" class="primary-button" type="submit">Save work</button></div>
