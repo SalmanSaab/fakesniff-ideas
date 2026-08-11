@@ -276,44 +276,56 @@ function wrap(ctx, text, max){
   }
   if(line) out.push(line); return out;
 }
+/* Real garment renders, so a line is judged as a shirt rather than as text.
+   Cached after first load so flicking between ideas is instant. */
+const SHIRT_IMG = {};
+function shirtImage(mode){
+  if(SHIRT_IMG[mode]) return SHIRT_IMG[mode];
+  const im = new Image();
+  im.src = mode==="cream" ? "shirt-cream.jpg" : "shirt-black.jpg";
+  SHIRT_IMG[mode] = im;
+  return im;
+}
+// warm the cache immediately
+shirtImage("black"); shirtImage("cream");
+
 function drawShirt(cv, line, sub, mode){
   const C = mode==="cream"
-    ? {body:"#ebe5d8", ink:"#17140f", sub:"#6c6559", seam:"#ded7c7"}
-    : {body:"#141414", ink:"#ece7dd", sub:"#8b8478", seam:"#0b0b0b"};
+    ? {ink:"#17140f", sub:"#6c6559", bg:"#efe9e2"}
+    : {ink:"#ece7dd", sub:"#9a948a", bg:"#f2ebe4"};
   const dpr = devicePixelRatio||1, w = cv.clientWidth||260, h = cv.clientHeight||300;
   cv.width=w*dpr; cv.height=h*dpr;
-  const x = cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const x = cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0);
+  x.fillStyle=C.bg; x.fillRect(0,0,w,h);
 
-  const cx=w/2, shoulder=h*.15, hem=h*.93, bl=w*.25, br=w*.75;
-  x.fillStyle=C.body; x.beginPath();
-  x.moveTo(bl,shoulder);
-  x.lineTo(w*.12,h*.30); x.lineTo(w*.19,h*.47); x.lineTo(bl,h*.41);
-  x.lineTo(bl-w*.01,hem);
-  x.quadraticCurveTo(cx,hem+h*.028,br+w*.01,hem);
-  x.lineTo(br,h*.41); x.lineTo(w*.81,h*.47); x.lineTo(w*.88,h*.30);
-  x.lineTo(br,shoulder);
-  x.quadraticCurveTo(cx,h*.225,bl,shoulder);
-  x.closePath(); x.fill();
-  x.strokeStyle=C.seam; x.lineWidth=Math.max(2,w*.008);
-  x.beginPath(); x.moveTo(bl+w*.016,shoulder+h*.007);
-  x.quadraticCurveTo(cx,h*.245,br-w*.016,shoulder+h*.007); x.stroke();
+  const img = shirtImage(mode);
+  const paint = ()=>{
+    // cover-fit the garment
+    const s = Math.max(w/img.width, h/img.height);
+    const dw = img.width*s, dh = img.height*s;
+    x.drawImage(img, (w-dw)/2, (h-dh)/2, dw, dh);
 
-  const max=w*.40; let size=Math.round(w*.070), lines;
-  for(; size>7; size--){
-    x.font=`800 ${size}px "Arial Narrow","Helvetica Neue",Arial,sans-serif`;
-    lines=wrap(x,line,max);
-    if(lines.length*size*1.06 <= h*.20) break;
-  }
-  x.fillStyle=C.ink; x.textAlign="center"; x.textBaseline="top";
-  let y=h*.40;
-  for(const l of lines){ x.fillText(l,cx,y); y+=size*1.06; }
-  if(sub){
-    const ss=Math.max(8,Math.round(size*.55));
-    x.font=`italic ${ss}px Georgia,serif`; x.fillStyle=C.sub;
-    for(const l of wrap(x,sub,max)){ x.fillText(l,cx,y+ss*.35); y+=ss*1.25; }
-  }
-  x.font=`italic ${Math.max(7,Math.round(size*.42))}px Georgia,serif`;
-  x.fillStyle=C.sub; x.fillText("fakesniff.",cx,h*.79);
+    // print area, chest
+    const max = w*.42;
+    let size = Math.round(w*.068), lines;
+    for(; size>7; size--){
+      x.font=`800 ${size}px "Arial Narrow","Helvetica Neue",Arial,sans-serif`;
+      lines = wrap(x,line,max);
+      if(lines.length*size*1.06 <= h*.19) break;
+    }
+    x.fillStyle=C.ink; x.textAlign="center"; x.textBaseline="top";
+    let y = h*.30;
+    for(const l of lines){ x.fillText(l,w/2,y); y += size*1.06; }
+    if(sub){
+      const ss = Math.max(8, Math.round(size*.55));
+      x.font=`italic ${ss}px Georgia,serif`; x.fillStyle=C.sub;
+      for(const l of wrap(x,sub,max)){ x.fillText(l,w/2,y+ss*.35); y += ss*1.25; }
+    }
+    x.font=`italic ${Math.max(7,Math.round(size*.44))}px Georgia,serif`;
+    x.fillStyle=C.sub; x.fillText("fakesniff.", w/2, h*.62);
+  };
+  if(img.complete && img.naturalWidth) paint();
+  else img.onload = paint;
 }
 
 /* ---------------- render ---------------- */
