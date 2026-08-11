@@ -134,6 +134,13 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 
 ---
 
+## 8b. Who this is for — design principle (applies to both agents)
+
+The people using this every day are **Marco and Emiel, who are non-technical**. Every screen must
+be obvious without instruction: plain words not jargon, few choices per screen, nothing that
+needs explaining. If a feature needs a manual, it is too complex. Favour big obvious buttons,
+one clear action per view, and forgiving behaviour (nothing destructive without an easy undo).
+
 ## 9. Rules
 1. Work only in your own worktree/branch. Commit small and often, prefix `Codex —` / `Claude —`.
 2. `master` is production: reach it only by tested merges, never direct feature work.
