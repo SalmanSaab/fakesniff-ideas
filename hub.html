@@ -102,6 +102,8 @@
         <div class="topbar-actions">
           <button id="refresh-button" class="quiet-button" type="button">Refresh</button>
           <span id="sync-label" class="sync-label" role="status" aria-live="polite">Up to date</span>
+          <!-- Codex — 2026-08-11: account access remains reachable when the desktop rail collapses on phones. -->
+          <button id="mobile-signout-button" class="quiet-button mobile-only-action" type="button">Sign out</button>
           <div id="member-avatar" class="avatar avatar-green" aria-hidden="true">?</div>
         </div>
       </header>
@@ -225,13 +227,25 @@
 
         <p id="work-board-status" class="sr-only" role="status" aria-live="polite"></p>
         <div id="work-loading" class="board-loading" role="status" hidden>Loading work…</div>
+        <!-- Codex — 2026-08-11: phones show one clearly selected stage instead of a hidden six-column strip. -->
+        <div class="work-stage-picker">
+          <label for="work-stage-filter">Show stage</label>
+          <select id="work-stage-filter">
+            <option value="backlog">Backlog (0)</option>
+            <option value="this_week" selected>This week (0)</option>
+            <option value="doing">Doing (0)</option>
+            <option value="review">Review / Decision (0)</option>
+            <option value="waiting">Waiting / Blocked (0)</option>
+            <option value="done">Done (0)</option>
+          </select>
+        </div>
         <div class="board" aria-label="FAKESNIFF work board">
-          <section class="board-column" aria-labelledby="backlog-title"><header><h3 id="backlog-title">Backlog</h3><span id="backlog-count">0</span></header><div id="backlog-items" class="board-items"></div></section>
-          <section class="board-column board-column-focus" aria-labelledby="week-title"><header><h3 id="week-title">This week</h3><span id="this_week-count">0</span></header><div id="this_week-items" class="board-items"></div></section>
-          <section class="board-column" aria-labelledby="doing-title"><header><h3 id="doing-title">Doing</h3><span id="doing-count">0</span></header><div id="doing-items" class="board-items"></div></section>
-          <section class="board-column" aria-labelledby="review-title"><header><h3 id="review-title">Review / Decision</h3><span id="review-count">0</span></header><div id="review-items" class="board-items"></div></section>
-          <section class="board-column" aria-labelledby="waiting-title"><header><h3 id="waiting-title">Waiting / Blocked</h3><span id="waiting-count">0</span></header><div id="waiting-items" class="board-items"></div></section>
-          <section class="board-column" aria-labelledby="done-title"><header><h3 id="done-title">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="backlog" aria-labelledby="backlog-title"><header><h3 id="backlog-title">Backlog</h3><span id="backlog-count">0</span></header><div id="backlog-items" class="board-items"></div></section>
+          <section class="board-column board-column-focus is-mobile-current" data-work-status="this_week" aria-labelledby="week-title"><header><h3 id="week-title">This week</h3><span id="this_week-count">0</span></header><div id="this_week-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="doing" aria-labelledby="doing-title"><header><h3 id="doing-title">Doing</h3><span id="doing-count">0</span></header><div id="doing-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="review" aria-labelledby="review-title"><header><h3 id="review-title">Review / Decision</h3><span id="review-count">0</span></header><div id="review-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="waiting" aria-labelledby="waiting-title"><header><h3 id="waiting-title">Waiting / Blocked</h3><span id="waiting-count">0</span></header><div id="waiting-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="done" aria-labelledby="done-title"><header><h3 id="done-title">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
         </div>
 
         <dialog id="work-dialog" class="work-dialog" aria-labelledby="work-dialog-title">

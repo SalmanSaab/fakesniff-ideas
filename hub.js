@@ -41,6 +41,7 @@ const state = {
   saving: false,
   stale: false,
   activeSectionId: "home",
+  mobileWorkStatus: "this_week",
   dialogOpener: null,
   dialogOpenerTaskId: ""
 };
@@ -71,6 +72,8 @@ const ownerInput = get("work-owner");
 const approverInput = get("work-approver");
 const searchInput = get("work-search");
 const ownerFilter = get("work-owner-filter");
+const workStageFilter = get("work-stage-filter");
+const mobileSignOutButton = get("mobile-signout-button");
 const primaryNav = document.querySelector(".primary-nav");
 const navLinks = [...document.querySelectorAll('.nav-link[href^="#"]')];
 
@@ -349,6 +352,7 @@ function clearWorkspaceState() {
   get("home-week-count").textContent = "00";
   get("home-review-count").textContent = "00";
   get("home-waiting-count").textContent = "00";
+  setMobileWorkStatus("this_week");
 }
 
 function canEdit() {
@@ -481,6 +485,19 @@ function taskMatches(task, search, ownerId) {
   ].join(" ").toLowerCase().includes(search);
 }
 
+function setMobileWorkStatus(status, { announce = false } = {}) {
+  const nextStatus = STATUSES.includes(status) ? status : "this_week";
+  state.mobileWorkStatus = nextStatus;
+  workStageFilter.value = nextStatus;
+  document.querySelectorAll(".board-column[data-work-status]").forEach((column) => {
+    column.classList.toggle("is-mobile-current", column.dataset.workStatus === nextStatus);
+  });
+  if (announce) {
+    const count = get(`${nextStatus}-count`).textContent;
+    boardStatus.textContent = `Showing ${STATUS_LABELS[nextStatus]}: ${count} ${count === "1" ? "item" : "items"}.`;
+  }
+}
+
 function renderBoard() {
   const search = searchInput.value.trim().toLowerCase();
   const ownerId = ownerFilter.value;
@@ -494,8 +511,11 @@ function renderBoard() {
     if (!matches.length) container.append(createElement("p", "board-empty", search || ownerId !== "all" ? "No matching work" : "No work here"));
     get(`${status}-count`).textContent = String(matches.length);
     get(`${status}-count`).setAttribute("aria-label", `${matches.length} ${STATUS_LABELS[status]} items shown`);
+    const stageOption = [...workStageFilter.options].find((option) => option.value === status);
+    if (stageOption) stageOption.textContent = `${STATUS_LABELS[status]} (${matches.length})`;
   });
 
+  setMobileWorkStatus(state.mobileWorkStatus);
   boardStatus.textContent = `${visible.length} work ${visible.length === 1 ? "item" : "items"} shown.`;
   renderSummary();
 }
@@ -717,6 +737,7 @@ function openNewTask() {
 function openTask(id) {
   const task = taskById(id);
   if (!task) return;
+  setMobileWorkStatus(task.status);
   state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.dialogOpenerTaskId = id;
   populateReferenceControls();
@@ -918,6 +939,7 @@ async function saveTask(event) {
       boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
       return;
     }
+    setMobileWorkStatus(values.status);
     await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${values.title} saved.`;
@@ -1097,6 +1119,7 @@ function bindEvents() {
   signInForm.addEventListener("submit", requestMagicLink);
   retryAccessButton.addEventListener("click", retryAccess);
   signOutButton.addEventListener("click", signOut);
+  mobileSignOutButton.addEventListener("click", signOut);
   accessSignOutButton.addEventListener("click", signOut);
   refreshButton.addEventListener("click", () => refreshTasks());
   get("dismiss-app-error").addEventListener("click", hideAppError);
@@ -1108,6 +1131,7 @@ function bindEvents() {
   statusInput.addEventListener("change", syncRequirements);
   searchInput.addEventListener("input", renderBoard);
   ownerFilter.addEventListener("change", renderBoard);
+  workStageFilter.addEventListener("change", () => setMobileWorkStatus(workStageFilter.value, { announce: true }));
   primaryNav.addEventListener("click", (event) => {
     const link = event.target.closest('.nav-link[href^="#"]');
     if (link) activateSection(link.getAttribute("href").slice(1));
