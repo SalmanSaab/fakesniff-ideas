@@ -123,7 +123,7 @@ function buildSectionContext() {
     restUrl: `${config.supabaseUrl}/rest/v1`,
     async getAccessToken() {
       if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
-      const token = await auth.getAccessToken();
+      const token = await auth.getAccessToken(userId);
       if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
       return token;
     },
@@ -213,7 +213,7 @@ function activateSection(sectionId) {
   navLinks.forEach((link) => {
     const current = link.getAttribute("href") === `#${normalized}`;
     link.classList.toggle("is-current", current);
-    if (current) link.setAttribute("aria-current", "page");
+    if (current) link.setAttribute("aria-current", "location");
     else link.removeAttribute("aria-current");
   });
   void mountRegisteredSection(normalized);

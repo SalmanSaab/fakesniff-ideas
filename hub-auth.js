@@ -122,12 +122,14 @@ export async function createHubAuth(config) {
     },
     /* Codex — 2026-08-11: module integrations receive a short-lived token
        accessor, never a copied token that can outlive the active Hub session. */
-    async getAccessToken() {
+    async getAccessToken(expectedUserId) {
       const response = await client.auth.getSession();
       if (response.error) throw response.error;
-      const token = response.data?.session?.access_token;
-      if (!token) throw new Error("No active Hub session.");
-      return token;
+      const session = response.data?.session;
+      if (!session?.access_token || !expectedUserId || session.user?.id !== expectedUserId) {
+        throw new Error("The active Hub account changed.");
+      }
+      return session.access_token;
     },
     async requestMagicLink(email) {
       return client.auth.signInWithOtp({
