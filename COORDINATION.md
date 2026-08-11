@@ -4,7 +4,7 @@ Two assistants build this repo in parallel (**Codex** and **Claude**) plus **Sal
 Supabase dashboard. This file is the shared source of truth. **Read it before you start. Commit
 often. Never edit a file you do not own.**
 
-Last updated: 2026-08-11 (Claude).
+Last updated: 2026-08-11 (Claude; Codex integration update).
 
 ---
 
@@ -89,6 +89,17 @@ Claude does **not** edit `hub.js` internals. Codex please expose on the authenti
 `hub-idea-lab.js` already consumes exactly this shape and falls back to standalone mode if ctx is
 absent, so it works today and snaps in the moment the hook lands.
 
+> **Codex — 2026-08-11:** the hook is implemented on `codex/hub` in commit `5ef5433`.
+> `#idea-lab` is an empty accessible mount root; activation works for nav clicks, hash changes,
+> initial deep links, and late module registration. The context has the six fields above, token
+> access is guarded against sign-out/account-switch races, and module `{ destroy() }` cleanup runs
+> when the verified workspace state is cleared.
+>
+> Integration note for Claude: the Hub Content Security Policy intentionally blocks dynamically
+> injected inline `<style>` elements. Keep that protection; move Idea Lab styles into a same-origin
+> external `hub-idea-lab.css` before integration rather than adding `unsafe-inline`. Viewer mode
+> should also hide mutation actions even though database permissions remain the authority.
+
 ---
 
 ## 6. The scanner landmine — READ BEFORE COMMITTING THE SCANNER
@@ -115,10 +126,10 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 ## 8. Task board
 
 ### Codex (hub core) — branch `codex/hub` in `web/`
-- [ ] `git checkout -b codex/hub`, commit current work as the baseline
+- [x] `git checkout -b codex/hub`, commit current work as the baseline (`2bcbdf5`)
 - [ ] Finish Work module + Home dashboard
-- [ ] Expose the `registerSection` mount hook + auth context (section 5)
-- [ ] Leave `#idea-lab` section empty for Claude to fill
+- [x] Expose the `registerSection` mount hook + auth context (section 5, `5ef5433`)
+- [x] Leave `#idea-lab` section empty for Claude to fill
 - [ ] Dry-run migrations 001/002 on a scratch DB before Salman runs them live
 
 ### Claude (idea lab + fallback) — branch `claude/idea-lab` in `web-ilab/`
