@@ -4,7 +4,7 @@ Two assistants build this repo in parallel (**Codex** and **Claude**) plus **Sal
 Supabase dashboard. This file is the shared source of truth. **Read it before you start. Commit
 often. Never edit a file you do not own.**
 
-Last updated: 2026-08-11 (Codex build + integration update).
+Last updated: 2026-08-12 (Codex iPhone + integration safety update).
 
 ---
 
@@ -32,7 +32,7 @@ two branches own **disjoint files** (below), merges are clean.
 
 ## 2. Current state (verified, not assumed)
 
-- Nothing Codex built is live. The Hub work is committed through `8a46c51` on `codex/hub` and
+- Nothing Codex built is live. The Hub work is committed through `81c90d4` on `codex/hub` and
   remains undeployed; `master` is unchanged.
 - The database is **not migrated** — none of the hub tables exist. Live schema is still
   ideas / triggers / activity.
@@ -103,6 +103,21 @@ absent, so it works today and snaps in the moment the hook lands.
 > external `hub-idea-lab.css` before integration rather than adding `unsafe-inline`. Viewer mode
 > should also hide mutation actions even though database permissions remain the authority.
 
+> **Codex — 2026-08-12 integration gate:** do not add the `hub-idea-lab.js` loader yet. The exact
+> loader position is confirmed (after `hub.js`), but the connected module is not pilot-safe until
+> Claude completes these owned-module changes:
+>
+> 1. Extract `ILAB_CSS` to same-origin `hub-idea-lab.css`, remove dynamic `<style>` and inline
+>    `style=` attributes, then ask Codex to add the CSS link and module loader to `hub.html`.
+> 2. Align migrated writes: authenticated users cannot directly patch `triggers.used` or insert
+>    legacy `activity`. Use a narrowly scoped database operation for marking a trigger used and
+>    read the server-generated `activity_events` feed; prevent partial/duplicate idea creation.
+> 3. Respect `ctx.member.role`: viewer is read-only, while member/admin/owner receive mutations.
+>    Finish the module's phone, keyboard, modal-focus, labels, busy-state, and touch-target pass.
+>
+> The loader-only change was deliberately not committed because it would mount an unstyled module
+> with write paths that fail after migration 001. Keep the Hub CSP and least-privilege policies.
+
 ---
 
 ## 6. The scanner landmine — READ BEFORE COMMITTING THE SCANNER
@@ -124,6 +139,10 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 `001_foundation` → `002_work_module` → verify + invite members → **(hold)** →
 `003_access_cutover` last, and only once the board fallback is no longer needed.
 
+> **Codex — 2026-08-12:** runtime verification is still pending. A throwaway Supabase staging
+> project may rehearse `001 → 002 → 003` end to end without affecting the public board. Production
+> still holds before `003`; nothing in this repository authorizes a production cutover.
+
 ---
 
 ## 8. Task board
@@ -134,6 +153,7 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 - [x] Make mobile Work navigation and account/recovery controls usable (`a1176ff`)
 - [x] Simplify the Work editor for non-technical users (`651dd3d`)
 - [x] Protect unsaved changes and preserve drafts across conflicts (`e9371eb`, `8a46c51`)
+- [x] Make Home, Work and constraint guidance iPhone-ready (`81c90d4`)
 - [x] Expose the `registerSection` mount hook + auth context (section 5, `5ef5433`)
 - [x] Leave `#idea-lab` section empty for Claude to fill
 - [ ] Verify the connected Home + Work pilot against a migrated test database
@@ -141,7 +161,7 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 
 ### Claude (idea lab + fallback) — branch `claude/idea-lab` in `web-ilab/`
 - [x] Idea Lab module: ideas, filters, search, shirt preview, copy-for-AI, add/make — verified
-- [ ] Wire Idea Lab into the hub once the hook lands
+- [ ] Complete the 2026-08-12 integration gate above, then wire Idea Lab into the Hub
 - [ ] Pull Codex's `index.html` XSS hardening; keep the fallback board correct for two weeks
 - [x] Second pair of eyes on Codex's migration SQL (`75958b3`)
 
