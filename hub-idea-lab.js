@@ -80,11 +80,13 @@ function safeHttpUrl(value) {
 /* ---------- module ---------- */
 export function mount(root, ctx) {
   const cfg = normaliseCtx(ctx);
+  const canEdit = cfg.member.role !== "viewer";   // viewers get a read-only board
   const el = document.createElement("div");
-  el.className = "ilab";
+  el.className = "ilab" + (canEdit ? "" : " ilab-readonly");
   el.innerHTML = TEMPLATE;
   root.replaceChildren(el);
   injectStyles();
+  if (!canEdit) { const add = el.querySelector("#ilab-add"); if (add) add.hidden = true; }
 
   const state = {
     ideas: [], triggers: [], activity: [],
@@ -273,7 +275,7 @@ export function mount(root, ctx) {
         </div>
         <div class="ilab-btns">
           <button class="ilab-copyai" data-ai="${t.id}">copy for AI</button>
-          <button class="ilab-mk" data-mk="${t.id}">write it myself</button>
+          ${canEdit ? `<button class="ilab-mk" data-mk="${t.id}">write it myself</button>` : ""}
         </div>
       </div>`;
     }).join("") || `<div class="ilab-empty">${state.tQuery ? "nothing matches \"" + esc(state.tQuery) + "\"" : "nothing collected yet"}</div>`;
@@ -303,6 +305,7 @@ export function mount(root, ctx) {
       </div>
       ${i.sparked_by ? `<div class="ilab-src">sparked by: ${esc(i.sparked_by)}
         ${sourceUrl ? `<br><a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(sourceUrl)}</a>` : ""}</div>` : ""}
+      ${canEdit ? `
       <div class="ilab-lbl">status</div>
       <div class="ilab-setline" id="ilab-setstatus">
         ${STATUSES.map((s) => `<button data-v="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}
@@ -310,8 +313,9 @@ export function mount(root, ctx) {
       <div class="ilab-lbl">risk</div>
       <div class="ilab-setline" id="ilab-setrisk">
         ${RISKS.map((r) => `<button data-v="${r}" class="${i.risk === r ? "on" : ""}">${r}</button>`).join("")}
-      </div>
-      <div class="ilab-src" style="margin-top:16px">
+      </div>` : `
+      <div class="ilab-lbl">status</div><div class="ilab-src">${esc(i.status)}${i.risk !== "clean" ? ` · risk: ${esc(i.risk)}` : ""}</div>`}
+      <div class="ilab-src ilab-mt16">
         added by ${esc(i.added_by || "—")}${i.updated_by ? ` · last touched by ${esc(i.updated_by)}` : ""}
       </div>`;
     q("#ilab-detail").classList.add("open");
@@ -319,16 +323,18 @@ export function mount(root, ctx) {
     drawShirt(q("#ilab-sv-b"), i.line, sub, "black");
     drawShirt(q("#ilab-sv-c"), i.line, sub, "cream");
     sheet.querySelector(".ilab-close").onclick = closeDetail;
-    sheet.querySelectorAll("#ilab-setstatus button").forEach((b) => (b.onclick = async () => {
-      await update(i.id, { status: b.dataset.v, updated_by: cfg.member.name });
-      log(`marked "${i.line.slice(0, 40)}" as ${b.dataset.v}`, i.id);
-      closeDetail(); await load();
-    }));
-    sheet.querySelectorAll("#ilab-setrisk button").forEach((b) => (b.onclick = async () => {
-      await update(i.id, { risk: b.dataset.v, updated_by: cfg.member.name });
-      log(`flagged "${i.line.slice(0, 40)}" as ${b.dataset.v}`, i.id);
-      closeDetail(); await load();
-    }));
+    if (canEdit) {
+      sheet.querySelectorAll("#ilab-setstatus button").forEach((b) => (b.onclick = async () => {
+        await update(i.id, { status: b.dataset.v, updated_by: cfg.member.name });
+        log(`marked "${i.line.slice(0, 40)}" as ${b.dataset.v}`, i.id);
+        closeDetail(); await load();
+      }));
+      sheet.querySelectorAll("#ilab-setrisk button").forEach((b) => (b.onclick = async () => {
+        await update(i.id, { risk: b.dataset.v, updated_by: cfg.member.name });
+        log(`flagged "${i.line.slice(0, 40)}" as ${b.dataset.v}`, i.id);
+        closeDetail(); await load();
+      }));
+    }
   }
   function closeDetail() { q("#ilab-detail").classList.remove("open"); }
   async function update(id, patch) {
@@ -359,8 +365,8 @@ export function mount(root, ctx) {
     const sheet = q("#ilab-sheet");
     sheet.innerHTML = `
       <button class="ilab-close">&times;</button>
-      <div class="ilab-dline" style="font-size:20px">new idea</div>
-      ${t ? `<div class="ilab-src" style="margin-top:10px">from: ${esc(t.title)}</div>` : ""}
+      <div class="ilab-dline ilab-dline-sm">new idea</div>
+      ${t ? `<div class="ilab-src ilab-mt10">from: ${esc(t.title)}</div>` : ""}
       <form class="ilab-new" id="ilab-nf">
         <input name="line" placeholder="the line that goes on the shirt" required autocomplete="off">
         <textarea name="concept" placeholder="what you'd see, one sentence"></textarea>
@@ -504,82 +510,12 @@ let stylesInjected = false;
 function injectStyles() {
   if (stylesInjected) return;
   stylesInjected = true;
-  const s = document.createElement("style");
-  s.textContent = ILAB_CSS;
-  document.head.appendChild(s);
+  // External same-origin stylesheet, so it satisfies the hub CSP (style-src 'self').
+  // Resolve the href relative to this module so it works from any host page.
+  if (document.querySelector('link[data-ilab-styles]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.setAttribute("data-ilab-styles", "");
+  link.href = new URL("hub-idea-lab.css", import.meta.url).href;
+  document.head.appendChild(link);
 }
-
-const ILAB_CSS = `
-.ilab{--il-ink:#ece7dd;--il-mut:#8b8478;--il-line:#262523;--il-panel:#161615;--il-green:#77c566;--il-warn:#d8a24a;--il-bad:#c9564a;color:var(--il-ink);position:relative}
-.ilab *{box-sizing:border-box}
-.ilab-bar{display:flex;align-items:center;gap:14px;margin-bottom:6px}
-.ilab-mark{font-family:Georgia,serif;font-style:italic;font-size:21px;line-height:1}
-.ilab-mark small{font-style:normal;font-family:inherit;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--il-mut);display:block;margin-top:3px}
-#ilab-howbtn{background:none;border:1px solid var(--il-line);color:var(--il-mut);font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;margin-left:auto}
-#ilab-howbtn:hover{border-color:var(--il-green);color:var(--il-green)}
-.ilab-tabs{display:flex;gap:2px;border-bottom:1px solid var(--il-line);margin-bottom:16px;overflow-x:auto}
-.ilab-tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--il-mut);padding:11px 12px;font-size:13px;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
-.ilab-tabs button.on{color:var(--il-ink);border-bottom-color:var(--il-green)}
-.ilab-count{color:var(--il-mut);font-weight:400;margin-left:5px}
-.ilab-filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
-.ilab-chip{background:transparent;border:1px solid var(--il-line);color:var(--il-mut);padding:6px 12px;border-radius:20px;font-size:12.5px;cursor:pointer}
-.ilab-chip.on{border-color:var(--il-green);color:var(--il-green)}
-.ilab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.ilab-card{background:var(--il-panel);border:1px solid var(--il-line);border-radius:3px;padding:16px;cursor:pointer;transition:border-color .12s}
-.ilab-card:hover{border-color:#3a3835}
-.ilab-line{font-size:19px;font-weight:700;line-height:1.25;letter-spacing:-.01em}
-.ilab-concept{color:var(--il-mut);font-size:13.5px;margin-top:8px;line-height:1.45}
-.ilab-foot{display:flex;align-items:center;gap:8px;margin-top:13px;flex-wrap:wrap}
-.ilab-tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;padding:3px 8px;border:1px solid var(--il-line);border-radius:2px;color:var(--il-mut)}
-.ilab-tag.status{border-color:#3a3835;color:var(--il-ink)}
-.ilab-tag.risk-check{border-color:var(--il-warn);color:var(--il-warn)}
-.ilab-tag.risk-avoid{border-color:var(--il-bad);color:var(--il-bad)}
-.ilab-by{margin-left:auto;font-size:11px;color:var(--il-mut)}
-.ilab-search{width:100%;background:#0f0f0e;border:1px solid var(--il-line);color:var(--il-ink);padding:12px 14px;font-size:15px;border-radius:2px;margin-bottom:14px;font-family:inherit}
-.ilab-search:focus{outline:none;border-color:var(--il-green)}
-.ilab-trig{border-bottom:1px solid var(--il-line);padding:13px 2px;display:flex;gap:12px;align-items:flex-start}
-.ilab-t{flex:1;font-size:14.5px;line-height:1.4}
-.ilab-s{font-size:11px;color:var(--il-mut);margin-top:5px}
-.ilab-s a{color:var(--il-green)}
-.ilab-btns{display:flex;flex-direction:column;gap:6px}
-.ilab-btns button{background:transparent;border:1px solid var(--il-line);color:var(--il-mut);padding:6px 11px;font-size:11.5px;cursor:pointer;white-space:nowrap;border-radius:2px}
-.ilab-copyai{border-color:var(--il-green)!important;color:var(--il-green)!important}
-.ilab-copyai:hover,.ilab-copyai.done{background:var(--il-green)!important;color:#0f0f0e!important}
-.ilab-mk:hover{border-color:var(--il-ink);color:var(--il-ink)}
-.ilab-trig.used{opacity:.4}
-.ilab-act{border-bottom:1px solid var(--il-line);padding:11px 2px;font-size:13.5px;color:var(--il-mut)}
-.ilab-act b{color:var(--il-ink);font-weight:600}
-.ilab-act span{float:right;font-size:11px}
-#ilab-add{position:sticky;float:right;bottom:18px;background:var(--il-green);color:#0f0f0e;border:none;width:54px;height:54px;border-radius:50%;font-size:28px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);line-height:1}
-.ilab-empty{color:var(--il-mut);text-align:center;padding:50px 20px;font-size:14.5px}
-.ilab-errbox{background:#2a1a17;border:1px solid var(--il-bad);color:#e8a79e;padding:10px 13px;font-size:13px;margin-bottom:14px;border-radius:2px}
-#ilab-detail{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
-#ilab-detail.open{display:flex}
-.ilab-sheet{background:var(--il-panel);border:1px solid var(--il-line);max-width:760px;width:100%;border-radius:4px;padding:24px;margin:auto;position:relative}
-.ilab-dline{font-size:27px;font-weight:800;line-height:1.2}
-.ilab-dconcept{color:var(--il-mut);margin:10px 0 0;line-height:1.5}
-.ilab-src{margin-top:14px;font-size:12.5px;color:var(--il-mut);line-height:1.5}
-.ilab-src a{color:var(--il-green);word-break:break-all}
-.ilab-shirts{display:flex;gap:14px;margin:22px 0;flex-wrap:wrap}
-.ilab-shirtbox{flex:1;min-width:200px;text-align:center}
-.ilab-shirtbox canvas{width:100%;height:300px;display:block;background:#0b0b0a;border:1px solid var(--il-line)}
-.ilab-shirtbox span{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--il-mut);display:block;margin-top:7px}
-.ilab-setline{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.ilab-setline button{background:transparent;border:1px solid var(--il-line);color:var(--il-mut);padding:8px 13px;font-size:12.5px;cursor:pointer;border-radius:2px}
-.ilab-setline button:hover{border-color:var(--il-ink);color:var(--il-ink)}
-.ilab-setline button.on{border-color:var(--il-green);color:var(--il-green)}
-.ilab-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--il-mut);margin:18px 0 0}
-.ilab-close{position:absolute;top:14px;right:18px;background:none;border:none;color:var(--il-mut);font-size:26px;cursor:pointer;line-height:1}
-.ilab-new{display:grid;gap:11px;margin-top:6px}
-.ilab-new input,.ilab-new textarea,.ilab-new select{background:#0f0f0e;border:1px solid var(--il-line);color:var(--il-ink);padding:11px 12px;font-size:15px;border-radius:2px;font-family:inherit;width:100%}
-.ilab-new textarea{min-height:70px;resize:vertical}
-.ilab-row{display:flex;gap:10px}
-.ilab-row>*{flex:1}
-.ilab-new button{background:var(--il-green);color:#0f0f0e;border:none;padding:13px;font-size:15px;font-weight:700;cursor:pointer;border-radius:2px}
-.ilab-how h3{font-size:19px;margin:0 0 4px}
-.ilab-how p{color:var(--il-mut);font-size:14px;line-height:1.55;margin:0 0 16px}
-.ilab-how ol{color:var(--il-mut);font-size:14px;line-height:1.7;padding-left:20px;margin:0 0 18px}
-.ilab-how ol b{color:var(--il-ink)}
-.ilab-rules{background:#0f0f0e;border:1px solid var(--il-line);padding:14px 16px;border-radius:2px;font-size:13.5px;color:var(--il-mut);line-height:1.6}
-.ilab-rules b{color:var(--il-ink)}
-`;
