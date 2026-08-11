@@ -2687,6 +2687,41 @@ select {
   font-size: 20px;
 }
 
+.hub-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 110;
+  display: flex;
+  width: min(420px, calc(100vw - 40px));
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 13px 13px 16px;
+  border: 1px solid rgba(120, 199, 103, 0.45);
+  background: #172017;
+  color: var(--ink);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hub-notice button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.hub-notice button:hover,
+.hub-notice button:focus-visible {
+  color: var(--ink);
+}
+
 .dashboard-grid-connected {
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.85fr);
 }

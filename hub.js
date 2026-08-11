@@ -43,6 +43,8 @@ const state = {
   activeSectionId: "home",
   mobileWorkStatus: "this_week",
   originalApproverId: "",
+  formBaseline: null,
+  noticeTimer: null,
   dialogOpener: null,
   dialogOpenerTaskId: ""
 };
@@ -305,6 +307,8 @@ function clearWorkspaceState() {
   state.mutationSequence += 1;
   setSaving(false);
   clearRegisteredSections();
+  state.formBaseline = null;
+  clearNotice();
   state.user = null;
   state.membership = null;
   state.workspace = null;
@@ -649,6 +653,55 @@ function hideAppError() {
   get("app-error-copy").textContent = "";
 }
 
+/* Codex — 2026-08-11: visible outcomes and one shared dirty-form guard make
+   common actions forgiving without changing the Work persistence contract. */
+function clearNotice() {
+  if (state.noticeTimer) window.clearTimeout(state.noticeTimer);
+  state.noticeTimer = null;
+  get("hub-notice-copy").textContent = "";
+  get("hub-notice").hidden = true;
+}
+
+function showNotice(message) {
+  clearNotice();
+  get("hub-notice-copy").textContent = message;
+  get("hub-notice").hidden = false;
+  state.noticeTimer = window.setTimeout(clearNotice, 8000);
+}
+
+function formSnapshot() {
+  return JSON.stringify([...form.querySelectorAll("input, select, textarea")].map((control) => ({
+    id: control.id,
+    value: control.type === "checkbox" ? control.checked : control.value
+  })));
+}
+
+function captureFormBaseline() {
+  state.formBaseline = formSnapshot();
+}
+
+function isFormDirty() {
+  return Boolean(
+    dialog.open
+    && state.formBaseline !== null
+    && ROLE_RANK[state.membership?.role] >= ROLE_RANK.member
+    && formSnapshot() !== state.formBaseline
+  );
+}
+
+function requestDialogClose() {
+  if (state.saving) return;
+  if (isFormDirty() && !window.confirm("Discard your unsaved changes?")) return;
+  state.formBaseline = null;
+  dialog.close();
+}
+
+async function requestWorkspaceRefresh() {
+  if (isFormDirty() && !window.confirm("Refresh the Hub and discard your unsaved changes?")) return;
+  state.formBaseline = null;
+  await refreshTasks();
+}
+
 function clearFormError() {
   formError.hidden = true;
   formError.textContent = "";
@@ -741,6 +794,7 @@ function openNewTask() {
   get("work-dialog-title").textContent = "New work item";
   archiveButton.hidden = true;
   syncRequirements();
+  captureFormBaseline();
   dialog.showModal();
   get("work-title-input").focus();
 }
@@ -780,6 +834,7 @@ function openTask(id) {
   archiveButton.hidden = !canEdit();
   syncRequirements();
   configureApprovalControls(task);
+  captureFormBaseline();
   dialog.showModal();
   get("work-title-input").focus();
 }
@@ -901,7 +956,10 @@ async function refreshTasks({ quiet = false } = {}) {
     state.tasks = workspaceData.tasks;
     state.stale = false;
     hideAppError();
-    if (dialog.open) dialog.close();
+    if (dialog.open) {
+      state.formBaseline = null;
+      dialog.close();
+    }
     renderWorkspace();
     return true;
   } catch {
@@ -958,9 +1016,13 @@ async function saveTask(event) {
       return;
     }
     setMobileWorkStatus(values.status);
-    await refreshTasks({ quiet: true });
+    state.formBaseline = null;
+    const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${values.title} saved.`;
+    showNotice(refreshed
+      ? `${values.title} saved in ${STATUS_LABELS[values.status]}.`
+      : `${values.title} was saved. Refresh the board to see the latest version.`);
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     showFormError(humanRepositoryError(error));
@@ -973,7 +1035,10 @@ async function archiveTask() {
   const id = get("work-id").value;
   const task = taskById(id);
   if (!task || !canEdit() || state.saving || archiveButton.hidden) return;
-  if (!window.confirm(`Archive “${task.title}”? It will leave the active board.`)) return;
+  const archiveMessage = isFormDirty()
+    ? `Archive “${task.title}”? It will leave the active board and unsaved edits will be discarded.`
+    : `Archive “${task.title}”? It will leave the active board.`;
+  if (!window.confirm(archiveMessage)) return;
   setSaving(true);
   const mutation = startMutation();
   try {
@@ -987,9 +1052,13 @@ async function archiveTask() {
       boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
       return;
     }
-    await refreshTasks({ quiet: true });
+    state.formBaseline = null;
+    const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${task.title} archived.`;
+    showNotice(refreshed
+      ? `${task.title} archived and removed from the board.`
+      : `${task.title} was archived. Refresh the board to confirm.`);
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     showFormError(humanRepositoryError(error));
@@ -1006,6 +1075,7 @@ async function reconcileSession(session, event = "MANUAL") {
   const generation = ++state.generation;
   state.mutationSequence += 1;
   setSaving(false);
+  state.formBaseline = null;
   if (dialog.open) dialog.close();
   if (!session) {
     showSignedOut();
@@ -1120,6 +1190,7 @@ async function retryAccess() {
 }
 
 function handleDialogClose() {
+  state.formBaseline = null;
   window.requestAnimationFrame(() => {
     let target = state.dialogOpener;
     if ((!target || !target.isConnected) && state.dialogOpenerTaskId) {
@@ -1139,13 +1210,14 @@ function bindEvents() {
   signOutButton.addEventListener("click", signOut);
   mobileSignOutButton.addEventListener("click", signOut);
   accessSignOutButton.addEventListener("click", signOut);
-  refreshButton.addEventListener("click", () => refreshTasks());
+  refreshButton.addEventListener("click", requestWorkspaceRefresh);
   get("dismiss-app-error").addEventListener("click", hideAppError);
+  get("dismiss-hub-notice").addEventListener("click", clearNotice);
   newWorkButton.addEventListener("click", openNewTask);
   form.addEventListener("submit", saveTask);
   archiveButton.addEventListener("click", archiveTask);
-  get("close-work-dialog").addEventListener("click", () => dialog.close());
-  get("cancel-work-button").addEventListener("click", () => dialog.close());
+  get("close-work-dialog").addEventListener("click", requestDialogClose);
+  get("cancel-work-button").addEventListener("click", requestDialogClose);
   statusInput.addEventListener("change", syncRequirements);
   searchInput.addEventListener("input", renderBoard);
   ownerFilter.addEventListener("change", renderBoard);
@@ -1155,6 +1227,18 @@ function bindEvents() {
     if (link) activateSection(link.getAttribute("href").slice(1));
   });
   window.addEventListener("hashchange", () => activateSection(sectionIdFromHash()));
+  window.addEventListener("beforeunload", (event) => {
+    if (!isFormDirty()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  dialog.addEventListener("cancel", (event) => {
+    if (state.saving || (isFormDirty() && !window.confirm("Discard your unsaved changes?"))) {
+      event.preventDefault();
+      return;
+    }
+    state.formBaseline = null;
+  });
   dialog.addEventListener("close", handleDialogClose);
   board.addEventListener("click", (event) => {
     const card = event.target.closest("button[data-task-id]");
