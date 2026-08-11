@@ -4,7 +4,7 @@ Two assistants build this repo in parallel (**Codex** and **Claude**) plus **Sal
 Supabase dashboard. This file is the shared source of truth. **Read it before you start. Commit
 often. Never edit a file you do not own.**
 
-Last updated: 2026-08-11 (Claude; Codex integration update).
+Last updated: 2026-08-11 (Codex build + integration update).
 
 ---
 
@@ -32,7 +32,8 @@ two branches own **disjoint files** (below), merges are clean.
 
 ## 2. Current state (verified, not assumed)
 
-- Nothing Codex built is live. It is all on the working tree / to-be `codex/hub`, undeployed.
+- Nothing Codex built is live. The Hub work is committed through `8a46c51` on `codex/hub` and
+  remains undeployed; `master` is unchanged.
 - The database is **not migrated** — none of the hub tables exist. Live schema is still
   ideas / triggers / activity.
 - The public board (`index.html`) and the daily scanner still run the **committed master**
@@ -94,6 +95,8 @@ absent, so it works today and snaps in the moment the hook lands.
 > initial deep links, and late module registration. The context has the six fields above, token
 > access is guarded against sign-out/account-switch races, and module `{ destroy() }` cleanup runs
 > when the verified workspace state is cleared.
+> Commit `52905c1` additionally binds every requested access token to the already verified member
+> ID, so an account switch cannot mix one member label with another member's token.
 >
 > Integration note for Claude: the Hub Content Security Policy intentionally blocks dynamically
 > injected inline `<style>` elements. Keep that protection; move Idea Lab styles into a same-origin
@@ -127,16 +130,20 @@ Until then, keep them on `codex/hub` only. `master`'s current scanner keeps the 
 
 ### Codex (hub core) — branch `codex/hub` in `web/`
 - [x] `git checkout -b codex/hub`, commit current work as the baseline (`2bcbdf5`)
-- [ ] Finish Work module + Home dashboard
+- [x] Build the private Home + Work pilot shell and connected repository (`2bcbdf5`)
+- [x] Make mobile Work navigation and account/recovery controls usable (`a1176ff`)
+- [x] Simplify the Work editor for non-technical users (`651dd3d`)
+- [x] Protect unsaved changes and preserve drafts across conflicts (`e9371eb`, `8a46c51`)
 - [x] Expose the `registerSection` mount hook + auth context (section 5, `5ef5433`)
 - [x] Leave `#idea-lab` section empty for Claude to fill
+- [ ] Verify the connected Home + Work pilot against a migrated test database
 - [ ] Dry-run migrations 001/002 on a scratch DB before Salman runs them live
 
 ### Claude (idea lab + fallback) — branch `claude/idea-lab` in `web-ilab/`
 - [x] Idea Lab module: ideas, filters, search, shirt preview, copy-for-AI, add/make — verified
 - [ ] Wire Idea Lab into the hub once the hook lands
 - [ ] Pull Codex's `index.html` XSS hardening; keep the fallback board correct for two weeks
-- [ ] Second pair of eyes on Codex's migration SQL
+- [x] Second pair of eyes on Codex's migration SQL (`75958b3`)
 
 ### Salman (dashboard, only on go)
 - [ ] Run migrations in order; set GitHub secrets + environment
