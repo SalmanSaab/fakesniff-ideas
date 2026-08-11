@@ -139,6 +139,10 @@
   .copyai.done{background:var(--green); color:#0f0f0e}
   .trig .btns{display:flex; flex-direction:column; gap:6px}
 
+  .search{width:100%; background:#0f0f0e; border:1px solid var(--line); color:var(--ink);
+    padding:12px 14px; font-size:15px; border-radius:2px; margin-bottom:14px; font-family:inherit}
+  .search:focus{outline:none; border-color:var(--green)}
+
   .empty{color:var(--mut); text-align:center; padding:50px 20px; font-size:14.5px}
   .err{background:#2a1a17; border:1px solid var(--bad); color:#e8a79e; padding:10px 13px;
     font-size:13px; margin-bottom:14px; border-radius:2px}
@@ -179,6 +183,7 @@
   </section>
 
   <section id="tab-triggers" hidden>
+    <input id="tsearch" class="search" placeholder="search the raw material..." autocomplete="off">
     <div class="filters" id="tfilters"></div>
     <div id="triggers"></div>
   </section>
@@ -239,7 +244,7 @@ const CATS = ["music","film","tv","icons","social","tech","sport","travel","art"
 
 let me = localStorage.getItem("fs_who") || "";
 let ideas = [], triggers = [], activity = [];
-let fStatus = "all", fCat = "all", fRisk = "all", fTrigUsed = "unused";
+let fStatus = "all", fCat = "all", fRisk = "all", fTrigUsed = "unused", tQuery = "";
 
 /* ---------------- api ---------------- */
 async function api(path, opts={}) {
@@ -432,7 +437,14 @@ function renderTriggers(){
      <button class="chip ${fTrigUsed==="all"?"on":""}" data-t="all">everything ${triggers.length}</button>`;
   tf.querySelectorAll("[data-t]").forEach(b=> b.onclick=()=>{ fTrigUsed=b.dataset.t; render(); });
 
-  const list = fTrigUsed==="unused" ? triggers.filter(t=>!t.used) : triggers;
+  let list = fTrigUsed==="unused" ? triggers.filter(t=>!t.used) : triggers;
+  if(tQuery){
+    const q = tQuery.toLowerCase();
+    list = list.filter(t=>
+      t.title.toLowerCase().includes(q) ||
+      (t.source||"").toLowerCase().includes(q) ||
+      (t.category||"").toLowerCase().includes(q));
+  }
   el.innerHTML = list.slice(0,150).map(t=>`
     <div class="trig ${t.used?"used":""}">
       <div class="t">${esc(t.title)}
@@ -443,7 +455,7 @@ function renderTriggers(){
         <button class="copyai" data-ai="${t.id}">copy for AI</button>
         <button data-mk="${t.id}">write it myself</button>
       </div>
-    </div>`).join("") || `<div class="empty">nothing collected yet</div>`;
+    </div>`).join("") || `<div class="empty">${tQuery ? "nothing matches \""+esc(tQuery)+"\"" : "nothing collected yet"}</div>`;
   el.querySelectorAll("[data-mk]").forEach(b=> b.onclick=()=> newIdea(+b.dataset.mk));
   el.querySelectorAll("[data-ai]").forEach(b=> b.onclick=()=> copyForAI(+b.dataset.ai, b));
 }
@@ -573,6 +585,13 @@ document.querySelectorAll("#gate button").forEach(b=> b.onclick=()=>{
 });
 
 document.getElementById("howbtn").onclick = showHow;
+
+let searchTimer;
+document.getElementById("tsearch").addEventListener("input", e=>{
+  clearTimeout(searchTimer);
+  const v = e.target.value;
+  searchTimer = setTimeout(()=>{ tQuery = v.trim(); renderTriggers(); }, 160);
+});
 
 function start(){
   document.getElementById("gate").style.display="none";
