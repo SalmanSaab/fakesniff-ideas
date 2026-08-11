@@ -1,0 +1,968 @@
+/* Codex — 2026-08-11: authenticated Hub controller. No company records are embedded in this file. */
+
+import { createHubAuth, validateHubConfig } from "./hub-auth.js";
+import { createConnectedWorkRepository, HubRepositoryError } from "./hub-work-repository.js";
+
+const STATUSES = ["backlog", "this_week", "doing", "review", "waiting", "done"];
+const ACTIVE_STATUSES = new Set(["this_week", "doing", "review", "waiting"]);
+const STATUS_LABELS = {
+  backlog: "Backlog",
+  this_week: "This week",
+  doing: "Doing",
+  review: "Review / Decision",
+  waiting: "Waiting / Blocked",
+  done: "Done"
+};
+const FLAG_LABELS = {
+  legal: "Legal",
+  budget: "Budget",
+  supplier: "Supplier",
+  account_access: "Account access",
+  missing_assets: "Missing assets"
+};
+const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
+
+const state = {
+  config: null,
+  auth: null,
+  repository: null,
+  authSubscription: null,
+  generation: 0,
+  refreshSequence: 0,
+  mutationSequence: 0,
+  user: null,
+  membership: null,
+  workspace: null,
+  members: [],
+  workstreams: [],
+  tasks: [],
+  saving: false,
+  stale: false,
+  dialogOpener: null,
+  dialogOpenerTaskId: ""
+};
+
+const get = (id) => document.getElementById(id);
+const accessScreen = get("access-screen");
+const appShell = get("app-shell");
+const accessLoading = get("access-loading");
+const accessCopy = get("access-copy");
+const accessStatus = get("access-status");
+const signInForm = get("signin-form");
+const setupActions = get("setup-actions");
+const retryAccessButton = get("retry-access-button");
+const accessSignOutButton = get("access-signout-button");
+const localPreviewLink = get("local-preview-link");
+const signOutButton = get("signout-button");
+const refreshButton = get("refresh-button");
+const board = document.querySelector(".board");
+const boardStatus = get("work-board-status");
+const dialog = get("work-dialog");
+const form = get("work-form");
+const formError = get("work-form-error");
+const newWorkButton = get("new-work-button");
+const archiveButton = get("archive-work-button");
+const saveButton = get("save-work-button");
+const statusInput = get("work-status");
+const ownerInput = get("work-owner");
+const approverInput = get("work-approver");
+const searchInput = get("work-search");
+const ownerFilter = get("work-owner-filter");
+
+function createElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+function isLoopback() {
+  return ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+}
+
+function setAccessView({ copy, loading = false, signin = false, setup = false, retry = false, switchAccount = false, status = "" }) {
+  appShell.hidden = true;
+  accessScreen.hidden = false;
+  accessCopy.textContent = copy;
+  accessLoading.hidden = !loading;
+  signInForm.hidden = !signin;
+  setupActions.hidden = !setup;
+  retryAccessButton.hidden = !retry;
+  accessSignOutButton.hidden = !switchAccount;
+  accessStatus.textContent = status;
+  document.querySelector(".skip-link")?.setAttribute("href", "#access-screen");
+  window.requestAnimationFrame(() => {
+    if (accessScreen.hidden) return;
+    if (signin && !signInForm.hidden) get("team-email").focus();
+    else accessScreen.focus();
+  });
+}
+
+function showSetupMode(configErrors = []) {
+  const detail = configErrors.length ? "The connected configuration is incomplete." : "The connected workspace has not been enabled yet.";
+  setAccessView({ copy: detail, setup: true, status: configErrors.join(" ") });
+  localPreviewLink.hidden = !isLoopback();
+}
+
+function showSignedOut(status = "") {
+  clearWorkspaceState();
+  setAccessView({
+    copy: "Use an invited email address. We will send a one-time sign-in link.",
+    signin: true,
+    status
+  });
+  get("team-email").disabled = false;
+  get("signin-button").disabled = false;
+}
+
+function showChecking(copy = "Verifying your invited workspace membership…") {
+  setAccessView({ copy, loading: true });
+}
+
+function showAccessDenied() {
+  clearWorkspaceState();
+  setAccessView({
+    copy: "This signed-in account does not have active access to the FAKESNIFF workspace.",
+    retry: true,
+    switchAccount: true,
+    status: "Ask a workspace owner to confirm the invitation and membership record."
+  });
+}
+
+function clearWorkspaceState() {
+  state.refreshSequence += 1;
+  state.mutationSequence += 1;
+  setSaving(false);
+  state.user = null;
+  state.membership = null;
+  state.workspace = null;
+  state.members = [];
+  state.workstreams = [];
+  state.tasks = [];
+  state.stale = false;
+  state.dialogOpener = null;
+  state.dialogOpenerTaskId = "";
+  if (dialog?.open) dialog.close();
+  form?.reset();
+  clearFormError();
+  searchInput.value = "";
+  get("workspace-label").textContent = "FAKESNIFF workspace";
+  get("rail-member-label").textContent = "Member";
+  get("member-avatar").textContent = "?";
+  get("home-member-kicker").textContent = "Workspace overview";
+  get("member-role-pill").textContent = "Member";
+  ownerFilter.replaceChildren();
+  appendOption(ownerFilter, "all", "All owners");
+  appendOption(ownerFilter, "unassigned", "Owner needed");
+  ownerInput.replaceChildren();
+  appendOption(ownerInput, "", "Owner needed");
+  approverInput.replaceChildren();
+  appendOption(approverInput, "", "No approver");
+  get("work-workstream").replaceChildren();
+  appendOption(get("work-workstream"), "", "No workstream");
+  if (board) {
+    STATUSES.forEach((status) => {
+      get(`${status}-items`)?.replaceChildren();
+      const count = get(`${status}-count`);
+      if (count) {
+        count.textContent = "0";
+        count.setAttribute("aria-label", `0 ${STATUS_LABELS[status]} items shown`);
+      }
+    });
+  }
+  boardStatus.textContent = "";
+  get("home-week-list")?.replaceChildren();
+  get("home-attention-list")?.replaceChildren();
+  hideAppError();
+  get("work-nav-count").textContent = "0";
+  get("work-nav-count").setAttribute("aria-label", "0 active work items");
+  get("home-active-work-count").textContent = "00";
+  get("home-active-work-note").textContent = "No active owners";
+  get("home-week-count").textContent = "00";
+  get("home-review-count").textContent = "00";
+  get("home-waiting-count").textContent = "00";
+}
+
+function canEdit() {
+  return ROLE_RANK[state.membership?.role] >= ROLE_RANK.member && !state.stale;
+}
+
+function isAdmin() {
+  return ROLE_RANK[state.membership?.role] >= ROLE_RANK.admin;
+}
+
+function memberMap() {
+  return new Map(state.members.map((member) => [member.user_id, member]));
+}
+
+function workstreamMap() {
+  return new Map(state.workstreams.map((workstream) => [workstream.id, workstream]));
+}
+
+function memberName(userId, fallback = "Owner needed") {
+  if (!userId) return fallback;
+  return memberMap().get(userId)?.display_name || "Former member";
+}
+
+function workstreamName(workstreamId) {
+  if (!workstreamId) return "General";
+  return workstreamMap().get(workstreamId)?.name || "Archived workstream";
+}
+
+function ownerClass(userId) {
+  if (!userId) return "owner-unassigned";
+  let value = 0;
+  for (const character of userId) value = (value + character.charCodeAt(0)) % 3;
+  return ["owner-s", "owner-e", "owner-m"][value];
+}
+
+function validWebUrl(value, httpsOnly = false) {
+  if (!value) return true;
+  try {
+    const parsed = new URL(value);
+    return httpsOnly ? parsed.protocol === "https:" : ["http:", "https:"].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function formatDate(value) {
+  if (!value) return "No date";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(parsed);
+}
+
+function isOverdue(task) {
+  if (!task.due_on || task.status === "done") return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(`${task.due_on}T00:00:00`) < today;
+}
+
+function makeExternalLink(url, label) {
+  const link = createElement("a", "", label);
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  return link;
+}
+
+function makeTaskCard(task) {
+  const shell = createElement("div", "task-card-shell");
+  const classes = ["task-card"];
+  if (["this_week", "doing", "review"].includes(task.status)) classes.push("task-card-active");
+  if (task.status === "waiting") classes.push("task-card-muted");
+  if (task.status === "done") classes.push("task-card-done");
+
+  const button = createElement("button", classes.join(" "));
+  button.type = "button";
+  button.dataset.taskId = task.id;
+  button.setAttribute("aria-label", `${canEdit() ? "Edit" : "View"} ${task.title}. ${STATUS_LABELS[task.status]}.`);
+
+  const top = createElement("span", "task-card-top");
+  top.append(createElement("span", "task-type", workstreamName(task.workstream_id)));
+  top.append(createElement("span", `priority-label priority-${task.priority}`, task.priority));
+  button.append(top, createElement("span", "task-card-title", task.title));
+
+  if (task.next_action) {
+    const next = createElement("span", "task-card-next");
+    next.append(createElement("strong", "", "Next: "), document.createTextNode(task.next_action));
+    button.append(next);
+  }
+  if (task.status === "waiting" && task.blocker_note) {
+    const blocker = createElement("span", "task-card-blocker");
+    blocker.append(createElement("strong", "", "Blocked: "), document.createTextNode(task.blocker_note));
+    button.append(blocker);
+  }
+
+  const flags = Array.isArray(task.flags) ? task.flags.filter((flag) => FLAG_LABELS[flag]) : [];
+  if (flags.length || !task.owner_id) {
+    const flagRow = createElement("span", "task-card-flags");
+    flags.forEach((flag) => flagRow.append(createElement("span", "task-flag", FLAG_LABELS[flag])));
+    if (!task.owner_id) flagRow.append(createElement("span", "task-flag task-flag-owner", "Owner needed"));
+    button.append(flagRow);
+  }
+
+  const footer = createElement("span", "task-card-footer");
+  footer.append(createElement("span", `owner-chip ${ownerClass(task.owner_id)}`, memberName(task.owner_id)));
+  footer.append(createElement("span", isOverdue(task) ? "task-card-date-overdue" : "", formatDate(task.due_on)));
+  button.append(footer);
+  shell.append(button);
+
+  const links = [];
+  if (task.source_url && validWebUrl(task.source_url)) links.push([task.source_url, "Source ↗"]);
+  if (task.latest_file_url && validWebUrl(task.latest_file_url, true)) links.push([task.latest_file_url, "Latest file ↗"]);
+  if (links.length) {
+    const linkRow = createElement("div", "task-card-links");
+    links.forEach(([url, label]) => linkRow.append(makeExternalLink(url, label)));
+    shell.append(linkRow);
+  }
+  return shell;
+}
+
+function taskMatches(task, search, ownerId) {
+  if (ownerId === "unassigned" && task.owner_id) return false;
+  if (ownerId !== "all" && ownerId !== "unassigned" && task.owner_id !== ownerId) return false;
+  if (!search) return true;
+  const flags = Array.isArray(task.flags) ? task.flags.map((flag) => FLAG_LABELS[flag] || "").join(" ") : "";
+  return [
+    task.title, workstreamName(task.workstream_id), memberName(task.owner_id),
+    memberName(task.approver_id, "No approver"), task.next_action, task.completion_condition,
+    task.blocker_note, flags, task.owner_id ? "" : "owner needed"
+  ].join(" ").toLowerCase().includes(search);
+}
+
+function renderBoard() {
+  const search = searchInput.value.trim().toLowerCase();
+  const ownerId = ownerFilter.value;
+  const visible = state.tasks.filter((task) => taskMatches(task, search, ownerId));
+
+  STATUSES.forEach((status) => {
+    const container = get(`${status}-items`);
+    const matches = visible.filter((task) => task.status === status);
+    container.replaceChildren();
+    matches.forEach((task) => container.append(makeTaskCard(task)));
+    if (!matches.length) container.append(createElement("p", "board-empty", search || ownerId !== "all" ? "No matching work" : "No work here"));
+    get(`${status}-count`).textContent = String(matches.length);
+    get(`${status}-count`).setAttribute("aria-label", `${matches.length} ${STATUS_LABELS[status]} items shown`);
+  });
+
+  boardStatus.textContent = `${visible.length} work ${visible.length === 1 ? "item" : "items"} shown.`;
+  renderSummary();
+}
+
+function homeListItem(task, detail) {
+  const row = createElement("a", "home-work-item");
+  row.href = "#work";
+  row.dataset.openTaskId = task.id;
+  const copy = createElement("span", "");
+  copy.append(createElement("strong", "", task.title), createElement("small", "", detail));
+  row.append(copy, createElement("span", `owner-chip ${ownerClass(task.owner_id)}`, memberName(task.owner_id)));
+  return row;
+}
+
+function renderHomeList(container, tasks, detailFor, emptyCopy) {
+  container.replaceChildren();
+  if (!tasks.length) {
+    container.append(createElement("p", "module-empty-copy", emptyCopy));
+    return;
+  }
+  tasks.forEach((task) => container.append(homeListItem(task, detailFor(task))));
+}
+
+function renderSummary() {
+  const active = state.tasks.filter((task) => ACTIVE_STATUSES.has(task.status));
+  const week = state.tasks.filter((task) => task.status === "this_week");
+  const review = state.tasks.filter((task) => task.status === "review");
+  const waiting = state.tasks.filter((task) => task.status === "waiting");
+  const owners = new Set(active.map((task) => task.owner_id).filter(Boolean));
+
+  get("work-nav-count").textContent = String(active.length);
+  get("work-nav-count").setAttribute("aria-label", `${active.length} active work items`);
+  get("home-active-work-count").textContent = String(active.length).padStart(2, "0");
+  get("home-active-work-note").textContent = owners.size ? `Across ${owners.size} ${owners.size === 1 ? "owner" : "owners"}` : "No active owners";
+  get("home-week-count").textContent = String(week.length).padStart(2, "0");
+  get("home-review-count").textContent = String(review.length).padStart(2, "0");
+  get("home-waiting-count").textContent = String(waiting.length).padStart(2, "0");
+
+  renderHomeList(get("home-week-list"), week, (task) => task.next_action || "Next action not recorded", "No work has been chosen for this week.");
+  renderHomeList(
+    get("home-attention-list"),
+    [...review, ...waiting].slice(0, 5),
+    (task) => task.status === "waiting" ? task.blocker_note : `Review by ${memberName(task.approver_id, "Approver needed")}`,
+    "No reviews or blockers need attention."
+  );
+}
+
+function appendOption(select, value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.append(option);
+}
+
+function populateReferenceControls() {
+  const currentFilter = ownerFilter.value;
+  ownerFilter.replaceChildren();
+  appendOption(ownerFilter, "all", "All owners");
+  appendOption(ownerFilter, "unassigned", "Owner needed");
+
+  const activeMembers = state.members.filter((member) => !member.archived_at);
+  const editableMembers = activeMembers.filter((member) => ROLE_RANK[member.role] >= ROLE_RANK.member);
+  activeMembers.forEach((member) => appendOption(ownerFilter, member.user_id, member.display_name));
+  if ([...ownerFilter.options].some((option) => option.value === currentFilter)) ownerFilter.value = currentFilter;
+
+  const ownerSelect = ownerInput;
+  ownerSelect.replaceChildren();
+  appendOption(ownerSelect, "", "Owner needed");
+  editableMembers.forEach((member) => appendOption(ownerSelect, member.user_id, member.display_name));
+
+  approverInput.replaceChildren();
+  appendOption(approverInput, "", "No approver");
+  editableMembers.forEach((member) => appendOption(approverInput, member.user_id, member.display_name));
+
+  const workstreamSelect = get("work-workstream");
+  workstreamSelect.replaceChildren();
+  appendOption(workstreamSelect, "", "No workstream");
+  state.workstreams
+    .filter((workstream) => !workstream.archived_at && workstream.status === "active")
+    .forEach((workstream) => appendOption(workstreamSelect, workstream.id, workstream.name));
+}
+
+function renderWorkspace({ focus = false } = {}) {
+  populateReferenceControls();
+  const role = state.membership.role;
+  const displayName = state.membership.display_name;
+  const activeWorkstreams = state.workstreams.filter((workstream) => !workstream.archived_at && workstream.status === "active");
+
+  get("workspace-label").textContent = state.workspace?.name || "FAKESNIFF workspace";
+  get("rail-member-label").textContent = `${displayName} · ${role}`;
+  get("member-avatar").textContent = displayName.trim().slice(0, 1).toUpperCase() || "?";
+  get("home-member-kicker").textContent = `Welcome, ${displayName}`;
+  get("member-role-pill").textContent = role;
+  get("work-mode-copy").textContent = role === "viewer"
+    ? "You have read-only access. A workspace member must make changes."
+    : "Signed-in changes are written to the private workspace.";
+  const dataNote = get("work-data-note");
+  dataNote.replaceChildren(createElement("strong", "", "Private data."), document.createTextNode(" Loaded for verified members only."));
+
+  newWorkButton.hidden = !canEdit();
+  newWorkButton.disabled = !canEdit() || activeWorkstreams.length === 0;
+  if (canEdit() && activeWorkstreams.length === 0) {
+    showAppError("Workstream setup is incomplete, so new work is disabled.");
+  }
+  renderBoard();
+  appShell.hidden = false;
+  accessScreen.hidden = true;
+  document.querySelector(".skip-link")?.setAttribute("href", "#main-content");
+  setSyncState("Up to date", false);
+  if (focus) window.requestAnimationFrame(() => get("main-content").focus());
+}
+
+function setSyncState(label, busy) {
+  get("sync-label").textContent = label;
+  refreshButton.disabled = Boolean(busy);
+  get("connection-label").textContent = state.stale ? "Stale" : "Connected";
+  get("connection-pulse").classList.toggle("pulse-warn", state.stale);
+}
+
+function showAppError(message) {
+  get("app-error-copy").textContent = message;
+  get("app-error").hidden = false;
+}
+
+function hideAppError() {
+  get("app-error").hidden = true;
+  get("app-error-copy").textContent = "";
+}
+
+function clearFormError() {
+  formError.hidden = true;
+  formError.textContent = "";
+}
+
+function showFormError(message) {
+  formError.textContent = message;
+  formError.hidden = false;
+  formError.focus();
+}
+
+function addMissingReferenceOption(select, value, label) {
+  if (!value || [...select.options].some((option) => option.value === value)) return;
+  appendOption(select, value, label);
+}
+
+function setFormReadOnly(readOnly) {
+  form.querySelectorAll("input, select, textarea").forEach((control) => {
+    if (["work-id", "work-updated-at"].includes(control.id)) return;
+    const textLike = control instanceof HTMLTextAreaElement
+      || (control instanceof HTMLInputElement && control.type !== "checkbox");
+    if (textLike) {
+      control.disabled = false;
+      control.readOnly = readOnly;
+    } else {
+      control.disabled = readOnly;
+    }
+    if (readOnly) control.setAttribute("aria-readonly", "true");
+    else control.removeAttribute("aria-readonly");
+  });
+  saveButton.hidden = readOnly;
+  get("cancel-work-button").textContent = readOnly ? "Close" : "Cancel";
+}
+
+function syncRequirements() {
+  const status = statusInput.value;
+  const active = ACTIVE_STATUSES.has(status);
+  const done = status === "done";
+  form.classList.toggle("is-active", active);
+  form.classList.toggle("is-done", done);
+  form.classList.toggle("is-waiting", status === "waiting");
+  form.classList.toggle("is-review", status === "review");
+  ownerInput.required = active || done;
+  get("work-date").required = active;
+  get("work-next-action").required = active;
+  get("work-completion").required = active || done;
+  get("work-blocker").required = status === "waiting";
+  approverInput.required = status === "review";
+  clearFormError();
+}
+
+function taskById(id) {
+  return state.tasks.find((task) => task.id === id);
+}
+
+function configureApprovalControls(task) {
+  if (!task || !canEdit()) return;
+  const actorIsApprover = task.approver_id && task.approver_id === state.membership.user_id;
+  const admin = isAdmin();
+
+  if (task.approver_id && !admin) approverInput.disabled = true;
+  if (task.status === "review" && !actorIsApprover && !admin) statusInput.disabled = true;
+  if (task.status === "done" && task.approver_id && !actorIsApprover && !admin) statusInput.disabled = true;
+  if (task.approver_id && !actorIsApprover && !admin) {
+    const doneOption = [...statusInput.options].find((option) => option.value === "done");
+    if (doneOption) doneOption.disabled = true;
+  }
+  archiveButton.hidden = !(admin || actorIsApprover || (!task.approver_id && task.status !== "review"));
+}
+
+function openNewTask() {
+  if (!canEdit() || newWorkButton.disabled) return;
+  state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  state.dialogOpenerTaskId = "";
+  populateReferenceControls();
+  form.reset();
+  setFormReadOnly(false);
+  get("work-id").value = "";
+  get("work-updated-at").value = "";
+  statusInput.value = "backlog";
+  get("work-priority").value = "normal";
+  get("work-dialog-title").textContent = "New work item";
+  archiveButton.hidden = true;
+  syncRequirements();
+  dialog.showModal();
+  get("work-title-input").focus();
+}
+
+function openTask(id) {
+  const task = taskById(id);
+  if (!task) return;
+  state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  state.dialogOpenerTaskId = id;
+  populateReferenceControls();
+  addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived workstream");
+  addMissingReferenceOption(ownerInput, task.owner_id, "Former member");
+  addMissingReferenceOption(approverInput, task.approver_id, "Former member");
+  setFormReadOnly(!canEdit());
+
+  get("work-id").value = task.id;
+  get("work-updated-at").value = task.updated_at;
+  get("work-title-input").value = task.title;
+  get("work-workstream").value = task.workstream_id || "";
+  statusInput.value = task.status;
+  ownerInput.value = task.owner_id || "";
+  approverInput.value = task.approver_id || "";
+  get("work-priority").value = task.priority;
+  get("work-date").value = task.due_on || "";
+  get("work-next-action").value = task.next_action || "";
+  get("work-completion").value = task.completion_condition || "";
+  get("work-blocker").value = task.blocker_note || "";
+  form.querySelectorAll('input[name="flags"]').forEach((checkbox) => {
+    checkbox.checked = Array.isArray(task.flags) && task.flags.includes(checkbox.value);
+  });
+  get("work-source-url").value = task.source_url || "";
+  get("work-latest-file-url").value = task.latest_file_url || "";
+  get("work-dialog-title").textContent = canEdit() ? "Edit work item" : "View work item";
+  archiveButton.hidden = !canEdit();
+  syncRequirements();
+  configureApprovalControls(task);
+  dialog.showModal();
+  get("work-title-input").focus();
+}
+
+function valuesFromForm() {
+  return {
+    title: get("work-title-input").value.trim(),
+    workstreamId: get("work-workstream").value,
+    status: statusInput.value,
+    ownerId: ownerInput.value,
+    approverId: approverInput.value,
+    priority: get("work-priority").value,
+    dueOn: get("work-date").value,
+    nextAction: get("work-next-action").value.trim(),
+    completion: get("work-completion").value.trim(),
+    blocker: get("work-blocker").value.trim(),
+    flags: Array.from(form.querySelectorAll('input[name="flags"]:checked'), (checkbox) => checkbox.value),
+    sourceUrl: get("work-source-url").value.trim(),
+    latestFileUrl: get("work-latest-file-url").value.trim(),
+    position: 0
+  };
+}
+
+function capacityError(values, editingId) {
+  const otherTasks = state.tasks.filter((task) => task.id !== editingId);
+  if (values.status === "this_week" && otherTasks.filter((task) => task.status === "this_week").length >= 3) {
+    return "This week is full (3 of 3). Move or finish an item before adding another.";
+  }
+  if (values.status === "doing" && otherTasks.some((task) => task.status === "doing" && task.owner_id === values.ownerId)) {
+    return `${memberName(values.ownerId)} already has one item in Doing.`;
+  }
+  return "";
+}
+
+function validationError(values, editingId) {
+  if (!values.title) return "Title cannot be blank.";
+  if (ACTIVE_STATUSES.has(values.status)
+      && (!values.ownerId || !values.dueOn || !values.nextAction || !values.completion)) {
+    return "Active work needs an owner, due date, next action and completion condition.";
+  }
+  if (values.status === "done" && (!values.ownerId || !values.completion)) {
+    return "Done work needs an owner and completion condition.";
+  }
+  if (values.status === "waiting" && !values.blocker) return "Waiting work needs a written blocker.";
+  if (values.status === "review" && !values.approverId) return "Review needs an assigned approver.";
+  if (values.approverId && values.ownerId === values.approverId) return "The approver must be different from the work owner.";
+  const existing = taskById(editingId);
+  if (values.status === "done" && values.approverId && !isAdmin()) {
+    if (!existing) return "Only a workspace admin can create approval-bound work directly as Done.";
+    if (!existing.approver_id) return "Assign the approver first, save, and let that approver complete the task.";
+  }
+  if (!validWebUrl(values.sourceUrl)) return "Source URL must begin with http:// or https://.";
+  if (!validWebUrl(values.latestFileUrl, true)) return "Latest file URL must be a secure https:// link.";
+  return capacityError(values, editingId);
+}
+
+function humanRepositoryError(error) {
+  if (!(error instanceof HubRepositoryError)) return "The Hub could not save this change. Try again.";
+  const server = error.serverMessage.toLowerCase();
+  if (error.code === "23505" || server.includes("one active doing")) return "That owner already has one item in Doing.";
+  if (server.includes("this week") || server.includes("three-card")) return "This week already has three items.";
+  if (server.includes("assigned approver") || server.includes("move this review") || server.includes("complete this task") || server.includes("archive this task")) {
+    return "Only the assigned approver or a workspace admin can make that workflow change.";
+  }
+  if (error.code === "23503") return "A member or workstream changed. Refresh the Hub and try again.";
+  if (error.code === "23514") return "One or more fields do not meet the rules for this status.";
+  if (["42501", "PGRST301"].includes(error.code)) return "Your workspace access changed. Refresh or sign in again.";
+  return "The Hub could not save this change. Refresh and try again.";
+}
+
+function setSaving(saving) {
+  state.saving = saving;
+  saveButton.disabled = saving;
+  archiveButton.disabled = saving;
+  get("close-work-dialog").disabled = saving;
+  get("cancel-work-button").disabled = saving;
+  saveButton.textContent = saving ? "Saving…" : "Save work";
+}
+
+function startMutation() {
+  return {
+    generation: state.generation,
+    userId: state.user?.id || "",
+    sequence: ++state.mutationSequence
+  };
+}
+
+function mutationIsCurrent(mutation) {
+  return Boolean(
+    mutation.userId
+    && mutation.generation === state.generation
+    && mutation.sequence === state.mutationSequence
+    && mutation.userId === state.user?.id
+  );
+}
+
+async function refreshTasks({ quiet = false } = {}) {
+  if (!state.repository || !state.membership) return false;
+  const authGeneration = state.generation;
+  const refreshSequence = ++state.refreshSequence;
+  const userId = state.user?.id;
+  if (!userId) return false;
+  if (!quiet) setSyncState("Refreshing…", true);
+  try {
+    const workspaceData = await state.repository.loadWorkspace(userId);
+    if (
+      authGeneration !== state.generation
+      || refreshSequence !== state.refreshSequence
+      || state.user?.id !== userId
+    ) return false;
+    if (!workspaceData) {
+      showAccessDenied();
+      return false;
+    }
+    state.membership = workspaceData.membership;
+    state.workspace = workspaceData.workspace;
+    state.members = workspaceData.members;
+    state.workstreams = workspaceData.workstreams;
+    state.tasks = workspaceData.tasks;
+    state.stale = false;
+    hideAppError();
+    if (dialog.open) dialog.close();
+    renderWorkspace();
+    return true;
+  } catch {
+    if (
+      authGeneration !== state.generation
+      || refreshSequence !== state.refreshSequence
+      || state.user?.id !== userId
+    ) return false;
+    state.stale = true;
+    newWorkButton.disabled = true;
+    if (dialog.open) setFormReadOnly(true);
+    setSyncState("Refresh failed", false);
+    showAppError("The last loaded board is still visible, but editing is paused until refresh succeeds.");
+    return false;
+  }
+}
+
+async function saveTask(event) {
+  event.preventDefault();
+  if (!canEdit() || state.saving) return;
+  syncRequirements();
+  if (!form.checkValidity()) {
+    showFormError("Complete the required fields for this status before saving.");
+    form.reportValidity();
+    return;
+  }
+  const id = get("work-id").value;
+  const values = valuesFromForm();
+  const invalid = validationError(values, id);
+  if (invalid) {
+    showFormError(invalid);
+    return;
+  }
+
+  setSaving(true);
+  const mutation = startMutation();
+  clearFormError();
+  try {
+    const saved = id
+      ? await state.repository.updateTask(id, get("work-updated-at").value, values)
+      : await state.repository.createTask(values);
+    if (!mutationIsCurrent(mutation)) return;
+    if (!saved) {
+      const refreshed = await refreshTasks({ quiet: true });
+      if (!mutationIsCurrent(mutation)) return;
+      if (!refreshed && !state.membership) return;
+      showAppError("This item changed elsewhere or your access changed. Reopen it from the refreshed board.");
+      boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
+      return;
+    }
+    await refreshTasks({ quiet: true });
+    if (!mutationIsCurrent(mutation)) return;
+    boardStatus.textContent = `${values.title} saved.`;
+  } catch (error) {
+    if (!mutationIsCurrent(mutation)) return;
+    showFormError(humanRepositoryError(error));
+  } finally {
+    if (mutationIsCurrent(mutation)) setSaving(false);
+  }
+}
+
+async function archiveTask() {
+  const id = get("work-id").value;
+  const task = taskById(id);
+  if (!task || !canEdit() || state.saving || archiveButton.hidden) return;
+  if (!window.confirm(`Archive “${task.title}”? It will leave the active board.`)) return;
+  setSaving(true);
+  const mutation = startMutation();
+  try {
+    const archived = await state.repository.archiveTask(id, get("work-updated-at").value);
+    if (!mutationIsCurrent(mutation)) return;
+    if (!archived) {
+      const refreshed = await refreshTasks({ quiet: true });
+      if (!mutationIsCurrent(mutation)) return;
+      if (!refreshed && !state.membership) return;
+      showAppError("This item changed elsewhere or your access changed. Reopen it from the refreshed board.");
+      boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
+      return;
+    }
+    await refreshTasks({ quiet: true });
+    if (!mutationIsCurrent(mutation)) return;
+    boardStatus.textContent = `${task.title} archived.`;
+  } catch (error) {
+    if (!mutationIsCurrent(mutation)) return;
+    showFormError(humanRepositoryError(error));
+  } finally {
+    if (mutationIsCurrent(mutation)) setSaving(false);
+  }
+}
+
+async function reconcileSession(session, event = "MANUAL") {
+  const incomingUserId = session?.user?.id || "";
+  const sameKnownUser = Boolean(incomingUserId && incomingUserId === state.user?.id && state.membership);
+  if (sameKnownUser && ["TOKEN_REFRESHED", "SIGNED_IN"].includes(event)) return;
+
+  const generation = ++state.generation;
+  state.mutationSequence += 1;
+  setSaving(false);
+  if (dialog.open) dialog.close();
+  if (!session) {
+    showSignedOut();
+    return;
+  }
+  if (state.user && incomingUserId !== state.user.id) clearWorkspaceState();
+  showChecking();
+  try {
+    const userResponse = await state.auth.getVerifiedUser();
+    if (generation !== state.generation) return;
+    if (userResponse.error || !userResponse.data?.user) {
+      showSignedOut("Your sign-in expired. Request a new link.");
+      return;
+    }
+    const user = userResponse.data.user;
+    const workspaceData = await state.repository.loadWorkspace(user.id);
+    if (generation !== state.generation) return;
+    if (!workspaceData) {
+      showAccessDenied();
+      return;
+    }
+    state.user = user;
+    state.membership = workspaceData.membership;
+    state.workspace = workspaceData.workspace;
+    state.members = workspaceData.members;
+    state.workstreams = workspaceData.workstreams;
+    state.tasks = workspaceData.tasks;
+    state.stale = false;
+    renderWorkspace({ focus: true });
+  } catch {
+    if (generation !== state.generation) return;
+    clearWorkspaceState();
+    setAccessView({
+      copy: "The private workspace could not be verified.",
+      retry: true,
+      status: "Check the connection and try again. No company data was loaded."
+    });
+  }
+}
+
+async function startConnectedMode() {
+  showChecking("Starting secure access…");
+  try {
+    state.auth = await createHubAuth(state.config);
+    state.repository = createConnectedWorkRepository(state.auth.client, state.config.workspaceId);
+    state.authSubscription = state.auth.onAuthStateChange((event, session) => {
+      window.setTimeout(() => void reconcileSession(session, event), 0);
+    });
+    const initial = await state.auth.getInitialSession();
+    if (initial.error) throw initial.error;
+    await reconcileSession(initial.data?.session || null, "INITIAL_CHECK");
+  } catch {
+    clearWorkspaceState();
+    setAccessView({
+      copy: "Secure access could not start.",
+      retry: true,
+      status: "Check the Hub configuration and network connection."
+    });
+  }
+}
+
+async function requestMagicLink(event) {
+  event.preventDefault();
+  const emailInput = get("team-email");
+  if (!signInForm.checkValidity()) {
+    signInForm.reportValidity();
+    return;
+  }
+  emailInput.disabled = true;
+  get("signin-button").disabled = true;
+  accessStatus.textContent = "Sending a one-time link…";
+  try {
+    await state.auth.requestMagicLink(emailInput.value);
+    accessStatus.textContent = "If this address is invited, check its inbox for a sign-in link.";
+  } catch {
+    accessStatus.textContent = "If this address is invited, check its inbox for a sign-in link.";
+  } finally {
+    emailInput.disabled = false;
+    get("signin-button").disabled = false;
+  }
+}
+
+async function signOut() {
+  ++state.generation;
+  showSignedOut("Signed out on this device.");
+  try {
+    await state.auth?.signOut();
+  } catch {
+    // Local company data is already cleared. Remote revocation can be retried by signing in again.
+  }
+}
+
+async function retryAccess() {
+  retryAccessButton.disabled = true;
+  try {
+    if (!state.auth) await startConnectedMode();
+    else {
+      const initial = await state.auth.getInitialSession();
+      if (initial.error) throw initial.error;
+      await reconcileSession(initial.data?.session || null, "MANUAL_RETRY");
+    }
+  } catch {
+    clearWorkspaceState();
+    setAccessView({
+      copy: "Secure access could not be retried.",
+      retry: true,
+      status: "Check the connection and try again. No company data was loaded."
+    });
+  } finally {
+    retryAccessButton.disabled = false;
+  }
+}
+
+function handleDialogClose() {
+  window.requestAnimationFrame(() => {
+    let target = state.dialogOpener;
+    if ((!target || !target.isConnected) && state.dialogOpenerTaskId) {
+      target = [...board.querySelectorAll("button[data-task-id]")]
+        .find((card) => card.dataset.taskId === state.dialogOpenerTaskId);
+    }
+    if (!target || !target.isConnected) target = newWorkButton;
+    target?.focus();
+    state.dialogOpener = null;
+    state.dialogOpenerTaskId = "";
+  });
+}
+
+function bindEvents() {
+  signInForm.addEventListener("submit", requestMagicLink);
+  retryAccessButton.addEventListener("click", retryAccess);
+  signOutButton.addEventListener("click", signOut);
+  accessSignOutButton.addEventListener("click", signOut);
+  refreshButton.addEventListener("click", () => refreshTasks());
+  get("dismiss-app-error").addEventListener("click", hideAppError);
+  newWorkButton.addEventListener("click", openNewTask);
+  form.addEventListener("submit", saveTask);
+  archiveButton.addEventListener("click", archiveTask);
+  get("close-work-dialog").addEventListener("click", () => dialog.close());
+  get("cancel-work-button").addEventListener("click", () => dialog.close());
+  statusInput.addEventListener("change", syncRequirements);
+  searchInput.addEventListener("input", renderBoard);
+  ownerFilter.addEventListener("change", renderBoard);
+  dialog.addEventListener("close", handleDialogClose);
+  board.addEventListener("click", (event) => {
+    const card = event.target.closest("button[data-task-id]");
+    if (card) openTask(card.dataset.taskId);
+  });
+  get("home-week-list").addEventListener("click", (event) => {
+    const row = event.target.closest("[data-open-task-id]");
+    if (row) window.setTimeout(() => openTask(row.dataset.openTaskId), 0);
+  });
+  get("home-attention-list").addEventListener("click", (event) => {
+    const row = event.target.closest("[data-open-task-id]");
+    if (row) window.setTimeout(() => openTask(row.dataset.openTaskId), 0);
+  });
+}
+
+function boot() {
+  bindEvents();
+  const validation = validateHubConfig(globalThis.FAKESNIFF_HUB_CONFIG);
+  state.config = validation.config;
+  if (!validation.ok || state.config.mode === "setup") {
+    showSetupMode(validation.errors);
+    return;
+  }
+  void startConnectedMode();
+}
+
+boot();

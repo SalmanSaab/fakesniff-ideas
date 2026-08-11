@@ -1,13 +1,28 @@
+# Codex — 2026-08-11
 name: collect ideas material
 
 on:
   schedule:
     - cron: "0 7 * * *"      # every day, 7am UTC
-  workflow_dispatch:          # and a button to run it by hand
+
+# Codex — GitHub schedules always run the latest commit on the default branch.
+# Do not add workflow_dispatch without pinning checkout and script execution to
+# a protected ref.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fakesniff-daily-scanner
+  cancel-in-progress: false
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Restrict this Environment's deployment branches to the protected default
+    # branch. It contains the powerful server-side V1 scanner credential.
+    environment: scanner-production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,3 +30,11 @@ jobs:
           python-version: "3.12"
       - name: scan and push to supabase
         run: python scan_cloud.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # V1: this Environment secret contains the Supabase service-role key.
+          # Replace it with a least-privilege RPC/Edge Function credential later.
+          SUPABASE_SCANNER_KEY: ${{ secrets.SUPABASE_SCANNER_KEY }}
+          SUPABASE_WORKSPACE_ID: ${{ secrets.SUPABASE_WORKSPACE_ID }}
+          SCANNER_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          SCANNER_COMMIT_SHA: ${{ github.sha }}

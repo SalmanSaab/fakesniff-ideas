@@ -253,7 +253,15 @@ async function api(path, opts={}) {
   if (!r.ok) throw new Error(body || r.status);
   return body ? JSON.parse(body) : null;
 }
-function showErr(m){ document.getElementById("err").innerHTML = `<div class="err">${m}</div>`; }
+/* Codex — 2026-08-11: legacy-board errors and external URLs must never become
+   executable markup on the future authenticated Hub origin. */
+function showErr(m){
+  const host = document.getElementById("err");
+  const message = document.createElement("div");
+  message.className = "err";
+  message.textContent = String(m || "something went wrong");
+  host.replaceChildren(message);
+}
 
 async function load(){
   try{
@@ -262,7 +270,7 @@ async function load(){
       api("triggers?select=*&order=id.desc&limit=400"),
       api("activity?select=*&order=at.desc&limit=60"),
     ]);
-    document.getElementById("err").innerHTML = "";
+    document.getElementById("err").replaceChildren();
     render();
   }catch(e){ showErr("could not reach the database. " + e.message.slice(0,120)); }
 }
@@ -365,23 +373,29 @@ function renderIdeas(){
   const el = document.getElementById("ideas");
   const list = visible();
   if(!list.length){ el.innerHTML = `<div class="empty">nothing here</div>`; return; }
-  el.innerHTML = list.map(i=>`
+  el.innerHTML = list.map(i=>{
+    const status = safeEnum(i.status, STATUSES, "new");
+    const category = safeEnum(i.category, CATS, "other");
+    const risk = safeEnum(i.risk, ["clean","check","avoid"], "check");
+    return `
     <div class="card" data-id="${i.id}">
       <div class="line">${esc(i.line)}</div>
       ${i.concept?`<div class="concept">${esc(i.concept)}</div>`:""}
       <div class="foot">
-        <span class="tag status">${i.status}</span>
-        <span class="tag">${i.category}</span>
-        ${i.risk!=="clean"?`<span class="tag risk-${i.risk}">${i.risk}</span>`:""}
+        <span class="tag status">${esc(status)}</span>
+        <span class="tag">${esc(category)}</span>
+        ${risk!=="clean"?`<span class="tag risk-${risk}">${esc(risk)}</span>`:""}
         ${i.added_by?`<span class="by">${esc(i.added_by)}</span>`:""}
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   el.querySelectorAll(".card").forEach(c=> c.onclick=()=> openIdea(+c.dataset.id));
 }
 
 function openIdea(id){
   const i = ideas.find(x=>x.id===id); if(!i) return;
   const sheet = document.getElementById("sheet");
+  const sourceUrl = safeHttpUrl(i.source_url);
   sheet.innerHTML = `
     <button class="close">&times;</button>
     <div class="line">${esc(i.line)}</div>
@@ -391,7 +405,7 @@ function openIdea(id){
       <div class="shirtbox"><canvas id="sv-c"></canvas><span>cream</span></div>
     </div>
     ${i.sparked_by?`<div class="src">sparked by: ${esc(i.sparked_by)}
-      ${i.source_url?`<br><a href="${esc(i.source_url)}" target="_blank" rel="noopener">${esc(i.source_url)}</a>`:""}</div>`:""}
+      ${sourceUrl?`<br><a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(sourceUrl)}</a>`:""}</div>`:""}
     <div class="lbl">status</div>
     <div class="setline" id="setstatus">
       ${STATUSES.map(s=>`<button data-v="${s}" class="${i.status===s?"on":""}">${s}</button>`).join("")}
@@ -445,17 +459,21 @@ function renderTriggers(){
       (t.source||"").toLowerCase().includes(q) ||
       (t.category||"").toLowerCase().includes(q));
   }
-  el.innerHTML = list.slice(0,150).map(t=>`
+  el.innerHTML = list.slice(0,150).map(t=>{
+    const category = safeEnum(t.category, CATS, "other");
+    const triggerUrl = safeHttpUrl(t.url);
+    return `
     <div class="trig ${t.used?"used":""}">
       <div class="t">${esc(t.title)}
-        <div class="s">${esc(t.source)} · ${t.category}
-          ${t.url?` · <a href="${esc(t.url)}" target="_blank" rel="noopener">open</a>`:""}</div>
+        <div class="s">${esc(t.source)} · ${esc(category)}
+          ${triggerUrl?` · <a href="${esc(triggerUrl)}" target="_blank" rel="noopener noreferrer">open</a>`:""}</div>
       </div>
       <div class="btns">
         <button class="copyai" data-ai="${t.id}">copy for AI</button>
         <button data-mk="${t.id}">write it myself</button>
       </div>
-    </div>`).join("") || `<div class="empty">${tQuery ? "nothing matches \""+esc(tQuery)+"\"" : "nothing collected yet"}</div>`;
+    </div>`;
+  }).join("") || `<div class="empty">${tQuery ? "nothing matches \""+esc(tQuery)+"\"" : "nothing collected yet"}</div>`;
   el.querySelectorAll("[data-mk]").forEach(b=> b.onclick=()=> newIdea(+b.dataset.mk));
   el.querySelectorAll("[data-ai]").forEach(b=> b.onclick=()=> copyForAI(+b.dataset.ai, b));
 }
@@ -495,7 +513,7 @@ function newIdea(triggerId){
       category:f.get("category"), risk:f.get("risk"), status:"new",
       added_by:me,
       sparked_by: t? `${t.source}: ${t.title.slice(0,70)}` : "",
-      source_url: t? (t.url||"") : ""
+      source_url: t? safeHttpUrl(t.url) : ""
     };
     try{
       await api("ideas", {method:"POST", body:JSON.stringify([row])});
@@ -566,7 +584,17 @@ function showHow(){
 }
 
 /* ---------------- chrome ---------------- */
-function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+/* Codex — 2026-08-11: defensive rendering for records that remain anonymously
+   writable until the authenticated cutover. */
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function safeEnum(value, allowed, fallback){ return allowed.includes(value) ? value : fallback; }
+function safeHttpUrl(value){
+  if(!value) return "";
+  try{
+    const parsed = new URL(String(value));
+    return ["http:","https:"].includes(parsed.protocol) ? parsed.href : "";
+  }catch(e){ return ""; }
+}
 
 document.querySelectorAll("nav button").forEach(b=> b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Codex — 2026-08-11: the authenticated shell runs only same-origin code plus one exact SRI-pinned Supabase asset. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="FAKESNIFF private company workspace.">
+  <title>FAKESNIFF — company hub</title>
+  <link rel="stylesheet" href="hub.css">
+  <script src="hub-config.js" defer></script>
+  <script type="module" src="hub.js"></script>
+</head>
+<body>
+  <!-- Codex — 2026-08-11: publishable Hub shell. Company records render only after authenticated membership is verified. -->
+  <a class="skip-link" href="#main-content">Skip to the workspace</a>
+
+  <main id="access-screen" class="access-screen" aria-labelledby="access-title" tabindex="-1">
+    <section class="access-card">
+      <a class="brand access-brand" href="./" aria-label="FAKESNIFF">
+        <span class="brand-word">fakesniff.</span>
+        <span class="brand-sub">company hub</span>
+      </a>
+      <div class="access-mark" aria-hidden="true">fs.</div>
+      <p class="eyebrow">Private workspace</p>
+      <h1 id="access-title">Make the work<br><em>visible.</em></h1>
+      <p id="access-copy" class="access-copy">Checking workspace access…</p>
+
+      <div id="access-loading" class="access-loading" role="status">
+        <span class="pulse" aria-hidden="true"></span>
+        <span>Checking secure access</span>
+      </div>
+
+      <form id="signin-form" class="signin-form" novalidate hidden>
+        <label for="team-email">Invited email</label>
+        <input id="team-email" name="email" type="email" autocomplete="email" inputmode="email" required>
+        <button id="signin-button" type="submit">Email me a sign-in link</button>
+      </form>
+
+      <div id="setup-actions" class="setup-actions" hidden>
+        <p>Connected access is not configured yet. No company data is included in this public shell.</p>
+        <a id="local-preview-link" class="primary-button" href="hub-preview.local.html" hidden>Open local private preview</a>
+      </div>
+
+      <p id="access-status" class="access-status" role="status" aria-live="polite"></p>
+      <button id="retry-access-button" class="text-button" type="button" hidden>Try again</button>
+      <button id="access-signout-button" class="text-button" type="button" hidden>Use another account</button>
+      <p class="access-footnote">Invite-only · access is verified against the workspace membership list</p>
+    </section>
+  </main>
+
+  <div id="app-shell" class="app-shell" hidden>
+    <aside class="side-rail" aria-label="Workspace navigation">
+      <a class="brand" href="#home" aria-label="FAKESNIFF hub home">
+        <span class="brand-word">fakesniff.</span>
+        <span class="brand-sub">company hub</span>
+      </a>
+
+      <nav class="primary-nav" aria-label="Hub sections">
+        <a class="nav-link is-current" href="#home" aria-current="page">
+          <span class="nav-index" aria-hidden="true">01</span>
+          <span>Home</span>
+        </a>
+        <a class="nav-link" href="#work">
+          <span class="nav-index" aria-hidden="true">02</span>
+          <span>Work</span>
+          <span id="work-nav-count" class="nav-count" aria-label="0 active items">0</span>
+        </a>
+        <a class="nav-link" href="#idea-lab">
+          <span class="nav-index" aria-hidden="true">03</span>
+          <span>Idea Lab</span>
+          <span class="nav-meta">Next</span>
+        </a>
+        <a class="nav-link" href="#designs">
+          <span class="nav-index" aria-hidden="true">04</span>
+          <span>Designs</span>
+          <span class="nav-meta">Next</span>
+        </a>
+        <a class="nav-link" href="#decisions">
+          <span class="nav-index" aria-hidden="true">05</span>
+          <span>Decisions</span>
+          <span class="nav-meta">Next</span>
+        </a>
+      </nav>
+
+      <div class="rail-footer">
+        <div class="system-status">
+          <span id="connection-pulse" class="pulse" aria-hidden="true"></span>
+          <span id="connection-label">Connected</span>
+        </div>
+        <p id="rail-member-label">Member</p>
+        <button id="signout-button" class="rail-signout" type="button">Sign out</button>
+      </div>
+    </aside>
+
+    <main id="main-content" class="workspace" tabindex="-1">
+      <header class="topbar">
+        <div>
+          <p id="workspace-label" class="eyebrow">FAKESNIFF workspace</p>
+          <p class="topbar-title">Internal control tower</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="refresh-button" class="quiet-button" type="button">Refresh</button>
+          <span id="sync-label" class="sync-label" role="status" aria-live="polite">Up to date</span>
+          <div id="member-avatar" class="avatar avatar-green" aria-hidden="true">?</div>
+        </div>
+      </header>
+
+      <div id="app-error" class="app-error" role="alert" hidden>
+        <strong>Could not update the Hub.</strong>
+        <span id="app-error-copy"></span>
+        <button id="dismiss-app-error" type="button" aria-label="Dismiss error">×</button>
+      </div>
+
+      <section id="home" class="page-section hero-section" aria-labelledby="home-title">
+        <div class="hero-copy">
+          <p id="home-member-kicker" class="kicker">Workspace overview</p>
+          <h1 id="home-title">Make the work<br><em>visible.</em></h1>
+          <p class="hero-note">One place for what is moving, what is blocked, and what needs a decision.</p>
+        </div>
+        <div class="week-signal" aria-label="Workspace principle">
+          <span class="signal-label">Operating rule</span>
+          <span class="signal-value">One owner. One next move.</span>
+          <span class="signal-detail">If either is missing, the item stays in the backlog.</span>
+        </div>
+
+        <div class="stat-grid" aria-label="Workspace snapshot">
+          <article class="stat-card">
+            <span id="home-active-work-count" class="stat-number">00</span>
+            <span class="stat-label">Active work</span>
+            <span id="home-active-work-note" class="stat-note">No active owners</span>
+          </article>
+          <article class="stat-card">
+            <span id="home-week-count" class="stat-number">00</span>
+            <span class="stat-label">This week</span>
+            <span class="stat-note">Maximum three</span>
+          </article>
+          <article class="stat-card stat-card-alert">
+            <span id="home-review-count" class="stat-number">00</span>
+            <span class="stat-label">Need review</span>
+            <span class="stat-note">Approver-controlled</span>
+          </article>
+          <article class="stat-card">
+            <span id="home-waiting-count" class="stat-number">00</span>
+            <span class="stat-label">Blocked</span>
+            <span class="stat-note">Waiting needs a reason</span>
+          </article>
+        </div>
+
+        <div class="dashboard-grid dashboard-grid-connected">
+          <article class="panel priorities-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Current focus</p>
+                <h2>This week</h2>
+              </div>
+              <a class="micro-link" href="#work">Open board</a>
+            </div>
+            <div id="home-week-list" class="home-work-list"></div>
+          </article>
+
+          <article class="panel attention-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Attention</p>
+                <h2>Review and blockers</h2>
+              </div>
+              <span class="alert-dot" aria-hidden="true"></span>
+            </div>
+            <div id="home-attention-list" class="home-work-list"></div>
+          </article>
+
+          <article class="panel rhythm-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Team rhythm</p>
+                <h2>One short loop</h2>
+              </div>
+            </div>
+            <div class="rhythm-steps" aria-label="Weekly operating rhythm">
+              <div class="rhythm-step"><span>Start</span><strong>Choose</strong><small>up to 3</small></div>
+              <div class="rhythm-line" aria-hidden="true"></div>
+              <div class="rhythm-step"><span>Move</span><strong>Do</strong><small>one each</small></div>
+              <div class="rhythm-line" aria-hidden="true"></div>
+              <div class="rhythm-step"><span>Finish</span><strong>Close</strong><small>record it</small></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="work" class="page-section" aria-labelledby="work-title">
+        <div class="section-heading">
+          <div>
+            <p class="kicker">02 / Shared work</p>
+            <h2 id="work-title">Work</h2>
+            <p>Every active item gets one owner, a next move, a finish condition and a due date.</p>
+          </div>
+          <button id="new-work-button" class="primary-button" type="button">New work <span aria-hidden="true">＋</span></button>
+        </div>
+
+        <aside class="integration-notice integration-notice-confirmed" aria-labelledby="work-system-title">
+          <div class="notice-icon" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <p class="eyebrow">Source of truth</p>
+            <h3 id="work-system-title">Work lives in this Hub</h3>
+            <p id="work-mode-copy">Signed-in changes are written to the private workspace.</p>
+          </div>
+          <span id="member-role-pill" class="status-pill status-live">Member</span>
+        </aside>
+
+        <div class="work-toolbar" aria-label="Work board controls">
+          <div class="work-control work-search">
+            <label for="work-search">Search work</label>
+            <input id="work-search" type="search" placeholder="Title, next action, flag…" autocomplete="off">
+          </div>
+          <div class="work-control">
+            <label for="work-owner-filter">Owner</label>
+            <select id="work-owner-filter">
+              <option value="all">All owners</option>
+              <option value="unassigned">Owner needed</option>
+            </select>
+          </div>
+          <p id="work-data-note" class="preview-reset-note"><strong>Private data.</strong> Loaded for verified members only.</p>
+        </div>
+
+        <p id="work-board-status" class="sr-only" role="status" aria-live="polite"></p>
+        <div id="work-loading" class="board-loading" role="status" hidden>Loading work…</div>
+        <div class="board" aria-label="FAKESNIFF work board">
+          <section class="board-column" aria-labelledby="backlog-title"><header><h3 id="backlog-title">Backlog</h3><span id="backlog-count">0</span></header><div id="backlog-items" class="board-items"></div></section>
+          <section class="board-column board-column-focus" aria-labelledby="week-title"><header><h3 id="week-title">This week</h3><span id="this_week-count">0</span></header><div id="this_week-items" class="board-items"></div></section>
+          <section class="board-column" aria-labelledby="doing-title"><header><h3 id="doing-title">Doing</h3><span id="doing-count">0</span></header><div id="doing-items" class="board-items"></div></section>
+          <section class="board-column" aria-labelledby="review-title"><header><h3 id="review-title">Review / Decision</h3><span id="review-count">0</span></header><div id="review-items" class="board-items"></div></section>
+          <section class="board-column" aria-labelledby="waiting-title"><header><h3 id="waiting-title">Waiting / Blocked</h3><span id="waiting-count">0</span></header><div id="waiting-items" class="board-items"></div></section>
+          <section class="board-column" aria-labelledby="done-title"><header><h3 id="done-title">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
+        </div>
+
+        <dialog id="work-dialog" class="work-dialog" aria-labelledby="work-dialog-title">
+          <form id="work-form" class="work-form" novalidate>
+            <div class="dialog-heading">
+              <div><p class="eyebrow">Shared work</p><h3 id="work-dialog-title">New work item</h3></div>
+              <button id="close-work-dialog" class="dialog-close" type="button" aria-label="Close work editor">×</button>
+            </div>
+            <input id="work-id" name="work-id" type="hidden">
+            <input id="work-updated-at" name="work-updated-at" type="hidden">
+            <div class="form-grid">
+              <div class="form-field form-field-wide"><label for="work-title-input">Title <span aria-hidden="true">*</span></label><input id="work-title-input" name="title" type="text" maxlength="240" required></div>
+              <div class="form-field"><label for="work-workstream">Workstream</label><select id="work-workstream" name="workstream"><option value="">No workstream</option></select></div>
+              <div class="form-field"><label for="work-status">Status</label><select id="work-status" name="status"><option value="backlog">Backlog</option><option value="this_week">This week</option><option value="doing">Doing</option><option value="review">Review / Decision</option><option value="waiting">Waiting / Blocked</option><option value="done">Done</option></select></div>
+              <div class="form-field"><label for="work-owner">Owner <span class="owner-required">*</span></label><select id="work-owner" name="owner"><option value="">Owner needed</option></select></div>
+              <div class="form-field"><label for="work-approver">Approver <span class="review-required">*</span></label><select id="work-approver" name="approver"><option value="">No approver</option></select></div>
+              <div class="form-field"><label for="work-priority">Priority</label><select id="work-priority" name="priority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+              <div class="form-field"><label for="work-date">Due date <span class="active-required">*</span></label><input id="work-date" name="date" type="date"></div>
+              <div class="form-field form-field-wide"><label for="work-next-action">Next action <span class="active-required">*</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000"></textarea></div>
+              <div class="form-field form-field-wide"><label for="work-completion">Completion condition <span class="completion-required">*</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000"></textarea></div>
+              <div id="work-blocker-field" class="form-field form-field-wide"><label for="work-blocker">Waiting on / blocker <span class="waiting-required">*</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea></div>
+              <fieldset class="form-field form-field-wide flags-field"><legend>Flags</legend><div class="flag-options"><div class="flag-option"><input id="flag-legal" name="flags" type="checkbox" value="legal"><label for="flag-legal">Legal</label></div><div class="flag-option"><input id="flag-budget" name="flags" type="checkbox" value="budget"><label for="flag-budget">Budget</label></div><div class="flag-option"><input id="flag-supplier" name="flags" type="checkbox" value="supplier"><label for="flag-supplier">Supplier</label></div><div class="flag-option"><input id="flag-account-access" name="flags" type="checkbox" value="account_access"><label for="flag-account-access">Account access</label></div><div class="flag-option"><input id="flag-missing-assets" name="flags" type="checkbox" value="missing_assets"><label for="flag-missing-assets">Missing assets</label></div></div></fieldset>
+              <div class="form-field form-field-wide"><label for="work-source-url">Source URL</label><input id="work-source-url" name="sourceUrl" type="url" inputmode="url" placeholder="https://…"></div>
+              <div class="form-field form-field-wide"><label for="work-latest-file-url">Latest file URL</label><input id="work-latest-file-url" name="latestFileUrl" type="url" inputmode="url" placeholder="https://…"></div>
+            </div>
+            <p id="work-form-error" class="form-error" role="alert" tabindex="-1" hidden></p>
+            <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden>Archive item</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button">Cancel</button><button id="save-work-button" class="primary-button" type="submit">Save work</button></div>
+          </form>
+        </dialog>
+      </section>
+
+      <section id="idea-lab" class="page-section placeholder-section" aria-labelledby="ideas-title"><p class="kicker">03 / Signal to statement</p><h2 id="ideas-title">Idea Lab</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Ideas move here after the private Work pilot.</h3><p>The existing idea records stay untouched until authenticated access is verified.</p></div></section>
+      <section id="designs" class="page-section placeholder-section" aria-labelledby="designs-title"><p class="kicker">04 / Product development</p><h2 id="designs-title">Designs</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Design records and private files come next.</h3><p>No internal design names or assets are embedded in this publishable page.</p></div></section>
+      <section id="decisions" class="page-section placeholder-section" aria-labelledby="decisions-title"><p class="kicker">05 / Company memory</p><h2 id="decisions-title">Decisions &amp; resources</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Confirmed decisions will load from the workspace.</h3><p>The static source contains no private decision log.</p></div></section>
+
+      <footer class="site-footer"><span class="brand-word">fakesniff.</span><p>Nothing is real. The workflow should be.</p><a href="#home">Back to top <span aria-hidden="true">↑</span></a></footer>
+    </main>
+  </div>
+</body>
+</html>
