@@ -13,6 +13,14 @@ const STATUS_LABELS = {
   waiting: "Waiting / Blocked",
   done: "Done"
 };
+const STATUS_GUIDANCE = {
+  backlog: "Backlog is simple: only the title is required. Add the working details when this is ready to move.",
+  this_week: "For This week, choose an owner, due date, next step, and what Done means. The team keeps no more than three items here.",
+  doing: "To start Doing, complete the working details. Each person keeps one item in progress at a time.",
+  review: "For Review, complete the working details and choose someone other than the owner to approve it.",
+  waiting: "For Waiting, keep the working details and say exactly which person, answer, file, or event is needed.",
+  done: "To finish an item, record its owner and the result that means it is Done."
+};
 const FLAG_LABELS = {
   legal: "Legal",
   budget: "Budget",
@@ -399,6 +407,7 @@ function ownerClass(userId) {
 
 function validWebUrl(value, httpsOnly = false) {
   if (!value) return true;
+  if (/\s/.test(value)) return false;
   try {
     const parsed = new URL(value);
     return httpsOnly ? parsed.protocol === "https:" : ["http:", "https:"].includes(parsed.protocol);
@@ -706,15 +715,55 @@ async function requestWorkspaceRefresh() {
   await refreshTasks();
 }
 
-function clearFormError() {
+function clearFieldError(control) {
+  const errorId = control?.dataset?.fieldErrorId;
+  if (!errorId) return;
+  get(errorId)?.remove();
+  const describedBy = (control.getAttribute("aria-describedby") || "")
+    .split(/\s+/)
+    .filter((id) => id && id !== errorId);
+  if (describedBy.length) control.setAttribute("aria-describedby", describedBy.join(" "));
+  else control.removeAttribute("aria-describedby");
+  control.removeAttribute("aria-invalid");
+  delete control.dataset.fieldErrorId;
+}
+
+function clearFieldErrors() {
+  form.querySelectorAll("[data-field-error-id]").forEach(clearFieldError);
+  form.querySelectorAll(".field-error").forEach((message) => message.remove());
+}
+
+function clearEditedFieldError(event) {
+  clearFieldError(event.target);
   formError.hidden = true;
   formError.textContent = "";
 }
 
-function showFormError(message) {
+function clearFormError() {
+  formError.hidden = true;
+  formError.textContent = "";
+  clearFieldErrors();
+}
+
+function showFormError(message, fieldId = "") {
+  clearFieldErrors();
   formError.textContent = message;
   formError.hidden = false;
-  formError.focus();
+  const control = fieldId ? get(fieldId) : null;
+  if (!control) {
+    formError.focus();
+    return;
+  }
+  if (get("work-more-details").contains(control)) get("work-more-details").open = true;
+  const inlineError = createElement("small", "field-error", message);
+  inlineError.id = `${fieldId}-field-error`;
+  control.insertAdjacentElement("afterend", inlineError);
+  const describedBy = new Set((control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+  describedBy.add(inlineError.id);
+  control.setAttribute("aria-describedby", [...describedBy].join(" "));
+  control.setAttribute("aria-invalid", "true");
+  control.dataset.fieldErrorId = inlineError.id;
+  control.focus();
 }
 
 function addMissingReferenceOption(select, value, label) {
@@ -760,6 +809,7 @@ function syncRequirements() {
   get("work-completion").required = active || done;
   get("work-blocker").required = waiting;
   approverInput.required = review;
+  get("work-status-guidance").textContent = STATUS_GUIDANCE[status] || STATUS_GUIDANCE.backlog;
   clearFormError();
 }
 
@@ -811,7 +861,8 @@ function openTask(id) {
   const task = taskById(id);
   if (!task) return;
   setMobileWorkStatus(task.status);
-  state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  state.dialogOpener = activeElement?.matches("[data-open-task-id]") ? null : activeElement;
   state.dialogOpenerTaskId = id;
   populateReferenceControls();
   addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived area");
@@ -844,7 +895,7 @@ function openTask(id) {
   configureApprovalControls(task);
   captureFormBaseline();
   dialog.showModal();
-  get("work-title-input").focus();
+  get("close-work-dialog").focus();
 }
 
 function valuesFromForm() {
@@ -869,48 +920,91 @@ function valuesFromForm() {
 function capacityError(values, editingId) {
   const otherTasks = state.tasks.filter((task) => task.id !== editingId);
   if (values.status === "this_week" && otherTasks.filter((task) => task.status === "this_week").length >= 3) {
-    return "This week is full (3 of 3). Move or finish an item before adding another.";
+    return { message: "This week is full (3 of 3). Move or finish an item before adding another.", fieldId: "work-status" };
   }
   if (values.status === "doing" && otherTasks.some((task) => task.status === "doing" && task.owner_id === values.ownerId)) {
-    return `${memberName(values.ownerId)} already has one item in Doing.`;
+    return { message: `${memberName(values.ownerId)} already has one item in Doing. Finish or move that item before starting another.`, fieldId: "work-owner" };
   }
-  return "";
+  return null;
 }
 
 function validationError(values, editingId) {
-  if (!values.title) return "Title cannot be blank.";
-  if (ACTIVE_STATUSES.has(values.status)
-      && (!values.ownerId || !values.dueOn || !values.nextAction || !values.completion)) {
-    return "To move this out of Backlog, add an owner, due date, next step, and Done when.";
+  if (!values.title) return { message: "Add a short title so the team can recognise this work.", fieldId: "work-title-input" };
+  if (ACTIVE_STATUSES.has(values.status)) {
+    if (!values.ownerId) return { message: `Choose who owns this before moving it to ${STATUS_LABELS[values.status]}.`, fieldId: "work-owner" };
+    if (!values.dueOn) return { message: `Add a due date before moving this to ${STATUS_LABELS[values.status]}.`, fieldId: "work-date" };
+    if (!values.nextAction) return { message: "Write the next concrete step so the owner knows what to do.", fieldId: "work-next-action" };
+    if (!values.completion) return { message: "Describe the result that will mean this work is Done.", fieldId: "work-completion" };
   }
-  if (values.status === "done" && (!values.ownerId || !values.completion)) {
-    return "Done work needs an owner and a clear Done when.";
+  if (values.status === "done") {
+    if (!values.ownerId) return { message: "Choose who completed this work before marking it Done.", fieldId: "work-owner" };
+    if (!values.completion) return { message: "Record the result that means this work is Done.", fieldId: "work-completion" };
   }
-  if (values.status === "waiting" && !values.blocker) return "Say what this work is waiting for.";
-  if (values.status === "review" && !values.approverId) return "Choose another person to approve this work.";
-  if (values.approverId && values.ownerId === values.approverId) return "The owner and approver must be different people.";
+  if (values.status === "waiting" && !values.blocker) return { message: "Say which person, answer, file, or event this work is waiting for.", fieldId: "work-blocker" };
+  if (values.status === "review" && !values.approverId) return { message: "Choose another team member to review this work.", fieldId: "work-approver" };
+  if (values.approverId && values.ownerId === values.approverId) return { message: "Choose someone other than the owner to approve this work.", fieldId: "work-approver" };
   const existing = taskById(editingId);
   if (values.status === "done" && values.approverId && !isAdmin()) {
-    if (!existing) return "Only a workspace admin can create approval-bound work directly as Done.";
-    if (!existing.approver_id) return "Assign the approver first, save, and let that approver complete the task.";
+    if (!existing) return { message: "Save this for Review first. The chosen approver can mark it Done afterward.", fieldId: "work-status" };
+    if (!existing.approver_id) return { message: "Save the approver first. Then that person can mark the item Done.", fieldId: "work-status" };
   }
-  if (!validWebUrl(values.sourceUrl)) return "The source link must begin with http:// or https://.";
-  if (!validWebUrl(values.latestFileUrl, true)) return "The latest file link must begin with secure https://.";
+  if (!validWebUrl(values.sourceUrl)) return { message: "Remove spaces from the source link and make sure it starts with http:// or https://.", fieldId: "work-source-url" };
+  if (!validWebUrl(values.latestFileUrl, true)) return { message: "Remove spaces from the file link and make sure it starts with https://.", fieldId: "work-latest-file-url" };
   return capacityError(values, editingId);
 }
 
 function humanRepositoryError(error) {
-  if (!(error instanceof HubRepositoryError)) return "The Hub could not save this change. Try again.";
+  const issue = (message, fieldId = "") => ({ message, fieldId });
+  if (!(error instanceof HubRepositoryError)) return issue("The Hub could not save this change. Check your connection and try again.");
   const server = error.serverMessage.toLowerCase();
-  if (error.code === "23505" || server.includes("one active doing")) return "That owner already has one item in Doing.";
-  if (server.includes("this week") || server.includes("three-card")) return "This week already has three items.";
-  if (server.includes("assigned approver") || server.includes("move this review") || server.includes("complete this task") || server.includes("archive this task")) {
-    return "Only the assigned approver or a workspace admin can make that workflow change.";
+
+  if (server.includes("owner must be an active member")) return issue("That owner can no longer edit work. Refresh and choose an active team member.", "work-owner");
+  if (server.includes("approver must be an active member")) return issue("That approver is no longer available. Refresh and choose another active team member.", "work-approver");
+  if (server.includes("workspace admin can create completed approval-bound")) return issue("Save this for Review first. The approver can mark it Done afterward.", "work-status");
+  if (server.includes("workspace admin can change an assigned approver")) return issue("The approver is locked after assignment. Ask a workspace owner to change it.", "work-approver");
+  if (server.includes("approval must be assigned before completion")) return issue("Save the approver first. Then that person can mark the item Done.", "work-status");
+  if (server.includes("archive this task")) return issue("Only this item's approver or a workspace owner can archive it.");
+  if (server.includes("move this review")) return issue("This review is waiting for its approver. Only that person or a workspace owner can move it.", "work-status");
+  if (server.includes("reopen this task")) return issue("Only this item's approver or a workspace owner can reopen it.", "work-status");
+  if (server.includes("complete this task")) return issue("Only the assigned approver or a workspace owner can mark this Done.", "work-status");
+  if (server.includes("the this week lane is limited to three tasks")) return issue("This week already has three items. Move or finish one before adding another.", "work-status");
+  if (server.includes("tasks_one_doing_per_owner_active_uidx") || server.includes("one active doing")) {
+    return issue("That owner already has one item in Doing. Finish or move it before starting another.", "work-owner");
   }
-  if (error.code === "23503") return "A team member or area changed. Refresh the Hub and try again.";
-  if (error.code === "23514") return "One or more fields do not meet the rules for this status.";
-  if (["42501", "PGRST301"].includes(error.code)) return "Your workspace access changed. Refresh or sign in again.";
-  return "The Hub could not save this change. Refresh and try again.";
+
+  if (server.includes("tasks_title_length")) return issue("Add a title of 240 characters or fewer.", "work-title-input");
+  if (server.includes("tasks_status_allowed")) return issue("Choose one of the available stages.", "work-status");
+  if (server.includes("tasks_priority_allowed")) return issue("Choose one of the available priorities.", "work-priority");
+  if (server.includes("tasks_flags_allowed")) return issue("Choose only the available attention flags.");
+  if (server.includes("tasks_source_url_http")) return issue("Remove spaces from the source link and make sure it starts with http:// or https://.", "work-source-url");
+  if (server.includes("tasks_latest_file_url_https")) return issue("Remove spaces from the file link and make sure it starts with https://.", "work-latest-file-url");
+  if (server.includes("tasks_waiting_has_reason")) return issue("Say which person, answer, file, or event this work is waiting for.", "work-blocker");
+  if (server.includes("tasks_review_has_separate_approver")) return issue("Choose someone other than the owner to approve this work.", "work-approver");
+  if (server.includes("tasks_active_work_fields_present")) {
+    const current = valuesFromForm();
+    if (!current.ownerId) return issue("Choose who owns this active work.", "work-owner");
+    if (!current.dueOn) return issue("Add a due date for this active work.", "work-date");
+    if (!current.nextAction) return issue("Write the next concrete step for this active work.", "work-next-action");
+    if (!current.completion) return issue("Describe the result that will mean this work is Done.", "work-completion");
+    return issue("Review the required details for this active work, save it, and try again.");
+  }
+  if (server.includes("tasks_done_fields_present")) {
+    const current = valuesFromForm();
+    if (!current.ownerId) return issue("Choose who completed this work.", "work-owner");
+    if (!current.completion) return issue("Record the result that made this work complete.", "work-completion");
+    return issue("Review the completion details, save the item, and try again.");
+  }
+
+  if (error.code === "23505") return issue("This item conflicts with another saved change. Refresh the Hub and try again.");
+  if (error.code === "23503") {
+    if (server.includes("tasks_workstream_fk")) return issue("That area is no longer available. Refresh and choose another area.", "work-workstream");
+    if (server.includes("tasks_owner_fk")) return issue("That owner is no longer available. Refresh and choose another team member.", "work-owner");
+    if (server.includes("tasks_approver_fk")) return issue("That approver is no longer available. Refresh and choose another team member.", "work-approver");
+    return issue("A linked idea, design, or workspace changed. Refresh the Hub and try again.");
+  }
+  if (error.code === "23514") return issue("This older item does not meet a current Hub rule. Review its status details, save it, and try again.");
+  if (["42501", "PGRST301"].includes(error.code)) return issue("Your workspace access changed. Refresh the Hub or sign in again.");
+  return issue("The Hub could not save this change. Check your connection, then refresh and try again.");
 }
 
 function setSaving(saving) {
@@ -997,7 +1091,7 @@ async function saveTask(event) {
   if (!form.checkValidity()) {
     const invalidControl = form.querySelector("input:invalid, select:invalid, textarea:invalid");
     if (invalidControl && get("work-more-details").contains(invalidControl)) get("work-more-details").open = true;
-    showFormError("Complete the required fields for this status before saving.");
+    showFormError("Complete this field before saving.", invalidControl?.id || "");
     form.reportValidity();
     return;
   }
@@ -1005,10 +1099,7 @@ async function saveTask(event) {
   const values = valuesFromForm();
   const invalid = validationError(values, id);
   if (invalid) {
-    if (!validWebUrl(values.sourceUrl) || !validWebUrl(values.latestFileUrl, true)) {
-      get("work-more-details").open = true;
-    }
-    showFormError(invalid);
+    showFormError(invalid.message, invalid.fieldId);
     return;
   }
 
@@ -1037,7 +1128,8 @@ async function saveTask(event) {
     }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
-    showFormError(humanRepositoryError(error));
+    const friendly = humanRepositoryError(error);
+    showFormError(friendly.message, friendly.fieldId);
   } finally {
     if (mutationIsCurrent(mutation)) setSaving(false);
   }
@@ -1073,7 +1165,8 @@ async function archiveTask() {
     }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
-    showFormError(humanRepositoryError(error));
+    const friendly = humanRepositoryError(error);
+    showFormError(friendly.message, friendly.fieldId);
   } finally {
     if (mutationIsCurrent(mutation)) setSaving(false);
   }
@@ -1207,11 +1300,12 @@ function handleDialogClose() {
   state.formBaseline = null;
   window.requestAnimationFrame(() => {
     let target = state.dialogOpener;
-    if ((!target || !target.isConnected) && state.dialogOpenerTaskId) {
+    const isVisible = (element) => Boolean(element?.isConnected && element.getClientRects().length);
+    if (!isVisible(target) && state.dialogOpenerTaskId) {
       target = [...board.querySelectorAll("button[data-task-id]")]
         .find((card) => card.dataset.taskId === state.dialogOpenerTaskId);
     }
-    if (!target || !target.isConnected) target = newWorkButton;
+    if (!isVisible(target)) target = isVisible(newWorkButton) ? newWorkButton : get("work");
     target?.focus();
     state.dialogOpener = null;
     state.dialogOpenerTaskId = "";
@@ -1229,6 +1323,8 @@ function bindEvents() {
   get("dismiss-hub-notice").addEventListener("click", clearNotice);
   newWorkButton.addEventListener("click", openNewTask);
   form.addEventListener("submit", saveTask);
+  form.addEventListener("input", clearEditedFieldError);
+  form.addEventListener("change", clearEditedFieldError);
   archiveButton.addEventListener("click", archiveTask);
   get("close-work-dialog").addEventListener("click", requestDialogClose);
   get("cancel-work-button").addEventListener("click", requestDialogClose);
@@ -1269,6 +1365,11 @@ function bindEvents() {
 }
 
 function boot() {
+  const phoneLayout = window.matchMedia("(max-width: 820px)");
+  get("work-tools").open = !phoneLayout.matches;
+  phoneLayout.addEventListener("change", (event) => {
+    get("work-tools").open = !event.matches;
+  });
   bindEvents();
   const validation = validateHubConfig(globalThis.FAKESNIFF_HUB_CONFIG);
   state.config = validation.config;

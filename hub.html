@@ -196,7 +196,7 @@
         </div>
       </section>
 
-      <section id="work" class="page-section" aria-labelledby="work-title">
+      <section id="work" class="page-section" aria-labelledby="work-title" tabindex="-1">
         <div class="section-heading">
           <div>
             <p class="kicker">02 / Shared work</p>
@@ -206,30 +206,25 @@
           <button id="new-work-button" class="primary-button" type="button">New work <span aria-hidden="true">＋</span></button>
         </div>
 
-        <aside class="integration-notice integration-notice-confirmed" aria-labelledby="work-system-title">
-          <div class="notice-icon" aria-hidden="true"><span></span><span></span><span></span></div>
-          <div>
-            <p class="eyebrow">Source of truth</p>
-            <h3 id="work-system-title">Work lives in this Hub</h3>
-            <p id="work-mode-copy">Signed-in changes are written to the private workspace.</p>
+        <!-- Codex — 2026-08-12: filters stay open on larger screens and collapse
+             into one obvious row on phones so today's cards appear sooner. -->
+        <details id="work-tools" class="work-tools" open>
+          <summary>Search and filter work</summary>
+          <div class="work-toolbar" aria-label="Work board controls">
+            <div class="work-control work-search">
+              <label for="work-search">Search work</label>
+              <input id="work-search" type="search" placeholder="Title, next step, flag…" autocomplete="off">
+            </div>
+            <div class="work-control">
+              <label for="work-owner-filter">Owner</label>
+              <select id="work-owner-filter">
+                <option value="all">All owners</option>
+                <option value="unassigned">Owner needed</option>
+              </select>
+            </div>
+            <p id="work-data-note" class="preview-reset-note"><strong>Private data.</strong> Loaded for verified members only.</p>
           </div>
-          <span id="member-role-pill" class="status-pill status-live">Member</span>
-        </aside>
-
-        <div class="work-toolbar" aria-label="Work board controls">
-          <div class="work-control work-search">
-            <label for="work-search">Search work</label>
-            <input id="work-search" type="search" placeholder="Title, next step, flag…" autocomplete="off">
-          </div>
-          <div class="work-control">
-            <label for="work-owner-filter">Owner</label>
-            <select id="work-owner-filter">
-              <option value="all">All owners</option>
-              <option value="unassigned">Owner needed</option>
-            </select>
-          </div>
-          <p id="work-data-note" class="preview-reset-note"><strong>Private data.</strong> Loaded for verified members only.</p>
-        </div>
+        </details>
 
         <p id="work-board-status" class="sr-only" role="status" aria-live="polite"></p>
         <div id="work-loading" class="board-loading" role="status" hidden>Loading work…</div>
@@ -254,6 +249,16 @@
           <section class="board-column" data-work-status="done" aria-labelledby="done-title"><header><h3 id="done-title">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
         </div>
 
+        <aside class="integration-notice integration-notice-confirmed" aria-labelledby="work-system-title">
+          <div class="notice-icon" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <p class="eyebrow">Source of truth</p>
+            <h3 id="work-system-title">Work lives in this Hub</h3>
+            <p id="work-mode-copy">Signed-in changes are written to the private workspace.</p>
+          </div>
+          <span id="member-role-pill" class="status-pill status-live">Member</span>
+        </aside>
+
         <dialog id="work-dialog" class="work-dialog" aria-labelledby="work-dialog-title">
           <form id="work-form" class="work-form" novalidate>
             <div class="dialog-heading">
@@ -265,12 +270,14 @@
             <div class="form-grid">
               <div class="form-field form-field-wide"><label for="work-title-input">Title <span aria-hidden="true">*</span></label><input id="work-title-input" name="title" type="text" maxlength="240" required></div>
               <div class="form-field"><label for="work-status">Status</label><select id="work-status" name="status"><option value="backlog">Backlog</option><option value="this_week">This week</option><option value="doing">Doing</option><option value="review">Review / Decision</option><option value="waiting">Waiting / Blocked</option><option value="done">Done</option></select></div>
-              <div class="form-field"><label for="work-owner">Owner <span class="owner-required">*</span></label><select id="work-owner" name="owner"><option value="">Owner needed</option></select></div>
-              <div id="work-approver-field" class="form-field form-field-wide" hidden><label for="work-approver">Who approves this? <span class="review-required">*</span></label><select id="work-approver" name="approver"><option value="">Choose another person</option></select><small class="form-hint">Approval stays attached so the decision cannot be bypassed.</small></div>
-              <div class="form-field"><label for="work-date">Due date <span class="active-required">*</span></label><input id="work-date" name="date" type="date"></div>
-              <div class="form-field form-field-wide"><label for="work-next-action">Next step <span class="active-required">*</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000" placeholder="What happens next?"></textarea></div>
-              <div class="form-field form-field-wide"><label for="work-completion">Done when <span class="completion-required">*</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000" placeholder="What result means this is finished?"></textarea></div>
-              <div id="work-blocker-field" class="form-field form-field-wide" hidden><label for="work-blocker">What are we waiting for? <span class="waiting-required">*</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea><small class="form-hint">Name the person, answer, file, or event needed to continue.</small></div>
+              <div class="form-field"><label for="work-owner">Owner <span class="owner-required">Required now</span></label><select id="work-owner" name="owner"><option value="">Owner needed</option></select></div>
+              <!-- Codex — 2026-08-12: status-specific guidance explains the workflow before a save can be rejected. -->
+              <p id="work-status-guidance" class="form-guidance form-field-wide" role="status" aria-live="polite">Backlog is simple: only the title is required.</p>
+              <div id="work-approver-field" class="form-field form-field-wide" hidden><label for="work-approver">Who approves this? <span class="review-required">Required now</span></label><select id="work-approver" name="approver"><option value="">Choose another person</option></select><small class="form-hint">Approval stays attached so the decision cannot be bypassed.</small></div>
+              <div class="form-field"><label for="work-date">Due date <span class="active-required">Required now</span></label><input id="work-date" name="date" type="date"></div>
+              <div class="form-field form-field-wide"><label for="work-next-action">Next step <span class="active-required">Required now</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000" placeholder="What happens next?"></textarea></div>
+              <div class="form-field form-field-wide"><label for="work-completion">Done when <span class="completion-required">Required now</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000" placeholder="What result means this is finished?"></textarea></div>
+              <div id="work-blocker-field" class="form-field form-field-wide" hidden><label for="work-blocker">What are we waiting for? <span class="waiting-required">Required now</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea><small class="form-hint">Name the person, answer, file, or event needed to continue.</small></div>
 
               <!-- Codex — 2026-08-11: secondary fields stay available without overwhelming the everyday task path. -->
               <details id="work-more-details" class="work-more-details form-field-wide">
