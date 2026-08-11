@@ -39,6 +39,7 @@ const state = {
   workstreams: [],
   tasks: [],
   saving: false,
+  refreshing: false,
   stale: false,
   activeSectionId: "home",
   mobileWorkStatus: "this_week",
@@ -306,6 +307,7 @@ function clearWorkspaceState() {
   state.refreshSequence += 1;
   state.mutationSequence += 1;
   setSaving(false);
+  state.refreshing = false;
   clearRegisteredSections();
   state.formBaseline = null;
   clearNotice();
@@ -697,8 +699,10 @@ function requestDialogClose() {
 }
 
 async function requestWorkspaceRefresh() {
+  if (state.refreshing) return;
   if (isFormDirty() && !window.confirm("Refresh the Hub and discard your unsaved changes?")) return;
   state.formBaseline = null;
+  if (dialog.open) dialog.close();
   await refreshTasks();
 }
 
@@ -779,7 +783,7 @@ function configureApprovalControls(task) {
 }
 
 function openNewTask() {
-  if (!canEdit() || newWorkButton.disabled) return;
+  if (!canEdit() || newWorkButton.disabled || state.refreshing) return;
   state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.dialogOpenerTaskId = "";
   populateReferenceControls();
@@ -800,6 +804,10 @@ function openNewTask() {
 }
 
 function openTask(id) {
+  if (state.refreshing) {
+    boardStatus.textContent = "Wait for Refresh to finish before opening work.";
+    return;
+  }
   const task = taskById(id);
   if (!task) return;
   setMobileWorkStatus(task.status);
@@ -937,6 +945,9 @@ async function refreshTasks({ quiet = false } = {}) {
   const refreshSequence = ++state.refreshSequence;
   const userId = state.user?.id;
   if (!userId) return false;
+  state.refreshing = true;
+  newWorkButton.disabled = true;
+  refreshButton.disabled = true;
   if (!quiet) setSyncState("Refreshing…", true);
   try {
     const workspaceData = await state.repository.loadWorkspace(userId);
@@ -955,6 +966,7 @@ async function refreshTasks({ quiet = false } = {}) {
     state.workstreams = workspaceData.workstreams;
     state.tasks = workspaceData.tasks;
     state.stale = false;
+    state.refreshing = false;
     hideAppError();
     if (dialog.open) {
       state.formBaseline = null;
@@ -968,6 +980,7 @@ async function refreshTasks({ quiet = false } = {}) {
       || refreshSequence !== state.refreshSequence
       || state.user?.id !== userId
     ) return false;
+    state.refreshing = false;
     state.stale = true;
     newWorkButton.disabled = true;
     if (dialog.open) setFormReadOnly(true);
@@ -1008,11 +1021,8 @@ async function saveTask(event) {
       : await state.repository.createTask(values);
     if (!mutationIsCurrent(mutation)) return;
     if (!saved) {
-      const refreshed = await refreshTasks({ quiet: true });
-      if (!mutationIsCurrent(mutation)) return;
-      if (!refreshed && !state.membership) return;
-      showAppError("This item changed elsewhere or your access changed. Reopen it from the refreshed board.");
-      boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
+      showFormError("This item changed elsewhere or your access changed, so your draft was not saved. Your typing is still here. Close this window, refresh the Hub, and reopen the item before trying again.");
+      boardStatus.textContent = "Draft not saved because the item changed elsewhere.";
       return;
     }
     setMobileWorkStatus(values.status);
@@ -1020,9 +1030,11 @@ async function saveTask(event) {
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${values.title} saved.`;
-    showNotice(refreshed
-      ? `${values.title} saved in ${STATUS_LABELS[values.status]}.`
-      : `${values.title} was saved. Refresh the board to see the latest version.`);
+    if (refreshed) {
+      showNotice(`${values.title} saved in ${STATUS_LABELS[values.status]}.`);
+    } else {
+      showFormError(`${values.title} was saved, but the board could not refresh. Close this window, then use Refresh to see the latest version.`);
+    }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     showFormError(humanRepositoryError(error));
@@ -1045,20 +1057,20 @@ async function archiveTask() {
     const archived = await state.repository.archiveTask(id, get("work-updated-at").value);
     if (!mutationIsCurrent(mutation)) return;
     if (!archived) {
-      const refreshed = await refreshTasks({ quiet: true });
-      if (!mutationIsCurrent(mutation)) return;
-      if (!refreshed && !state.membership) return;
-      showAppError("This item changed elsewhere or your access changed. Reopen it from the refreshed board.");
-      boardStatus.textContent = "The item changed elsewhere; the board was refreshed.";
+      showFormError("This item changed elsewhere or your access changed, so it was not archived. Nothing was removed, and your draft is still here. Close this window, refresh the Hub, and reopen the item before trying again.");
+      boardStatus.textContent = "The item was not archived because it changed elsewhere.";
       return;
     }
     state.formBaseline = null;
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${task.title} archived.`;
-    showNotice(refreshed
-      ? `${task.title} archived and removed from the board.`
-      : `${task.title} was archived. Refresh the board to confirm.`);
+    if (refreshed) {
+      showNotice(`${task.title} archived and removed from the board.`);
+    } else {
+      archiveButton.hidden = true;
+      showFormError(`${task.title} was archived, but the board could not refresh. Close this window, then use Refresh to update the board.`);
+    }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     showFormError(humanRepositoryError(error));
@@ -1073,8 +1085,10 @@ async function reconcileSession(session, event = "MANUAL") {
   if (sameKnownUser && ["TOKEN_REFRESHED", "SIGNED_IN"].includes(event)) return;
 
   const generation = ++state.generation;
+  state.refreshSequence += 1;
   state.mutationSequence += 1;
   setSaving(false);
+  state.refreshing = false;
   state.formBaseline = null;
   if (dialog.open) dialog.close();
   if (!session) {
