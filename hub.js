@@ -1244,24 +1244,58 @@ async function startConnectedMode() {
   }
 }
 
-async function requestMagicLink(event) {
+/* Claude — 2026-08-12: password is the primary sign-in. Magic links stay as a
+   fallback button, since the built-in email sender is rate limited and links
+   often land in junk, which is poor for non-technical daily users. */
+async function signInWithPassword(event) {
   event.preventDefault();
   const emailInput = get("team-email");
+  const passwordInput = get("team-password");
   if (!signInForm.checkValidity()) {
     signInForm.reportValidity();
     return;
   }
+  const button = get("signin-button");
   emailInput.disabled = true;
-  get("signin-button").disabled = true;
+  passwordInput.disabled = true;
+  button.disabled = true;
+  accessStatus.textContent = "Signing in…";
+  try {
+    const result = await state.auth.signInWithPassword(emailInput.value, passwordInput.value);
+    if (result?.error) throw result.error;
+    accessStatus.textContent = "Signed in. Checking your workspace access…";
+    passwordInput.value = "";
+  } catch (error) {
+    const message = String(error?.message || "");
+    accessStatus.textContent = /invalid login/i.test(message)
+      ? "That email and password did not match."
+      : "Could not sign in. Please try again.";
+  } finally {
+    emailInput.disabled = false;
+    passwordInput.disabled = false;
+    button.disabled = false;
+  }
+}
+
+async function requestMagicLink() {
+  const emailInput = get("team-email");
+  if (!emailInput.value.trim()) {
+    accessStatus.textContent = "Enter your email address first.";
+    emailInput.focus();
+    return;
+  }
+  const button = get("magiclink-button");
+  button.disabled = true;
   accessStatus.textContent = "Sending a one-time link…";
   try {
-    await state.auth.requestMagicLink(emailInput.value);
-    accessStatus.textContent = "If this address is invited, check its inbox for a sign-in link.";
+    const result = await state.auth.requestMagicLink(emailInput.value);
+    accessStatus.textContent = result?.error && /rate limit/i.test(String(result.error.message || ""))
+      ? "Too many emails requested. Wait an hour, or sign in with your password."
+      : "If this address is invited, check its inbox for a sign-in link.";
   } catch {
     accessStatus.textContent = "If this address is invited, check its inbox for a sign-in link.";
   } finally {
-    emailInput.disabled = false;
-    get("signin-button").disabled = false;
+    button.disabled = false;
   }
 }
 
@@ -1313,7 +1347,8 @@ function handleDialogClose() {
 }
 
 function bindEvents() {
-  signInForm.addEventListener("submit", requestMagicLink);
+  signInForm.addEventListener("submit", signInWithPassword);
+  get("magiclink-button").addEventListener("click", requestMagicLink);
   retryAccessButton.addEventListener("click", retryAccess);
   signOutButton.addEventListener("click", signOut);
   mobileSignOutButton.addEventListener("click", signOut);

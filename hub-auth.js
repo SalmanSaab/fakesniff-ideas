@@ -140,6 +140,16 @@ export async function createHubAuth(config) {
         }
       });
     },
+    /* Claude — 2026-08-12: password sign-in as the primary route.
+       Magic links depend on email deliverability and the built-in sender is
+       rate limited, which is fragile for non-technical daily users. Membership
+       and row-level security remain the real access boundary either way. */
+    async signInWithPassword(email, password) {
+      return client.auth.signInWithPassword({
+        email: String(email || "").trim().toLowerCase(),
+        password: String(password || "")
+      });
+    },
     onAuthStateChange(callback) {
       return client.auth.onAuthStateChange((event, session) => callback(event, session));
     },

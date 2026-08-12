@@ -36,9 +36,14 @@
       </div>
 
       <form id="signin-form" class="signin-form" novalidate hidden>
-        <label for="team-email">Invited email</label>
+        <label for="team-email">Your email</label>
         <input id="team-email" name="email" type="email" autocomplete="email" inputmode="email" required>
-        <button id="signin-button" type="submit">Email me a sign-in link</button>
+        <label for="team-password">Password</label>
+        <input id="team-password" name="password" type="password" autocomplete="current-password" required>
+        <button id="signin-button" type="submit">Sign in</button>
+        <!-- Claude — 2026-08-12: magic link kept as a fallback. Email delivery is
+             rate limited and lands in junk, so password is the primary route. -->
+        <button id="magiclink-button" class="text-button" type="button">Email me a sign-in link instead</button>
       </form>
 
       <div id="setup-actions" class="setup-actions" hidden>
