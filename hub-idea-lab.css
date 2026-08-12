@@ -124,3 +124,11 @@
   /* a floating action button behaves better than sticky+float on iOS */
   #ilab-add{position:fixed;float:none;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));width:58px;height:58px;font-size:30px;z-index:55}
 }
+
+/* form labels + screen-reader-only text */
+.ilab-flabel{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--il-mut);margin-bottom:5px}
+.ilab-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ilab-sheet:focus{outline:none}
+.ilab-sheet:focus-visible{outline:2px solid var(--il-green);outline-offset:2px}
+.ilab :focus-visible{outline:2px solid var(--il-green);outline-offset:2px}
+.ilab-new button[disabled]{opacity:.6;cursor:progress}
