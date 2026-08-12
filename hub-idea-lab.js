@@ -383,6 +383,7 @@ export function mount(root, ctx) {
     sheet.setAttribute("aria-modal", "true");
     if (labelledById) sheet.setAttribute("aria-labelledby", labelledById);
     else sheet.removeAttribute("aria-labelledby");
+    document.body.classList.add("hub-sheet-open");   // stop the page scrolling behind
     const first = sheet.querySelector(FOCUSABLE);
     (first || sheet).focus?.();
   }
@@ -401,6 +402,7 @@ export function mount(root, ctx) {
     const detail = q("#ilab-detail");
     if (!detail.classList.contains("open")) return;
     detail.classList.remove("open");
+    document.body.classList.remove("hub-sheet-open");
     q("#ilab-sheet").removeAttribute("aria-busy");
     if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
     lastFocused = null;

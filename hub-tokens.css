@@ -1,0 +1,122 @@
+/* FAKESNIFF Hub — design tokens.  Owner: Claude.
+ *
+ * One palette, one type scale, one spacing rhythm, consumed by the shell, the
+ * Idea Lab and the Lookbook. If a colour or size is written literally anywhere
+ * else, it is a bug — it is how the hub ended up looking like three apps.
+ *
+ * ── Why these choices ──────────────────────────────────────────────────────
+ * The brand is black, cream and a bright green, and that reads well on a
+ * poster for two seconds. Marco and Emiel are in this for an hour at a time,
+ * so the working surface has to be quieter than the brand.
+ *
+ * - Ground is a warm near-black, not #000 and not a blue-grey. Pure black plus
+ *   bright text is what made it tiring to look at; a warm ground with slightly
+ *   softened text lowers the contrast punch without losing legibility.
+ * - Neutrals are warm-biased (a touch of the brand's paper), so greys read as
+ *   chosen rather than default.
+ * - The brand green is kept for ONE job: the thing you should press. It is not
+ *   a decoration, a border, or a status. When everything is green, nothing is.
+ * - Status colours are separate from the accent, so "this is clickable" and
+ *   "this needs attention" never look the same.
+ */
+
+:root {
+  /* ── ground and surfaces ───────────────────────────────────────────────── */
+  --fs-bg:          #141311;   /* warm near-black, the page */
+  --fs-surface:     #1b1917;   /* cards, panels */
+  --fs-surface-2:   #221f1c;   /* raised: inputs, hover */
+  --fs-line:        #2e2a26;   /* hairlines */
+  --fs-line-strong: #423c35;   /* borders that need to be seen */
+
+  /* ── text ──────────────────────────────────────────────────────────────── */
+  --fs-ink:         #ece6da;   /* primary, the brand cream */
+  --fs-ink-2:       #b3aa9c;   /* secondary: supporting sentences */
+  --fs-ink-3:       #837a6d;   /* tertiary: labels, timestamps, meta */
+
+  /* ── accent: reserved for the primary action ───────────────────────────── */
+  --fs-accent:      #7ec96a;
+  --fs-accent-ink:  #12110f;   /* text on top of the accent */
+  --fs-accent-dim:  rgba(126,201,106,.14);
+  --fs-accent-edge: rgba(126,201,106,.42);
+
+  /* ── status: deliberately not the accent ───────────────────────────────── */
+  --fs-warn:        #d9a441;
+  --fs-warn-dim:    rgba(217,164,65,.13);
+  --fs-danger:      #cf6a5c;
+  --fs-danger-dim:  rgba(207,106,92,.13);
+  --fs-info:        #7fa8c9;
+
+  /* ── type ──────────────────────────────────────────────────────────────── */
+  --fs-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --fs-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;  /* the wordmark voice */
+  --fs-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* a real scale, so headings relate to each other instead of being guessed */
+  --fs-size-xs:  11px;
+  --fs-size-sm:  13px;
+  --fs-size-base: 15px;
+  --fs-size-md:  17px;
+  --fs-size-lg:  21px;
+  --fs-size-xl:  27px;
+  --fs-size-2xl: 34px;
+
+  --fs-leading-tight: 1.22;
+  --fs-leading-body:  1.55;
+  --fs-track-label: .14em;   /* uppercase labels need air */
+
+  /* ── spacing: a 4px rhythm ─────────────────────────────────────────────── */
+  --fs-1:  4px;
+  --fs-2:  8px;
+  --fs-3:  12px;
+  --fs-4:  16px;
+  --fs-5:  22px;
+  --fs-6:  30px;
+  --fs-7:  42px;
+
+  --fs-radius:    3px;
+  --fs-radius-lg: 6px;
+  --fs-radius-pill: 999px;
+
+  /* ── depth ─────────────────────────────────────────────────────────────── */
+  --fs-shadow:    0 2px 10px rgba(0,0,0,.30);
+  --fs-shadow-lg: 0 14px 40px rgba(0,0,0,.50);
+
+  /* touch: Apple's comfortable minimum */
+  --fs-touch: 44px;
+
+  /* layering, named so nothing fights by accident */
+  --fs-z-rail:  100;
+  --fs-z-float: 1200;
+  --fs-z-sheet: 2000;
+}
+
+/* The hub is a dark working surface by design — three people looking at
+   photographs and shirt artwork all day want a consistent ground, not one that
+   changes with the OS. Light mode would be a separate, deliberate build. */
+:root { color-scheme: dark; }
+
+/* Shared primitives. Anything used by more than one module belongs here so it
+   cannot drift apart. */
+.fs-label {
+  font-family: var(--fs-sans);
+  font-size: var(--fs-size-xs);
+  letter-spacing: var(--fs-track-label);
+  text-transform: uppercase;
+  color: var(--fs-ink-3);
+}
+
+.fs-focus:focus-visible,
+.fs-scope :focus-visible {
+  outline: 2px solid var(--fs-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

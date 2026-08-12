@@ -409,12 +409,14 @@ export function mount(root, ctx) {
     sheet.setAttribute("role", "dialog");
     sheet.setAttribute("aria-modal", "true");
     if (labelledById) sheet.setAttribute("aria-labelledby", labelledById);
+    document.body.classList.add("hub-sheet-open");   // stop the page scrolling behind
     (sheet.querySelector(FOCUSABLE) || sheet).focus?.();
   }
   function closeSheet() {
     const d = q("#lb-detail");
     if (!d.classList.contains("open")) return;
     d.classList.remove("open");
+    document.body.classList.remove("hub-sheet-open");
     q("#lb-sheet").removeAttribute("aria-busy");
     if (state.lastFocused && document.contains(state.lastFocused)) state.lastFocused.focus();
     state.lastFocused = null;

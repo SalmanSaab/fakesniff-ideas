@@ -2,8 +2,10 @@
    External file so it satisfies the hub CSP (style-src 'self').
    Phone-first: this is mostly used standing in a factory holding a phone. */
 
-.lb{--lb-ink:#ece7dd;--lb-mut:#8b8478;--lb-line:#262523;--lb-panel:#161615;
-    --lb-green:#77c566;--lb-bad:#c9564a;color:var(--lb-ink);position:relative}
+/* Claude — 2026-08-12: colours come from hub-tokens.css. See hub-idea-lab.css. */
+.lb{--lb-ink:var(--fs-ink);--lb-mut:var(--fs-ink-3);--lb-line:var(--fs-line);
+    --lb-panel:var(--fs-surface);--lb-green:var(--fs-accent);--lb-bad:var(--fs-danger);
+    color:var(--lb-ink);position:relative}
 .lb *{box-sizing:border-box}
 
 .lb-bar{display:flex;align-items:center;gap:14px;margin-bottom:14px}
@@ -11,7 +13,7 @@
 .lb-mark small{font-style:normal;font-family:inherit;font-size:10px;letter-spacing:.22em;
   text-transform:uppercase;color:var(--lb-mut);display:block;margin-top:3px}
 
-.lb-search{width:100%;background:#0f0f0e;border:1px solid var(--lb-line);color:var(--lb-ink);
+.lb-search{width:100%;background:var(--fs-surface-2);border:1px solid var(--lb-line);color:var(--lb-ink);
   padding:12px 14px;font-size:16px;border-radius:2px;margin-bottom:12px;font-family:inherit}
 .lb-search:focus{outline:none;border-color:var(--lb-green)}
 
@@ -25,9 +27,9 @@
 .lb-card{background:var(--lb-panel);border:1px solid var(--lb-line);border-radius:3px;
   padding:0;overflow:hidden;cursor:pointer;text-align:left;color:inherit;font:inherit;
   display:flex;flex-direction:column;transition:border-color .12s}
-.lb-card:hover{border-color:#3a3835}
-.lb-thumb{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:#0b0b0a}
-.lb-thumb.lb-loading{background:linear-gradient(100deg,#131211 30%,#1c1a18 50%,#131211 70%);
+.lb-card:hover{border-color:var(--fs-line-strong)}
+.lb-thumb{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--fs-bg)}
+.lb-thumb.lb-loading{background:linear-gradient(100deg,var(--fs-surface) 30%,var(--fs-surface-2) 50%,var(--fs-surface) 70%);
   background-size:220% 100%;animation:lb-shimmer 1.2s linear infinite}
 @keyframes lb-shimmer{to{background-position:-220% 0}}
 .lb-nolink{display:grid;place-items:center;color:var(--lb-mut);font-size:12px;
@@ -38,12 +40,12 @@
 .lb-ai{margin-left:auto;color:var(--lb-green);font-size:12px}
 
 .lb-empty{color:var(--lb-mut);text-align:center;padding:56px 20px;font-size:14.5px;grid-column:1/-1}
-.lb-errbox{background:#2a1a17;border:1px solid var(--lb-bad);color:#e8a79e;padding:10px 13px;
+.lb-errbox{background:var(--fs-danger-dim);border:1px solid var(--fs-danger);color:var(--fs-danger);padding:10px 13px;
   font-size:13px;margin-bottom:14px;border-radius:2px}
 
 /* add button */
 #lb-add{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));
-  background:var(--lb-green);color:#0f0f0e;border:none;width:58px;height:58px;border-radius:50%;
+  background:var(--lb-green);color:var(--fs-surface-2);border:none;width:58px;height:58px;border-radius:50%;
   font-size:30px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);line-height:1;z-index:55}
 .lb-readonly #lb-add{display:none}
 
@@ -57,7 +59,7 @@
 .lb-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--lb-mut);
   font-size:28px;cursor:pointer;line-height:1;padding:4px 8px}
 .lb-h{font-size:22px;font-weight:800;line-height:1.2;margin:0 0 14px}
-.lb-full{width:100%;border-radius:3px;display:block;margin-bottom:14px;background:#0b0b0a}
+.lb-full{width:100%;border-radius:3px;display:block;margin-bottom:14px;background:var(--fs-bg)}
 .lb-note{color:var(--lb-ink);font-size:15px;line-height:1.55;margin:0 0 12px}
 .lb-src{font-size:12.5px;color:var(--lb-mut);margin:0 0 8px}
 .lb-src a{color:var(--lb-green)}
@@ -75,16 +77,16 @@
 .lb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
 .lb-askai{background:transparent;border:1px solid var(--lb-green);color:var(--lb-green);
   padding:10px 14px;font-size:13px;cursor:pointer;border-radius:2px}
-.lb-askai:hover,.lb-askai.done{background:var(--lb-green);color:#0f0f0e}
+.lb-askai:hover,.lb-askai.done{background:var(--lb-green);color:var(--fs-surface-2)}
 .lb-archive{background:transparent;border:1px solid var(--lb-line);color:var(--lb-mut);
   padding:10px 14px;font-size:13px;cursor:pointer;border-radius:2px;margin-left:auto}
 .lb-archive:hover{border-color:var(--lb-bad);color:var(--lb-bad)}
 
 /* capture */
-.lb-drop{border:1px dashed #3a3835;border-radius:3px;padding:22px 16px;text-align:center;margin-bottom:18px}
+.lb-drop{border:1px dashed var(--fs-line-strong);border-radius:3px;padding:22px 16px;text-align:center;margin-bottom:18px}
 .lb-drop.over{border-color:var(--lb-green);background:rgba(119,197,102,.06)}
 .lb-drop.has-image{padding:12px}
-.lb-bigbtn{background:var(--lb-green);color:#0f0f0e;border:none;padding:15px 22px;font-size:16px;
+.lb-bigbtn{background:var(--lb-green);color:var(--fs-surface-2);border:none;padding:15px 22px;font-size:16px;
   font-weight:700;border-radius:2px;cursor:pointer;width:100%;min-height:52px}
 .lb-hint{color:var(--lb-mut);font-size:12.5px;margin:10px 0 0}
 .lb-center{text-align:center}
@@ -93,11 +95,11 @@
 
 .lb-form{display:grid;gap:6px}
 .lb-flabel{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--lb-mut);margin-top:10px}
-.lb-form input,.lb-form textarea,.lb-form select{background:#0f0f0e;border:1px solid var(--lb-line);
+.lb-form input,.lb-form textarea,.lb-form select{background:var(--fs-surface-2);border:1px solid var(--lb-line);
   color:var(--lb-ink);padding:12px;font-size:16px;border-radius:2px;font-family:inherit;width:100%}
 .lb-form textarea{min-height:70px;resize:vertical}
 .lb-form input:focus,.lb-form textarea:focus,.lb-form select:focus{outline:none;border-color:var(--lb-green)}
-#lb-save{background:var(--lb-green);color:#0f0f0e;border:none;padding:15px;font-size:16px;
+#lb-save{background:var(--lb-green);color:var(--fs-surface-2);border:none;padding:15px;font-size:16px;
   font-weight:700;cursor:pointer;border-radius:2px;margin-top:16px;min-height:52px}
 #lb-save[disabled]{opacity:.6;cursor:progress}
 
@@ -114,3 +116,7 @@
   .lb-askai{width:100%}
 }
 @media (prefers-reduced-motion:reduce){.lb-thumb.lb-loading{animation:none}}
+
+/* Claude — 2026-08-12: see hub-idea-lab.css. Sheets clear the sticky chrome. */
+#lb-detail{z-index:2000}
+#lb-add{z-index:1200}

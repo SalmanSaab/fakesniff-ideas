@@ -1,20 +1,26 @@
 /* Codex — 2026-08-11: Hub V1 visual system for the private preview and authenticated shell. */
+/* Claude — 2026-08-12: the shell's names are kept so the rest of this file is
+   untouched, but they now resolve to hub-tokens.css. One palette across the
+   shell, the Idea Lab and the Lookbook — previously each carried its own, which
+   is why the hub read as three different apps.
+   Ground moved from a cold near-black to a warm one: pure-black-plus-bright-text
+   is what made it tiring over a long session. */
 :root {
-  --bg: #0f0f0e;
-  --rail: #121211;
-  --panel: #171716;
-  --panel-raised: #1b1b19;
-  --line: #2a2926;
-  --line-strong: #3a3833;
-  --ink: #eee9df;
-  --muted: #928b7f;
-  --faint: #625e57;
-  --paper: #e9e2d5;
-  --green: #78c767;
-  --green-dark: #294d27;
-  --yellow: #daa850;
-  --red: #cb5a4e;
-  --blue: #7598b6;
+  --bg: var(--fs-bg);
+  --rail: var(--fs-bg);
+  --panel: var(--fs-surface);
+  --panel-raised: var(--fs-surface-2);
+  --line: var(--fs-line);
+  --line-strong: var(--fs-line-strong);
+  --ink: var(--fs-ink);
+  --muted: var(--fs-ink-2);
+  --faint: var(--fs-ink-3);
+  --paper: var(--fs-ink);
+  --green: var(--fs-accent);
+  --green-dark: var(--fs-accent-dim);
+  --yellow: var(--fs-warn);
+  --red: var(--fs-danger);
+  --blue: var(--fs-info);
   --rail-width: 248px;
   --topbar-height: 70px;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -337,12 +343,19 @@ select {
   color: var(--bg);
 }
 
+/* Claude — 2026-08-12: sections are pages, not scroll anchors. Previously every
+   section rendered at once and the nav only scrolled, so tapping "Idea Lab" left
+   Designs and Decisions stacked underneath. On a phone that reads as broken. */
 .page-section {
+  display: none;
   max-width: 1560px;
-  min-height: 70vh;
   margin: 0 auto;
   padding: 76px clamp(22px, 4vw, 58px) 96px;
-  border-bottom: 1px solid var(--line);
+}
+
+.page-section.is-active {
+  display: block;
+  min-height: 70vh;
 }
 
 .hero-section {

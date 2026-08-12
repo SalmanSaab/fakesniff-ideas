@@ -1,5 +1,10 @@
 /* FAKESNIFF Hub — Idea Lab styles. Owner: Claude. External file so it satisfies the hub CSP (style-src self). */
-.ilab{--il-ink:#ece7dd;--il-mut:#8b8478;--il-line:#262523;--il-panel:#161615;--il-green:#77c566;--il-warn:#d8a24a;--il-bad:#c9564a;color:var(--il-ink);position:relative}
+/* Claude — 2026-08-12: colours now come from hub-tokens.css. The local names
+   stay so the rest of the file is unchanged, but they resolve to the shared
+   palette, so the hub reads as one product instead of three. */
+.ilab{--il-ink:var(--fs-ink);--il-mut:var(--fs-ink-3);--il-line:var(--fs-line);
+  --il-panel:var(--fs-surface);--il-green:var(--fs-accent);--il-warn:var(--fs-warn);
+  --il-bad:var(--fs-danger);color:var(--il-ink);position:relative}
 .ilab *{box-sizing:border-box}
 .ilab-bar{display:flex;align-items:center;gap:14px;margin-bottom:6px}
 .ilab-mark{font-family:Georgia,serif;font-style:italic;font-size:21px;line-height:1}
@@ -15,16 +20,16 @@
 .ilab-chip.on{border-color:var(--il-green);color:var(--il-green)}
 .ilab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 .ilab-card{background:var(--il-panel);border:1px solid var(--il-line);border-radius:3px;padding:16px;cursor:pointer;transition:border-color .12s}
-.ilab-card:hover{border-color:#3a3835}
+.ilab-card:hover{border-color:var(--fs-line-strong)}
 .ilab-line{font-size:19px;font-weight:700;line-height:1.25;letter-spacing:-.01em}
 .ilab-concept{color:var(--il-mut);font-size:13.5px;margin-top:8px;line-height:1.45}
 .ilab-foot{display:flex;align-items:center;gap:8px;margin-top:13px;flex-wrap:wrap}
 .ilab-tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;padding:3px 8px;border:1px solid var(--il-line);border-radius:2px;color:var(--il-mut)}
-.ilab-tag.status{border-color:#3a3835;color:var(--il-ink)}
+.ilab-tag.status{border-color:var(--fs-line-strong);color:var(--il-ink)}
 .ilab-tag.risk-check{border-color:var(--il-warn);color:var(--il-warn)}
 .ilab-tag.risk-avoid{border-color:var(--il-bad);color:var(--il-bad)}
 .ilab-by{margin-left:auto;font-size:11px;color:var(--il-mut)}
-.ilab-search{width:100%;background:#0f0f0e;border:1px solid var(--il-line);color:var(--il-ink);padding:12px 14px;font-size:15px;border-radius:2px;margin-bottom:14px;font-family:inherit}
+.ilab-search{width:100%;background:var(--fs-surface-2);border:1px solid var(--il-line);color:var(--il-ink);padding:12px 14px;font-size:15px;border-radius:2px;margin-bottom:14px;font-family:inherit}
 .ilab-search:focus{outline:none;border-color:var(--il-green)}
 .ilab-trig{border-bottom:1px solid var(--il-line);padding:13px 2px;display:flex;gap:12px;align-items:flex-start}
 .ilab-t{flex:1;font-size:14.5px;line-height:1.4}
@@ -33,15 +38,15 @@
 .ilab-btns{display:flex;flex-direction:column;gap:6px}
 .ilab-btns button{background:transparent;border:1px solid var(--il-line);color:var(--il-mut);padding:6px 11px;font-size:11.5px;cursor:pointer;white-space:nowrap;border-radius:2px}
 .ilab-copyai{border-color:var(--il-green)!important;color:var(--il-green)!important}
-.ilab-copyai:hover,.ilab-copyai.done{background:var(--il-green)!important;color:#0f0f0e!important}
+.ilab-copyai:hover,.ilab-copyai.done{background:var(--il-green)!important;color:var(--fs-surface-2)!important}
 .ilab-mk:hover{border-color:var(--il-ink);color:var(--il-ink)}
 .ilab-trig.used{opacity:.4}
 .ilab-act{border-bottom:1px solid var(--il-line);padding:11px 2px;font-size:13.5px;color:var(--il-mut)}
 .ilab-act b{color:var(--il-ink);font-weight:600}
 .ilab-act span{float:right;font-size:11px}
-#ilab-add{position:sticky;float:right;bottom:18px;background:var(--il-green);color:#0f0f0e;border:none;width:54px;height:54px;border-radius:50%;font-size:28px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);line-height:1}
+#ilab-add{position:sticky;float:right;bottom:18px;background:var(--il-green);color:var(--fs-surface-2);border:none;width:54px;height:54px;border-radius:50%;font-size:28px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);line-height:1}
 .ilab-empty{color:var(--il-mut);text-align:center;padding:50px 20px;font-size:14.5px}
-.ilab-errbox{background:#2a1a17;border:1px solid var(--il-bad);color:#e8a79e;padding:10px 13px;font-size:13px;margin-bottom:14px;border-radius:2px}
+.ilab-errbox{background:var(--fs-danger-dim);border:1px solid var(--fs-danger);color:var(--fs-danger);padding:10px 13px;font-size:13px;margin-bottom:14px;border-radius:2px}
 #ilab-detail{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 #ilab-detail.open{display:flex}
 .ilab-sheet{background:var(--il-panel);border:1px solid var(--il-line);max-width:760px;width:100%;border-radius:4px;padding:24px;margin:auto;position:relative}
@@ -51,7 +56,7 @@
 .ilab-src a{color:var(--il-green);word-break:break-all}
 .ilab-shirts{display:flex;gap:14px;margin:22px 0;flex-wrap:wrap}
 .ilab-shirtbox{flex:1;min-width:200px;text-align:center}
-.ilab-shirtbox canvas{width:100%;height:300px;display:block;background:#0b0b0a;border:1px solid var(--il-line)}
+.ilab-shirtbox canvas{width:100%;height:300px;display:block;background:var(--fs-bg);border:1px solid var(--il-line)}
 .ilab-shirtbox span{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--il-mut);display:block;margin-top:7px}
 .ilab-setline{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .ilab-setline button{background:transparent;border:1px solid var(--il-line);color:var(--il-mut);padding:8px 13px;font-size:12.5px;cursor:pointer;border-radius:2px}
@@ -60,16 +65,16 @@
 .ilab-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--il-mut);margin:18px 0 0}
 .ilab-close{position:absolute;top:14px;right:18px;background:none;border:none;color:var(--il-mut);font-size:26px;cursor:pointer;line-height:1}
 .ilab-new{display:grid;gap:11px;margin-top:6px}
-.ilab-new input,.ilab-new textarea,.ilab-new select{background:#0f0f0e;border:1px solid var(--il-line);color:var(--il-ink);padding:11px 12px;font-size:15px;border-radius:2px;font-family:inherit;width:100%}
+.ilab-new input,.ilab-new textarea,.ilab-new select{background:var(--fs-surface-2);border:1px solid var(--il-line);color:var(--il-ink);padding:11px 12px;font-size:15px;border-radius:2px;font-family:inherit;width:100%}
 .ilab-new textarea{min-height:70px;resize:vertical}
 .ilab-row{display:flex;gap:10px}
 .ilab-row>*{flex:1}
-.ilab-new button{background:var(--il-green);color:#0f0f0e;border:none;padding:13px;font-size:15px;font-weight:700;cursor:pointer;border-radius:2px}
+.ilab-new button{background:var(--il-green);color:var(--fs-surface-2);border:none;padding:13px;font-size:15px;font-weight:700;cursor:pointer;border-radius:2px}
 .ilab-how h3{font-size:19px;margin:0 0 4px}
 .ilab-how p{color:var(--il-mut);font-size:14px;line-height:1.55;margin:0 0 16px}
 .ilab-how ol{color:var(--il-mut);font-size:14px;line-height:1.7;padding-left:20px;margin:0 0 18px}
 .ilab-how ol b{color:var(--il-ink)}
-.ilab-rules{background:#0f0f0e;border:1px solid var(--il-line);padding:14px 16px;border-radius:2px;font-size:13.5px;color:var(--il-mut);line-height:1.6}
+.ilab-rules{background:var(--fs-surface-2);border:1px solid var(--il-line);padding:14px 16px;border-radius:2px;font-size:13.5px;color:var(--il-mut);line-height:1.6}
 .ilab-rules b{color:var(--il-ink)}
 .ilab-mt16{margin-top:16px}
 .ilab-mt10{margin-top:10px}
@@ -132,3 +137,8 @@
 .ilab-sheet:focus-visible{outline:2px solid var(--il-green);outline-offset:2px}
 .ilab :focus-visible{outline:2px solid var(--il-green);outline-offset:2px}
 .ilab-new button[disabled]{opacity:.6;cursor:progress}
+
+/* Claude — 2026-08-12: an open sheet must sit above the hub's sticky rail and
+   topbar, and the page behind it must not scroll. Both were wrong on iOS. */
+body.hub-sheet-open{overflow:hidden;touch-action:none}
+#ilab-detail{z-index:2000}
