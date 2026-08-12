@@ -400,6 +400,38 @@ select {
   background: linear-gradient(90deg, rgba(120, 199, 103, 0.09), rgba(120, 199, 103, 0.015));
 }
 
+.home-focus {
+  grid-template-columns: auto minmax(180px, 0.9fr) minmax(220px, 1.2fr) auto;
+}
+
+.home-focus > * {
+  min-width: 0;
+}
+
+.home-focus .signal-value,
+.home-focus .signal-detail {
+  overflow-wrap: anywhere;
+}
+
+.signal-action {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: var(--bg);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signal-action:hover,
+.signal-action:focus-visible {
+  background: transparent;
+  color: var(--green);
+}
+
 .signal-label {
   color: var(--green);
   font-size: 9px;
@@ -1243,6 +1275,11 @@ select {
   color: #df8277;
 }
 
+.task-flag-approval {
+  border-color: rgba(120, 199, 103, 0.38);
+  color: var(--green);
+}
+
 .task-card-footer {
   margin-top: 13px;
   padding-top: 11px;
@@ -1446,6 +1483,62 @@ select {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.work-dialog-status {
+  margin-top: 18px;
+}
+
+.conflict-review {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(225, 181, 87, 0.42);
+  background: rgba(225, 181, 87, 0.055);
+}
+
+.conflict-review h4,
+.conflict-choice p {
+  margin: 0;
+}
+
+.conflict-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.conflict-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.conflict-choice-copy {
+  min-width: 0;
+}
+
+.conflict-choice-copy p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.conflict-choice-copy strong {
+  color: var(--ink);
+}
+
+.conflict-choice-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.conflict-choice-actions button {
+  min-height: 44px;
 }
 
 .field-error {
@@ -2327,6 +2420,29 @@ select {
     grid-template-columns: auto 1fr;
   }
 
+  .home-focus {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .home-focus .signal-label,
+  .home-focus .signal-value {
+    grid-column: 1 / -1;
+  }
+
+  .home-focus .signal-value {
+    padding-left: 0;
+    border-left: 0;
+    font-size: 16px;
+  }
+
+  .home-focus .signal-detail {
+    grid-column: 1;
+  }
+
+  .home-focus .signal-action {
+    grid-column: 2;
+  }
+
   .signal-detail {
     grid-column: 1 / -1;
     justify-self: start;
@@ -2394,15 +2510,15 @@ select {
   }
 
   #home .dashboard-grid {
-    order: 2;
-  }
-
-  #home .stat-grid {
     order: 3;
   }
 
-  #home .week-signal {
+  #home .stat-grid {
     order: 4;
+  }
+
+  #home .week-signal {
+    order: 2;
   }
 
   #work .integration-notice {
@@ -2565,10 +2681,23 @@ select {
     width: 100%;
   }
 
+  .conflict-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .conflict-choice-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .conflict-choice-actions button {
+    width: 100%;
+  }
+
   .work-dialog {
     width: calc(100vw - var(--safe-left) - var(--safe-right));
     max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
-    scroll-padding-bottom: calc(190px + var(--safe-bottom));
+    scroll-padding-bottom: calc(225px + var(--safe-bottom));
     border-right: 0;
     border-left: 0;
   }
@@ -3037,6 +3166,30 @@ select {
   .dashboard-grid-connected .rhythm-panel {
     grid-column: auto;
   }
+
+  .home-focus {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .home-focus .signal-label,
+  .home-focus .signal-value {
+    grid-column: 1 / -1;
+  }
+
+  .home-focus .signal-value {
+    padding-left: 0;
+    border-left: 0;
+    font-size: 16px;
+  }
+
+  .home-focus .signal-detail {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .home-focus .signal-action {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 820px) {
@@ -3089,6 +3242,15 @@ select {
   .home-work-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .home-focus .signal-detail,
+  .home-focus .signal-action {
+    grid-column: 1 / -1;
+  }
+
+  .home-focus .signal-action {
+    width: 100%;
   }
 
   .hub-notice {

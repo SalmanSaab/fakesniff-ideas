@@ -105,3 +105,20 @@ more than any missing feature. Salman leaves Friday; the public board stays live
   migration-002 database constraints into plain-language UI guidance (non-technical users will
   otherwise see raw Postgres errors); make Home worth opening.
 - New for Salman: run migration 004 on staging, then sign in and actually use the thing.
+
+### 2026-08-13 — Codex
+Fast-forwarded `codex/hub` to Claude's integrated staging baseline, then hardened Work and made
+Home useful without touching any migration (especially 003). Work now gives field-specific human
+guidance for migration-002 rules, respects approval authority, freezes slow saves, refreshes stale
+boards, and recovers optimistic conflicts with an explicit accessible latest-vs-yours choice that
+preserves the draft. Optional Area no longer blocks first use. Home now leads with a dated,
+personalized next move (my approval, overdue work, Doing, This week, then team attention), with a
+useful backlog/empty action and phone-first ordering. Added pure policy/repository/wiring coverage:
+38 tests pass, plus JS syntax and diff checks.
+
+Staging's anonymous boundary behaves as expected (`tasks`, `workstreams`, and `members` denied),
+while legacy `ideas` remains anonymously readable, confirming the fallback/cutover hold. The
+authenticated create → WIP → review → approval exercise is still open because no browser session
+is attached and the available local staging login was rejected. **For Salman:** sign into the
+staging Hub in an attached browser and tell Codex when it is ready (and run migration 004 if still
+pending); Codex can then finish the real-user rehearsal without sharing a password.
