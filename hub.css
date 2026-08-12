@@ -17,6 +17,10 @@
   --blue: #7598b6;
   --rail-width: 248px;
   --topbar-height: 70px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 * {
@@ -101,6 +105,7 @@ select {
 
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .side-rail {
@@ -840,7 +845,7 @@ select {
 .text-button,
 .primary-button {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 16px;
@@ -939,6 +944,20 @@ select {
   background: var(--green);
 }
 
+.board + .integration-notice {
+  margin-top: 20px;
+}
+
+.work-tools {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.work-tools > summary {
+  display: none;
+}
+
 .work-toolbar {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) minmax(160px, 220px) minmax(260px, 0.8fr);
@@ -980,7 +999,7 @@ select {
 .work-control select,
 .form-field input,
 .form-field select {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 12px;
 }
 
@@ -988,6 +1007,47 @@ select {
   min-height: 76px;
   padding: 10px 12px;
   resize: vertical;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.work-more-details {
+  border: 1px solid var(--line);
+  background: rgba(15, 15, 14, 0.45);
+}
+
+.work-more-details summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.work-more-details summary span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.work-more-details[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.form-grid-nested {
+  padding: 14px;
 }
 
 .work-control input::placeholder,
@@ -1235,6 +1295,7 @@ select {
 .work-dialog {
   width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
   padding: 0;
   overflow: auto;
   border: 1px solid var(--line-strong);
@@ -1269,8 +1330,8 @@ select {
 
 .dialog-close {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 1px solid var(--line-strong);
   background: transparent;
@@ -1323,7 +1384,7 @@ select {
 
 .flag-option {
   display: flex;
-  min-height: 38px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   padding: 0 10px;
@@ -1354,7 +1415,10 @@ select {
   display: none;
   margin-left: 4px;
   color: var(--yellow);
-  font-size: 7px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: none;
 }
 
 .work-form.is-active .active-required,
@@ -1372,6 +1436,30 @@ select {
   font-size: 11px;
 }
 
+/* Codex — 2026-08-12: plain workflow help and field-local errors keep database
+   rules understandable without exposing technical error details. */
+.form-guidance {
+  margin: 0;
+  padding: 11px 13px;
+  border-left: 2px solid var(--green);
+  background: rgba(120, 199, 103, 0.055);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.field-error {
+  display: block;
+  margin-top: 2px;
+  color: #ef9990;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.form-field [aria-invalid="true"] {
+  border-color: rgba(203, 90, 78, 0.78);
+}
+
 .dialog-actions {
   display: flex;
   align-items: center;
@@ -1386,7 +1474,7 @@ select {
 }
 
 .danger-button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid rgba(203, 90, 78, 0.5);
   background: transparent;
@@ -2130,6 +2218,11 @@ select {
   :root {
     --rail-width: 0px;
     --topbar-height: 62px;
+    --mobile-rail-height: 90px;
+  }
+
+  html {
+    scroll-padding-top: calc(var(--mobile-rail-height) + var(--safe-top) + var(--topbar-height) + 12px);
   }
 
   .side-rail {
@@ -2137,7 +2230,7 @@ select {
     bottom: auto;
     width: 100%;
     height: auto;
-    padding: 12px 14px 0;
+    padding: calc(12px + var(--safe-top)) max(14px, var(--safe-right)) 0 max(14px, var(--safe-left));
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -2167,7 +2260,7 @@ select {
 
   .nav-link {
     display: flex;
-    min-height: 42px;
+    min-height: 44px;
     flex: 0 0 auto;
     padding: 0 10px;
     border: 0;
@@ -2209,17 +2302,17 @@ select {
   }
 
   .workspace {
-    margin-top: 101px;
+    margin-top: calc(var(--mobile-rail-height) + var(--safe-top));
     margin-left: 0;
   }
 
   .topbar {
-    top: 101px;
-    padding: 10px 18px;
+    top: calc(var(--mobile-rail-height) + var(--safe-top));
+    padding: 10px max(18px, var(--safe-right)) 10px max(18px, var(--safe-left));
   }
 
   .page-section {
-    padding: 62px 18px 76px;
+    padding: 62px max(18px, var(--safe-right)) calc(76px + var(--safe-bottom)) max(18px, var(--safe-left));
   }
 
   .hero-section {
@@ -2288,6 +2381,61 @@ select {
   .board-column.is-mobile-current {
     display: block;
   }
+
+  /* Codex — 2026-08-12: phones put today's actions before dashboard ceremony;
+     Work filters collapse to one source-ordered disclosure row. */
+  #home {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #home .hero-copy {
+    order: 1;
+  }
+
+  #home .dashboard-grid {
+    order: 2;
+  }
+
+  #home .stat-grid {
+    order: 3;
+  }
+
+  #home .week-signal {
+    order: 4;
+  }
+
+  #work .integration-notice {
+    margin-top: 12px;
+    margin-bottom: 0;
+  }
+
+  .work-tools {
+    margin-bottom: 12px;
+  }
+
+  .work-tools > summary {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 13px;
+    border: 1px solid var(--line-strong);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .work-tools[open] > summary {
+    border-bottom-color: var(--line);
+  }
+
+  .work-tools .work-toolbar {
+    margin-bottom: 0;
+    border-top: 0;
+  }
 }
 
 @media (max-width: 560px) {
@@ -2296,12 +2444,56 @@ select {
     display: none;
   }
 
+  #home.hero-section {
+    padding-top: 28px;
+  }
+
+  #home .hero-copy {
+    display: block;
+  }
+
+  #home .hero-copy .kicker {
+    margin-bottom: 12px;
+  }
+
+  #home .hero-copy h1 {
+    font-size: clamp(38px, 12vw, 54px);
+    line-height: 0.9;
+  }
+
+  #home .hero-note {
+    margin-top: 14px;
+    padding-left: 0;
+    border-left: 0;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  #work .section-heading {
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  #work .section-heading h2 {
+    font-size: 42px;
+  }
+
+  #work .section-heading p:last-child {
+    display: none;
+  }
+
+  #work .section-heading .primary-button {
+    min-height: 48px;
+    width: 100%;
+  }
+
   .topbar-actions {
     gap: 8px;
   }
 
   .stat-grid {
     grid-template-columns: 1fr 1fr;
+    margin-top: 18px;
   }
 
   .stat-card {
@@ -2314,7 +2506,7 @@ select {
   }
 
   .dashboard-grid {
-    margin-top: 22px;
+    margin-top: 20px;
   }
 
   .panel,
@@ -2351,8 +2543,17 @@ select {
   }
 
   .dialog-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
     align-items: stretch;
     flex-direction: column;
+    margin-right: -20px;
+    margin-bottom: -20px;
+    margin-left: -20px;
+    padding: 16px 20px max(20px, calc(var(--safe-bottom) + 12px));
+    background: rgba(23, 23, 22, 0.98);
+    box-shadow: 0 -16px 30px rgba(15, 15, 14, 0.86);
   }
 
   .dialog-action-spacer {
@@ -2360,7 +2561,44 @@ select {
   }
 
   .dialog-actions button {
+    min-height: 48px;
     width: 100%;
+  }
+
+  .work-dialog {
+    width: calc(100vw - var(--safe-left) - var(--safe-right));
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+    scroll-padding-bottom: calc(190px + var(--safe-bottom));
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .work-form {
+    padding: 20px;
+  }
+
+  .work-control input,
+  .work-control select,
+  .form-field input,
+  .form-field select,
+  .form-field textarea,
+  .signin-form input,
+  .signin-form button {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .dialog-close,
+  .flag-option {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .task-card-links a,
+  .micro-link {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
   }
 
   .notice-icon {
@@ -2640,10 +2878,49 @@ select {
 }
 
 .app-error button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
   border: 0;
   background: transparent;
   color: inherit;
   font-size: 20px;
+}
+
+.hub-notice {
+  position: fixed;
+  right: 20px;
+  bottom: max(20px, calc(var(--safe-bottom) + 10px));
+  z-index: 110;
+  display: flex;
+  width: min(420px, calc(100vw - 40px));
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 13px 13px 16px;
+  border: 1px solid rgba(120, 199, 103, 0.45);
+  background: #172017;
+  color: var(--ink);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hub-notice button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.hub-notice button:hover,
+.hub-notice button:focus-visible {
+  color: var(--ink);
 }
 
 .dashboard-grid-connected {
@@ -2715,7 +2992,10 @@ select {
   display: none;
   margin-left: 4px;
   color: var(--yellow);
-  font-size: 7px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: none;
 }
 
 .work-form.is-active .owner-required,
@@ -2765,17 +3045,18 @@ select {
   }
 
   .app-error {
-    top: calc(var(--topbar-height) + 101px);
+    top: calc(var(--topbar-height) + var(--mobile-rail-height) + var(--safe-top));
   }
 }
 
 @media (max-width: 560px) {
   .access-screen {
-    padding: 0;
+    min-height: 100dvh;
+    padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   }
 
   .access-card {
-    min-height: 100vh;
+    min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
     border: 0;
   }
 
@@ -2789,8 +3070,8 @@ select {
 
   .topbar {
     gap: 6px;
-    padding-right: 10px;
-    padding-left: 10px;
+    padding-right: max(10px, var(--safe-right));
+    padding-left: max(10px, var(--safe-left));
   }
 
   .topbar-actions {
@@ -2808,6 +3089,12 @@ select {
   .home-work-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .hub-notice {
+    right: max(10px, var(--safe-right));
+    left: max(10px, var(--safe-left));
+    width: auto;
   }
 }
 
