@@ -14,6 +14,8 @@
        exists to register against. Its stylesheet is same-origin, so the CSP
        (style-src 'self') stays intact. -->
   <script type="module" src="hub-idea-lab.js"></script>
+  <!-- Claude — 2026-08-12: Lookbook (Emiel's visual reference container). -->
+  <script type="module" src="hub-lookbook.js"></script>
 </head>
 <body>
   <!-- Codex — 2026-08-11: publishable Hub shell. Company records render only after authenticated membership is verified. -->
@@ -80,13 +82,18 @@
           <span>Idea Lab</span>
           <span class="nav-meta">Next</span>
         </a>
-        <a class="nav-link" href="#designs">
+        <a class="nav-link" href="#lookbook">
           <span class="nav-index" aria-hidden="true">04</span>
+          <span>Lookbook</span>
+          <span class="nav-meta">Next</span>
+        </a>
+        <a class="nav-link" href="#designs">
+          <span class="nav-index" aria-hidden="true">05</span>
           <span>Designs</span>
           <span class="nav-meta">Next</span>
         </a>
         <a class="nav-link" href="#decisions">
-          <span class="nav-index" aria-hidden="true">05</span>
+          <span class="nav-index" aria-hidden="true">06</span>
           <span>Decisions</span>
           <span class="nav-meta">Next</span>
         </a>
@@ -308,6 +315,7 @@
 
       <!-- Codex — 2026-08-11: intentionally empty integration root. The separately owned Idea Lab module mounts here through window.Hub. -->
       <section id="idea-lab" class="page-section" aria-label="Idea Lab"></section>
+      <section id="lookbook" class="page-section" aria-label="Lookbook"></section>
       <section id="designs" class="page-section placeholder-section" aria-labelledby="designs-title"><p class="kicker">04 / Product development</p><h2 id="designs-title">Designs</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Design records and private files come next.</h3><p>No internal design names or assets are embedded in this publishable page.</p></div></section>
       <section id="decisions" class="page-section placeholder-section" aria-labelledby="decisions-title"><p class="kicker">05 / Company memory</p><h2 id="decisions-title">Decisions &amp; resources</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Confirmed decisions will load from the workspace.</h3><p>The static source contains no private decision log.</p></div></section>
 
