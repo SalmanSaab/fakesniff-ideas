@@ -10,6 +10,10 @@
   <link rel="stylesheet" href="hub.css">
   <script src="hub-config.js" defer></script>
   <script type="module" src="hub.js"></script>
+  <!-- Claude — 2026-08-12: Idea Lab module. Loads after hub.js so window.Hub
+       exists to register against. Its stylesheet is same-origin, so the CSP
+       (style-src 'self') stays intact. -->
+  <script type="module" src="hub-idea-lab.js"></script>
 </head>
 <body>
   <!-- Codex — 2026-08-11: publishable Hub shell. Company records render only after authenticated membership is verified. -->
