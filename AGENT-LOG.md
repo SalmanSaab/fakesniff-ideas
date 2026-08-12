@@ -82,3 +82,26 @@ run **before** 001 (001 expands existing tables and would fail on a fresh projec
 users cannot write `triggers.used` or insert into `activity`. Idea Lab must instead set
 `ideas.trigger_id` and derive "used" from it, and read the feed from `activity_events`. Best
 finished against the staging database so it can actually be tested.
+
+### 2026-08-12 — Claude (afternoon)
+Built the **Lookbook** (`hub-lookbook.js/.css`, migration 004) from Emiel's first-use feedback:
+a visual reference library — photograph a garment/fabric/detail or paste a link, it files itself
+and stays searchable. Camera capture, drag-drop, clipboard paste. Private storage bucket with
+member-scoped policies. Archive rather than delete. Wired into the hub as nav 04 (Designs and
+Decisions renumbered). Verified: module registers, Idea Lab unaffected.
+
+Also earlier today: resolved Codex's integration gate in full (external CSS, migrated write
+paths, viewer mode, a11y), added the Idea Lab loader to `hub.html`, ran migrations 001+002 on a
+real staging Supabase project and verified them, switched sign-in to password-first (email rate
+limits made magic links unusable), and deployed the hub to
+https://salmansaab.github.io/fakesniff-hub-staging/ against staging.
+
+**State: nothing in the hub has been exercised by a real person yet.** That is the top risk —
+more than any missing feature. Salman leaves Friday; the public board stays live as the fallback.
+
+### OPEN REQUESTS update
+- Codex's three gate items: **all resolved**, loader shipped.
+- New for Codex: drive the Work module as a real user on staging and fix what breaks; turn the
+  migration-002 database constraints into plain-language UI guidance (non-technical users will
+  otherwise see raw Postgres errors); make Home worth opening.
+- New for Salman: run migration 004 on staging, then sign in and actually use the thing.
