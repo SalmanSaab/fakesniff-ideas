@@ -393,9 +393,21 @@ export function mount(root, ctx) {
       });
       if (!res.ok) { console.warn("lookbook: link fetch failed", res.status); return null; }
       const out = await res.json();
-      if (!out?.dataUrl) return null;
-      const blob = await (await fetch(out.dataUrl)).blob();
-      return { file: new File([blob], out.name || "linked.jpg", { type: blob.type }) };
+      if (!out?.dataUrl) { console.warn("lookbook: link fetch returned no image", out?.error || ""); return null; }
+
+      /* Claude — 2026-08-13: decoded by hand rather than fetch(dataUrl). The
+         page's connect-src allows self and Supabase, not data:, so fetching a
+         data URL was blocked by our own CSP and failed silently — the picture
+         came back from the server and then vanished here. */
+      const [meta, b64] = String(out.dataUrl).split(",", 2);
+      if (!b64) return null;
+      const mime = (meta.match(/data:([^;]+)/) || [, "image/jpeg"])[1];
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const name = out.name || `linked.${(mime.split("/")[1] || "jpg").replace("jpeg", "jpg")}`;
+      return { file: new File([blob], name, { type: mime }) };
     } catch (e) {
       console.warn("lookbook: link fetch threw", String(e).slice(0, 160));
       return null;
