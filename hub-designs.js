@@ -72,19 +72,37 @@ export function mount(root, ctx) {
   $("#dg-download").addEventListener("click", download);
   $("#dg-pick").addEventListener("click", toggleIdeas);
 
-  /* If someone pressed "Open in Designs" on an idea, it is waiting for us. */
-  try {
-    const seed = JSON.parse(sessionStorage.getItem("fakesniff-design-seed") || "null");
-    if (seed?.line) {
+  /* If someone pressed "Open in Designs" on an idea, it is waiting for us.
+   *
+   * Claude — 2026-08-13: this used to run only at mount. The Hub keeps a
+   * section mounted once you have visited it, so arriving from the Idea Lab a
+   * second time did nothing — the idea sat in storage until a reload happened
+   * to remount the module. Salman saw exactly that: press the button, land on
+   * Designs, refresh, and only then find the idea. It now also runs whenever
+   * this section becomes the visible one. */
+  function takeSeed() {
+    try {
+      const seed = JSON.parse(sessionStorage.getItem("fakesniff-design-seed") || "null");
+      if (!seed?.line) return;
       $("#dg-idea").value = seed.concept
         ? `the words "${seed.line}" set as the print, in the spirit of: ${seed.concept}`
         : `the words "${seed.line}" set as the print`;
       sessionStorage.removeItem("fakesniff-design-seed");
       note("Taken from the Idea Lab. Edit it however you like before generating.");
-    }
-  } catch { /* nothing waiting */ }
+      $("#dg-idea").focus();
+    } catch { /* nothing waiting */ }
+  }
+  takeSeed();
+  const onHash = () => {
+    if ((location.hash || "").replace(/^#/, "") === "designs") takeSeed();
+  };
+  window.addEventListener("hashchange", onHash);
 
-  return () => { root.innerHTML = ""; root.classList.remove("dg", "fs-scope"); };
+  return () => {
+    window.removeEventListener("hashchange", onHash);
+    root.innerHTML = "";
+    root.classList.remove("dg", "fs-scope");
+  };
 
   async function generate(event) {
     event?.preventDefault?.();
