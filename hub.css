@@ -2517,7 +2517,9 @@ select {
 
   /* Codex — 2026-08-12: phones put today's actions before dashboard ceremony;
      Work filters collapse to one source-ordered disclosure row. */
-  #home {
+  /* Codex — 2026-08-13: qualify this layout override so an inactive Home stays
+     hidden when a phone opens a shared #lookbook or #decisions link. */
+  #home.is-active {
     display: flex;
     flex-direction: column;
   }
@@ -2527,15 +2529,19 @@ select {
   }
 
   #home .dashboard-grid {
-    order: 3;
+    order: 4;
   }
 
   #home .stat-grid {
-    order: 4;
+    order: 5;
   }
 
   #home .week-signal {
     order: 2;
+  }
+
+  #home .home-changes-panel {
+    order: 3;
   }
 
   #work .integration-notice {
@@ -3077,6 +3083,109 @@ select {
   grid-column: 1 / -1;
 }
 
+/* Codex — 2026-08-13: Home speaks first with a small, tappable change digest.
+   The feed uses the same restrained visual language as Work, not notifications. */
+.home-changes-panel {
+  margin-top: 16px;
+  padding: 20px 24px;
+}
+
+.home-changes-heading {
+  align-items: center;
+}
+
+.home-changes-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-changes-retry {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  cursor: pointer;
+}
+
+.home-changes-list {
+  display: grid;
+  margin-top: 15px;
+}
+
+.home-change-row {
+  display: grid;
+  min-height: 58px;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.home-change-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.home-change-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-change-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.home-change-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.home-change-kind {
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.home-change-kind.is-attention {
+  border-color: rgba(var(--fs-warn-rgb), .5);
+  color: var(--yellow);
+}
+
+.home-change-time {
+  min-width: 54px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.home-changes-note {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .micro-link {
   color: var(--green);
   font-size: 9px;
@@ -3084,6 +3193,10 @@ select {
   letter-spacing: 0.09em;
   text-decoration: none;
   text-transform: uppercase;
+}
+
+.micro-link.home-changes-retry {
+  font-size: 11px;
 }
 
 .home-work-list {
@@ -3259,6 +3372,24 @@ select {
   .home-work-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .home-changes-panel {
+    padding: 18px;
+  }
+
+  .home-change-row {
+    min-height: 72px;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .home-change-meta {
+    justify-content: space-between;
+  }
+
+  .home-change-copy strong {
+    white-space: normal;
   }
 
   .home-focus .signal-detail,

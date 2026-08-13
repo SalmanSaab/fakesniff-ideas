@@ -14,6 +14,11 @@ function fakeClient(responses = {}) {
   };
   return {
     calls,
+    rpc(name, args) {
+      const call = { rpc: name, args };
+      calls.push(call);
+      return Promise.resolve(take(`rpc:${name}`) || { data: null, error: null });
+    },
     from(table) {
       const call = { table, filters: [], orders: [] };
       calls.push(call);
@@ -164,4 +169,41 @@ test("workspace data is discarded if membership disappears during load", async (
   });
   const repository = createConnectedWorkRepository(client, WORKSPACE);
   assert.equal(await repository.loadWorkspace("user"), null);
+});
+
+test("Home changes use only the scoped sanitizing RPC contract", async () => {
+  const expectedUser = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const eventA = "11111111-1111-4111-8111-111111111111";
+  const eventB = "22222222-2222-4222-8222-222222222222";
+  const payload = { items: [], firstVisit: false, hasMore: false };
+  const client = fakeClient({
+    "rpc:get_home_changes": { data: payload, error: null },
+    "rpc:ack_home_changes": { data: { acknowledged: 1, openedAt: "2026-08-13T12:00:00Z" }, error: null }
+  });
+  const repository = createConnectedWorkRepository(client, WORKSPACE);
+
+  assert.equal(await repository.loadHomeChanges(expectedUser, 999), payload);
+  await repository.acknowledgeHomeChanges(expectedUser, [eventA, eventA, "not-an-id", eventB]);
+
+  assert.deepEqual(client.calls[0], {
+    rpc: "get_home_changes",
+    args: { p_workspace_id: WORKSPACE, p_expected_user_id: expectedUser, p_limit: 10 }
+  });
+  assert.deepEqual(client.calls[1], {
+    rpc: "ack_home_changes",
+    args: { p_workspace_id: WORKSPACE, p_expected_user_id: expectedUser, p_event_ids: [eventA, eventB] }
+  });
+  assert.equal(client.calls.some((call) => call.table === "activity_events"), false);
+});
+
+test("Home RPC failures stay inside the repository boundary", async () => {
+  const client = fakeClient({
+    "rpc:get_home_changes": { data: null, error: { code: "42501", message: "private detail" } }
+  });
+  const repository = createConnectedWorkRepository(client, WORKSPACE);
+  await assert.rejects(repository.loadHomeChanges("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), (error) => {
+    assert.ok(error instanceof HubRepositoryError);
+    assert.equal(error.operation, "Home changes load");
+    return true;
+  });
 });
