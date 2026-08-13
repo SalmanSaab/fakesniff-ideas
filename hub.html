@@ -120,7 +120,7 @@
         </div>
         <div class="topbar-actions">
           <button id="refresh-button" class="quiet-button" type="button">Refresh</button>
-          <span id="sync-label" class="sync-label" role="status" aria-live="polite">Up to date</span>
+          <span id="sync-label" class="sync-label" role="status" aria-live="polite">Loading…</span>
           <!-- Codex — 2026-08-11: account access remains reachable when the desktop rail collapses on phones. -->
           <button id="mobile-signout-button" class="quiet-button mobile-only-action" type="button">Sign out</button>
           <div id="member-avatar" class="avatar avatar-green" aria-hidden="true">?</div>
@@ -145,10 +145,11 @@
           <h1 id="home-title">Make the work<br><em>visible.</em></h1>
           <p class="hero-note">One place for what is moving, what is blocked, and what needs a decision.</p>
         </div>
-        <div class="week-signal" aria-label="Workspace principle">
-          <span class="signal-label">Operating rule</span>
-          <span class="signal-value">One owner. One next move.</span>
-          <span class="signal-detail">If either is missing, the item stays in the backlog.</span>
+        <div class="week-signal home-focus" role="group" aria-label="Your next move">
+          <span id="home-focus-date" class="signal-label">Today</span>
+          <span id="home-focus-value" class="signal-value">Loading your next move…</span>
+          <span id="home-focus-detail" class="signal-detail">Checking the shared work board.</span>
+          <button id="home-focus-action" class="signal-action" type="button" hidden>Open item</button>
         </div>
 
         <div class="stat-grid" aria-label="Workspace snapshot">
@@ -311,7 +312,12 @@
               </details>
             </div>
             <p id="work-form-error" class="form-error" role="alert" tabindex="-1" hidden></p>
-            <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden>Archive item</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button">Cancel</button><button id="save-work-button" class="primary-button" type="submit">Save work</button></div>
+            <p id="work-dialog-status" class="form-guidance work-dialog-status" role="status" aria-live="polite" tabindex="-1" hidden></p>
+            <section id="work-conflict-review" class="conflict-review" aria-labelledby="work-conflict-title" hidden>
+              <div><p class="eyebrow">Concurrent edit</p><h4 id="work-conflict-title">Choose which version to keep</h4></div>
+              <div id="work-conflict-fields" class="conflict-fields"></div>
+            </section>
+            <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden>Archive item</button><button id="reload-latest-work-button" class="text-button" type="button" hidden>Reload latest version</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button">Cancel</button><button id="save-work-button" class="primary-button" type="submit">Save work</button></div>
           </form>
         </dialog>
       </section>

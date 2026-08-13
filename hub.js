@@ -2,17 +2,18 @@
 
 import { createHubAuth, validateHubConfig } from "./hub-auth.js";
 import { createConnectedWorkRepository, HubRepositoryError } from "./hub-work-repository.js";
+import {
+  ACTIVE_WORK_STATUSES as ACTIVE_STATUSES,
+  WORK_STATUSES as STATUSES,
+  WORK_STATUS_LABELS as STATUS_LABELS,
+  isValidWorkUrl,
+  reconcileWorkDraft,
+  selectHomeFocus,
+  translateWorkRepositoryError,
+  validateWorkValues,
+  workApprovalPermissions
+} from "./hub-work-policy.js";
 
-const STATUSES = ["backlog", "this_week", "doing", "review", "waiting", "done"];
-const ACTIVE_STATUSES = new Set(["this_week", "doing", "review", "waiting"]);
-const STATUS_LABELS = {
-  backlog: "Backlog",
-  this_week: "This week",
-  doing: "Doing",
-  review: "Review / Decision",
-  waiting: "Waiting / Blocked",
-  done: "Done"
-};
 const STATUS_GUIDANCE = {
   backlog: "Backlog is simple: only the title is required. Add the working details when this is ready to move.",
   this_week: "For This week, choose an owner, due date, next step, and what Done means. The team keeps no more than three items here.",
@@ -48,11 +49,16 @@ const state = {
   tasks: [],
   saving: false,
   refreshing: false,
+  refreshWhenDialogCloses: false,
+  lastRefreshedAt: 0,
   stale: false,
   activeSectionId: "home",
   mobileWorkStatus: "this_week",
   originalApproverId: "",
   formBaseline: null,
+  formBaselineValues: null,
+  conflictDraft: null,
+  conflictReview: null,
   noticeTimer: null,
   dialogOpener: null,
   dialogOpenerTaskId: ""
@@ -78,6 +84,10 @@ const form = get("work-form");
 const formError = get("work-form-error");
 const newWorkButton = get("new-work-button");
 const archiveButton = get("archive-work-button");
+const reloadLatestButton = get("reload-latest-work-button");
+const conflictReviewPanel = get("work-conflict-review");
+const conflictFields = get("work-conflict-fields");
+const dialogStatus = get("work-dialog-status");
 const saveButton = get("save-work-button");
 const statusInput = get("work-status");
 const ownerInput = get("work-owner");
@@ -319,17 +329,24 @@ function showAccessDenied() {
 function clearWorkspaceState() {
   state.refreshSequence += 1;
   state.mutationSequence += 1;
+  state.conflictDraft = null;
+  state.conflictReview = null;
   setSaving(false);
   state.refreshing = false;
+  state.refreshWhenDialogCloses = false;
   clearRegisteredSections();
   state.formBaseline = null;
+  state.formBaselineValues = null;
   clearNotice();
+  clearDialogStatus();
+  renderConflictReview();
   state.user = null;
   state.membership = null;
   state.workspace = null;
   state.members = [];
   state.workstreams = [];
   state.tasks = [];
+  state.lastRefreshedAt = 0;
   state.stale = false;
   state.dialogOpener = null;
   state.dialogOpenerTaskId = "";
@@ -374,6 +391,11 @@ function clearWorkspaceState() {
   get("home-week-count").textContent = "00";
   get("home-review-count").textContent = "00";
   get("home-waiting-count").textContent = "00";
+  get("home-focus-date").textContent = "Today";
+  get("home-focus-value").textContent = "Your next move will appear here.";
+  get("home-focus-detail").textContent = "Sign in to load the shared work board.";
+  get("home-focus-action").hidden = true;
+  reloadLatestButton.hidden = true;
   setMobileWorkStatus("this_week");
 }
 
@@ -411,14 +433,7 @@ function ownerClass(userId) {
 }
 
 function validWebUrl(value, httpsOnly = false) {
-  if (!value) return true;
-  if (/\s/.test(value)) return false;
-  try {
-    const parsed = new URL(value);
-    return httpsOnly ? parsed.protocol === "https:" : ["http:", "https:"].includes(parsed.protocol);
-  } catch {
-    return false;
-  }
+  return isValidWorkUrl(value, { httpsOnly });
 }
 
 function formatDate(value) {
@@ -433,6 +448,16 @@ function isOverdue(task) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(`${task.due_on}T00:00:00`) < today;
+}
+
+function taskDateLabel(task) {
+  if (task.status === "done" && task.completed_at) {
+    const completed = new Date(task.completed_at);
+    if (!Number.isNaN(completed.getTime())) {
+      return `Done ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(completed)}`;
+    }
+  }
+  return formatDate(task.due_on);
 }
 
 function makeExternalLink(url, label) {
@@ -472,16 +497,25 @@ function makeTaskCard(task) {
   }
 
   const flags = Array.isArray(task.flags) ? task.flags.filter((flag) => FLAG_LABELS[flag]) : [];
-  if (flags.length || !task.owner_id) {
+  const approvalLabel = task.status === "review"
+    ? (task.approver_id === state.membership?.user_id
+      ? "Needs your approval"
+      : `Review by ${memberName(task.approver_id, "Approver needed")}`)
+    : "";
+  if (approvalLabel) {
+    button.setAttribute("aria-label", `${canEdit() ? "Edit" : "View"} ${task.title}. ${STATUS_LABELS[task.status]}. ${approvalLabel}.`);
+  }
+  if (flags.length || !task.owner_id || approvalLabel) {
     const flagRow = createElement("span", "task-card-flags");
     flags.forEach((flag) => flagRow.append(createElement("span", "task-flag", FLAG_LABELS[flag])));
     if (!task.owner_id) flagRow.append(createElement("span", "task-flag task-flag-owner", "Owner needed"));
+    if (approvalLabel) flagRow.append(createElement("span", "task-flag task-flag-approval", approvalLabel));
     button.append(flagRow);
   }
 
   const footer = createElement("span", "task-card-footer");
   footer.append(createElement("span", `owner-chip ${ownerClass(task.owner_id)}`, memberName(task.owner_id)));
-  footer.append(createElement("span", isOverdue(task) ? "task-card-date-overdue" : "", formatDate(task.due_on)));
+  footer.append(createElement("span", isOverdue(task) ? "task-card-date-overdue" : "", taskDateLabel(task)));
   button.append(footer);
   shell.append(button);
 
@@ -562,6 +596,70 @@ function renderHomeList(container, tasks, detailFor, emptyCopy) {
   tasks.forEach((task) => container.append(homeListItem(task, detailFor(task))));
 }
 
+function localDateIso(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function renderHomeFocus() {
+  const action = get("home-focus-action");
+  const today = new Date();
+  const todayIso = localDateIso(today);
+  const focus = selectHomeFocus(state.tasks, state.membership?.user_id || "", todayIso);
+  get("home-focus-date").textContent = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long", day: "numeric", month: "short"
+  }).format(today);
+  action.hidden = false;
+  delete action.dataset.taskId;
+  delete action.dataset.homeAction;
+
+  if (!focus) {
+    const teamHasActiveWork = state.tasks.some((task) => ACTIVE_STATUSES.has(task.status));
+    const backlogCount = state.tasks.filter((task) => task.status === "backlog").length;
+    get("home-focus-value").textContent = teamHasActiveWork
+      ? "Nothing needs you right now."
+      : (backlogCount ? "Choose what moves next." : "Nothing is planned yet.");
+    if (backlogCount && !teamHasActiveWork) {
+      get("home-focus-detail").textContent = `${backlogCount} backlog ${backlogCount === 1 ? "item is" : "items are"} ready to plan.`;
+      action.textContent = "Review backlog";
+      action.setAttribute("aria-label", "Open the Work backlog");
+      action.dataset.homeAction = "open-backlog";
+    } else if (canEdit() && !teamHasActiveWork) {
+      get("home-focus-detail").textContent = "Create the first work item, or add a backlog item to this week.";
+      action.textContent = "Create work";
+      action.setAttribute("aria-label", "Create the first work item");
+      action.dataset.homeAction = "create";
+    } else {
+      get("home-focus-detail").textContent = teamHasActiveWork
+        ? "The team's active work is on the board."
+        : "Open Work to see the shared board.";
+      action.textContent = "Open Work";
+      action.setAttribute("aria-label", "Open the shared Work board");
+      action.dataset.homeAction = "open-work";
+    }
+    return;
+  }
+
+  const { task, reason } = focus;
+  get("home-focus-value").textContent = task.title;
+  action.textContent = "Open item";
+  action.setAttribute("aria-label", `Open ${task.title}`);
+  action.dataset.taskId = task.id;
+  const next = task.next_action ? ` Next: ${task.next_action}` : "";
+  const details = {
+    assigned_review: `Needs your decision.${next}`,
+    owned_overdue: `Overdue since ${formatDate(task.due_on)}.${next}`,
+    owned_doing: task.next_action ? `Next: ${task.next_action}` : `Due ${formatDate(task.due_on)}. Add the next step.`,
+    owned_this_week: task.next_action ? `This week · Next: ${task.next_action}` : `Due ${formatDate(task.due_on)}. Add the next step.`,
+    team_attention: task.status === "waiting"
+      ? `Blocked: ${task.blocker_note || "Waiting reason needed"}`
+      : `Review by ${memberName(task.approver_id, "Approver needed")}.`
+  };
+  get("home-focus-detail").textContent = details[reason] || "Open this item to see the next move.";
+}
+
 function renderSummary() {
   const active = state.tasks.filter((task) => ACTIVE_STATUSES.has(task.status));
   const week = state.tasks.filter((task) => task.status === "this_week");
@@ -576,11 +674,22 @@ function renderSummary() {
   get("home-week-count").textContent = String(week.length).padStart(2, "0");
   get("home-review-count").textContent = String(review.length).padStart(2, "0");
   get("home-waiting-count").textContent = String(waiting.length).padStart(2, "0");
+  renderHomeFocus();
 
   renderHomeList(get("home-week-list"), week, (task) => task.next_action || "Next step not recorded", "No work has been chosen for this week.");
+  const memberId = state.membership?.user_id;
+  const attention = [...review, ...waiting].sort((left, right) => {
+    const leftMine = left.approver_id === memberId ? 0 : 1;
+    const rightMine = right.approver_id === memberId ? 0 : 1;
+    if (leftMine !== rightMine) return leftMine - rightMine;
+    const leftOverdue = isOverdue(left) ? 0 : 1;
+    const rightOverdue = isOverdue(right) ? 0 : 1;
+    if (leftOverdue !== rightOverdue) return leftOverdue - rightOverdue;
+    return String(left.due_on || "9999-12-31").localeCompare(String(right.due_on || "9999-12-31"));
+  });
   renderHomeList(
     get("home-attention-list"),
-    [...review, ...waiting].slice(0, 5),
+    attention.slice(0, 5),
     (task) => task.status === "waiting" ? task.blocker_note : `Review by ${memberName(task.approver_id, "Approver needed")}`,
     "No reviews or blockers need attention."
   );
@@ -625,7 +734,6 @@ function renderWorkspace({ focus = false } = {}) {
   populateReferenceControls();
   const role = state.membership.role;
   const displayName = state.membership.display_name;
-  const activeWorkstreams = state.workstreams.filter((workstream) => !workstream.archived_at && workstream.status === "active");
 
   get("workspace-label").textContent = state.workspace?.name || "FAKESNIFF workspace";
   get("rail-member-label").textContent = `${displayName} · ${role}`;
@@ -639,16 +747,14 @@ function renderWorkspace({ focus = false } = {}) {
   dataNote.replaceChildren(createElement("strong", "", "Private data."), document.createTextNode(" Loaded for verified members only."));
 
   newWorkButton.hidden = !canEdit();
-  newWorkButton.disabled = !canEdit() || activeWorkstreams.length === 0;
-  if (canEdit() && activeWorkstreams.length === 0) {
-    showAppError("Area setup is incomplete, so new work is disabled.");
-  }
+  newWorkButton.disabled = !canEdit();
   renderBoard();
   appShell.hidden = false;
   accessScreen.hidden = true;
   document.querySelector(".skip-link")?.setAttribute("href", "#main-content");
   activateSection(sectionIdFromHash());
-  setSyncState("Up to date", false);
+  state.lastRefreshedAt = Date.now();
+  setSyncState("Loaded just now", false);
   if (focus) window.requestAnimationFrame(() => get("main-content").focus());
 }
 
@@ -694,14 +800,21 @@ function formSnapshot() {
 
 function captureFormBaseline() {
   state.formBaseline = formSnapshot();
+  state.formBaselineValues = valuesFromForm();
 }
 
 function isFormDirty() {
   return Boolean(
     dialog.open
-    && state.formBaseline !== null
-    && ROLE_RANK[state.membership?.role] >= ROLE_RANK.member
-    && formSnapshot() !== state.formBaseline
+    && (
+      state.conflictDraft
+      || state.conflictReview?.unresolvedKeys?.length
+      || (
+        state.formBaseline !== null
+        && ROLE_RANK[state.membership?.role] >= ROLE_RANK.member
+        && formSnapshot() !== state.formBaseline
+      )
+    )
   );
 }
 
@@ -709,6 +822,7 @@ function requestDialogClose() {
   if (state.saving) return;
   if (isFormDirty() && !window.confirm("Discard your unsaved changes?")) return;
   state.formBaseline = null;
+  state.formBaselineValues = null;
   dialog.close();
 }
 
@@ -716,8 +830,27 @@ async function requestWorkspaceRefresh() {
   if (state.refreshing) return;
   if (isFormDirty() && !window.confirm("Refresh the Hub and discard your unsaved changes?")) return;
   state.formBaseline = null;
+  state.formBaselineValues = null;
   if (dialog.open) dialog.close();
   await refreshTasks();
+}
+
+function refreshAfterReturning() {
+  const refreshIsDue = Date.now() - state.lastRefreshedAt >= 30_000;
+  if (dialog.open && refreshIsDue && state.user && state.membership) {
+    state.refreshWhenDialogCloses = true;
+    return;
+  }
+  if (
+    document.visibilityState !== "visible"
+    || !state.user
+    || !state.membership
+    || state.refreshing
+    || state.saving
+    || dialog.open
+    || !refreshIsDue
+  ) return;
+  void refreshTasks({ quiet: true });
 }
 
 function clearFieldError(control) {
@@ -750,6 +883,142 @@ function clearFormError() {
   clearFieldErrors();
 }
 
+function clearDialogStatus() {
+  dialogStatus.hidden = true;
+  dialogStatus.textContent = "";
+}
+
+function showDialogStatus(message, { focus = false } = {}) {
+  dialogStatus.textContent = message;
+  dialogStatus.hidden = false;
+  if (focus) window.requestAnimationFrame(() => dialogStatus.focus());
+}
+
+const CONFLICT_FIELD_LABELS = Object.freeze({
+  title: "Title",
+  workstreamId: "Area",
+  status: "Status",
+  ownerId: "Owner",
+  approverId: "Approver",
+  priority: "Priority",
+  dueOn: "Due date",
+  nextAction: "Next step",
+  completion: "Done condition",
+  blocker: "Waiting reason",
+  flags: "Attention flags",
+  sourceUrl: "Source link",
+  latestFileUrl: "File link"
+});
+
+function conflictValueLabel(key, value) {
+  if (key === "ownerId" || key === "approverId") return memberName(value, "Nobody");
+  if (key === "workstreamId") return value ? workstreamName(value) : "No area";
+  if (key === "status") return STATUS_LABELS[value] || value;
+  if (key === "flags") return value?.length ? value.map((flag) => FLAG_LABELS[flag] || flag).join(", ") : "None";
+  return String(value || "Empty");
+}
+
+function protectedConflictNote(review) {
+  const labels = (review?.protectedFields || [])
+    .map((key) => CONFLICT_FIELD_LABELS[key]?.toLowerCase())
+    .filter(Boolean)
+    .join(", ");
+  return labels ? ` The latest ${labels} was kept because approval authority changed.` : "";
+}
+
+function renderConflictReview() {
+  conflictFields.replaceChildren();
+  const review = state.conflictReview;
+  if (!review?.unresolvedKeys?.length) {
+    conflictReviewPanel.hidden = true;
+    return;
+  }
+
+  review.unresolvedKeys.forEach((key, index) => {
+    const label = CONFLICT_FIELD_LABELS[key] || key;
+    const row = createElement("article", "conflict-choice");
+    const copy = createElement("div", "conflict-choice-copy");
+    const title = createElement("p", "conflict-field-label");
+    const titleId = `work-conflict-field-${index}`;
+    const latestId = `work-conflict-latest-${index}`;
+    const mineId = `work-conflict-mine-${index}`;
+    title.id = titleId;
+    title.append(createElement("strong", "", label));
+    const latest = createElement("p");
+    latest.id = latestId;
+    latest.append(createElement("strong", "", "Latest: "), document.createTextNode(conflictValueLabel(key, review.latestValues[key])));
+    const mine = createElement("p");
+    mine.id = mineId;
+    mine.append(createElement("strong", "", "Yours: "), document.createTextNode(conflictValueLabel(key, review.draftValues[key])));
+    copy.append(title, latest, mine);
+
+    const actions = createElement("div", "conflict-choice-actions");
+    const keepLatest = createElement("button", "text-button", "Keep latest");
+    keepLatest.type = "button";
+    keepLatest.dataset.conflictKey = key;
+    keepLatest.dataset.conflictChoice = "latest";
+    keepLatest.setAttribute("aria-label", `Keep latest ${label.toLowerCase()}`);
+    keepLatest.setAttribute("aria-describedby", latestId);
+    const useMine = createElement("button", "text-button", "Use mine");
+    useMine.type = "button";
+    useMine.dataset.conflictKey = key;
+    useMine.dataset.conflictChoice = "draft";
+    useMine.setAttribute("aria-label", `Use my ${label.toLowerCase()}`);
+    useMine.setAttribute("aria-describedby", mineId);
+    actions.append(keepLatest, useMine);
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", titleId);
+    row.append(copy, actions);
+    conflictFields.append(row);
+  });
+  conflictReviewPanel.hidden = false;
+}
+
+function resolveConflictChoice(key, choice) {
+  const review = state.conflictReview;
+  if (!review?.unresolvedKeys?.includes(key) || state.saving) return;
+  /* People may continue polishing unrelated fields while comparing a conflict.
+     Start from the live form so resolving one field never rewinds those edits. */
+  review.mergedValues = valuesFromForm();
+  const selected = choice === "draft" ? review.draftValues[key] : review.latestValues[key];
+  review.mergedValues[key] = Array.isArray(selected) ? [...selected] : selected;
+  review.unresolvedKeys = review.unresolvedKeys.filter((candidate) => candidate !== key);
+  applyValuesToForm(review.mergedValues);
+  syncRequirements();
+  renderConflictReview();
+  saveButton.disabled = Boolean(review.unresolvedKeys.length) || !canEdit();
+  archiveButton.disabled = Boolean(review.unresolvedKeys.length);
+  if (review.unresolvedKeys.length) {
+    showDialogStatus(`${review.unresolvedKeys.length} conflict ${review.unresolvedKeys.length === 1 ? "choice remains" : "choices remain"}.${protectedConflictNote(review)}`);
+    conflictFields.querySelector("button")?.focus();
+    return;
+  }
+  const authorityNote = protectedConflictNote(review);
+  state.conflictReview = null;
+  showDialogStatus(`Conflict choices resolved.${authorityNote} Review the item, then save your edits.`);
+  const firstAffectedControl = get({
+    title: "work-title-input", workstreamId: "work-workstream", status: "work-status",
+    ownerId: "work-owner", approverId: "work-approver", priority: "work-priority",
+    dueOn: "work-date", nextAction: "work-next-action", completion: "work-completion",
+    blocker: "work-blocker", sourceUrl: "work-source-url", latestFileUrl: "work-latest-file-url"
+  }[key]);
+  if (firstAffectedControl && get("work-more-details").contains(firstAffectedControl)) {
+    get("work-more-details").open = true;
+  }
+  window.requestAnimationFrame(() => {
+    const isFocusable = (control) => Boolean(
+      control
+      && !control.disabled
+      && !control.hidden
+      && control.getClientRects().length
+    );
+    const target = isFocusable(firstAffectedControl)
+      ? firstAffectedControl
+      : (isFocusable(saveButton) ? saveButton : dialogStatus);
+    target.focus();
+  });
+}
+
 function showFormError(message, fieldId = "") {
   clearFieldErrors();
   formError.textContent = message;
@@ -777,6 +1046,9 @@ function addMissingReferenceOption(select, value, label) {
 }
 
 function setFormReadOnly(readOnly) {
+  statusInput.querySelectorAll("option").forEach((option) => {
+    option.disabled = false;
+  });
   form.querySelectorAll("input, select, textarea").forEach((control) => {
     if (["work-id", "work-updated-at"].includes(control.id)) return;
     const textLike = control instanceof HTMLTextAreaElement
@@ -791,6 +1063,8 @@ function setFormReadOnly(readOnly) {
     else control.removeAttribute("aria-readonly");
   });
   saveButton.hidden = readOnly;
+  if (readOnly) archiveButton.hidden = true;
+  if (get("work-id").value) get("work-dialog-title").textContent = readOnly ? "View work item" : "Edit work item";
   get("cancel-work-button").textContent = readOnly ? "Close" : "Cancel";
 }
 
@@ -800,8 +1074,11 @@ function syncRequirements() {
   const done = status === "done";
   const review = status === "review";
   const waiting = status === "waiting";
-  if (!review && !state.originalApproverId) approverInput.value = "";
-  if (!waiting) get("work-blocker").value = "";
+  const statusChoicePending = state.conflictReview?.unresolvedKeys?.includes("status");
+  if (!statusChoicePending) {
+    if (!review && !state.originalApproverId) approverInput.value = "";
+    if (!waiting) get("work-blocker").value = "";
+  }
   get("work-approver-field").hidden = !review && !state.originalApproverId;
   get("work-blocker-field").hidden = !waiting;
   form.classList.toggle("is-active", active);
@@ -824,25 +1101,37 @@ function taskById(id) {
 
 function configureApprovalControls(task) {
   if (!task || !canEdit()) return;
-  const actorIsApprover = task.approver_id && task.approver_id === state.membership.user_id;
-  const admin = isAdmin();
+  const permissions = workApprovalPermissions(task, state.membership.user_id, isAdmin());
 
-  if (task.approver_id && !admin) approverInput.disabled = true;
-  if (task.status === "review" && !actorIsApprover && !admin) statusInput.disabled = true;
-  if (task.status === "done" && task.approver_id && !actorIsApprover && !admin) statusInput.disabled = true;
-  if (task.approver_id && !actorIsApprover && !admin) {
-    const doneOption = [...statusInput.options].find((option) => option.value === "done");
-    if (doneOption) doneOption.disabled = true;
+  /* Migration 002 intentionally rejects every update to an approved Done item
+     from an unrelated member, not just a status change. Reflect that authority
+     before somebody writes into fields that the database cannot save. */
+  if (permissions.readOnly) {
+    setFormReadOnly(true);
+    get("work-status-guidance").textContent = `This approved item is locked. Only ${memberName(task.approver_id, "its approver")} or a workspace admin or owner can change or reopen it.`;
+    archiveButton.hidden = true;
+    return;
   }
-  archiveButton.hidden = !(admin || actorIsApprover || (!task.approver_id && task.status !== "review"));
+
+  approverInput.disabled = permissions.disableApprover;
+  statusInput.disabled = permissions.disableStatus;
+  const doneOption = [...statusInput.options].find((option) => option.value === "done");
+  if (doneOption) doneOption.disabled = permissions.disableDone;
+  archiveButton.hidden = !permissions.canArchive;
 }
 
 function openNewTask() {
-  if (!canEdit() || newWorkButton.disabled || state.refreshing) return;
+  if (!canEdit() || newWorkButton.disabled || state.refreshing || state.saving) return;
   state.dialogOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.dialogOpenerTaskId = "";
   populateReferenceControls();
   form.reset();
+  state.conflictDraft = null;
+  state.conflictReview = null;
+  reloadLatestButton.hidden = true;
+  renderConflictReview();
+  clearDialogStatus();
+  if (!state.saving) saveButton.disabled = false;
   state.originalApproverId = "";
   get("work-more-details").open = false;
   setFormReadOnly(false);
@@ -859,8 +1148,10 @@ function openNewTask() {
 }
 
 function openTask(id) {
-  if (state.refreshing) {
-    boardStatus.textContent = "Wait for Refresh to finish before opening work.";
+  if (state.refreshing || state.saving) {
+    boardStatus.textContent = state.saving
+      ? "Wait for the current save to finish before opening another item."
+      : "Wait for Refresh to finish before opening work.";
     return;
   }
   const task = taskById(id);
@@ -869,6 +1160,12 @@ function openTask(id) {
   const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.dialogOpener = activeElement?.matches("[data-open-task-id]") ? null : activeElement;
   state.dialogOpenerTaskId = id;
+  state.conflictDraft = null;
+  state.conflictReview = null;
+  reloadLatestButton.hidden = true;
+  renderConflictReview();
+  clearDialogStatus();
+  saveButton.disabled = false;
   populateReferenceControls();
   addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived area");
   addMissingReferenceOption(ownerInput, task.owner_id, "Former member");
@@ -877,22 +1174,8 @@ function openTask(id) {
 
   get("work-id").value = task.id;
   get("work-updated-at").value = task.updated_at;
-  get("work-title-input").value = task.title;
-  get("work-workstream").value = task.workstream_id || "";
-  statusInput.value = task.status;
-  ownerInput.value = task.owner_id || "";
-  approverInput.value = task.approver_id || "";
   state.originalApproverId = task.approver_id || "";
-  get("work-priority").value = task.priority;
-  get("work-date").value = task.due_on || "";
-  get("work-next-action").value = task.next_action || "";
-  get("work-completion").value = task.completion_condition || "";
-  get("work-blocker").value = task.blocker_note || "";
-  form.querySelectorAll('input[name="flags"]').forEach((checkbox) => {
-    checkbox.checked = Array.isArray(task.flags) && task.flags.includes(checkbox.value);
-  });
-  get("work-source-url").value = task.source_url || "";
-  get("work-latest-file-url").value = task.latest_file_url || "";
+  applyValuesToForm(valuesFromTask(task));
   get("work-more-details").open = false;
   get("work-dialog-title").textContent = canEdit() ? "Edit work item" : "View work item";
   archiveButton.hidden = !canEdit();
@@ -922,103 +1205,198 @@ function valuesFromForm() {
   };
 }
 
-function capacityError(values, editingId) {
-  const otherTasks = state.tasks.filter((task) => task.id !== editingId);
-  if (values.status === "this_week" && otherTasks.filter((task) => task.status === "this_week").length >= 3) {
-    return { message: "This week is full (3 of 3). Move or finish an item before adding another.", fieldId: "work-status" };
-  }
-  if (values.status === "doing" && otherTasks.some((task) => task.status === "doing" && task.owner_id === values.ownerId)) {
-    return { message: `${memberName(values.ownerId)} already has one item in Doing. Finish or move that item before starting another.`, fieldId: "work-owner" };
-  }
-  return null;
+function valuesFromTask(task) {
+  return {
+    title: task.title || "",
+    workstreamId: task.workstream_id || "",
+    status: task.status || "backlog",
+    ownerId: task.owner_id || "",
+    approverId: task.approver_id || "",
+    priority: task.priority || "normal",
+    dueOn: task.due_on || "",
+    nextAction: task.next_action || "",
+    completion: task.completion_condition || "",
+    blocker: task.blocker_note || "",
+    flags: Array.isArray(task.flags) ? task.flags : [],
+    sourceUrl: task.source_url || "",
+    latestFileUrl: task.latest_file_url || "",
+    position: Number.isInteger(task.position) ? task.position : 0
+  };
+}
+
+function applyValuesToForm(values) {
+  get("work-title-input").value = values.title;
+  get("work-workstream").value = values.workstreamId;
+  statusInput.value = values.status;
+  ownerInput.value = values.ownerId;
+  approverInput.value = values.approverId;
+  get("work-priority").value = values.priority;
+  get("work-date").value = values.dueOn;
+  get("work-next-action").value = values.nextAction;
+  get("work-completion").value = values.completion;
+  get("work-blocker").value = values.blocker;
+  form.querySelectorAll('input[name="flags"]').forEach((checkbox) => {
+    checkbox.checked = values.flags.includes(checkbox.value);
+  });
+  get("work-source-url").value = values.sourceUrl;
+  get("work-latest-file-url").value = values.latestFileUrl;
 }
 
 function validationError(values, editingId) {
-  if (!values.title) return { message: "Add a short title so the team can recognise this work.", fieldId: "work-title-input" };
-  if (ACTIVE_STATUSES.has(values.status)) {
-    if (!values.ownerId) return { message: `Choose who owns this before moving it to ${STATUS_LABELS[values.status]}.`, fieldId: "work-owner" };
-    if (!values.dueOn) return { message: `Add a due date before moving this to ${STATUS_LABELS[values.status]}.`, fieldId: "work-date" };
-    if (!values.nextAction) return { message: "Write the next concrete step so the owner knows what to do.", fieldId: "work-next-action" };
-    if (!values.completion) return { message: "Describe the result that will mean this work is Done.", fieldId: "work-completion" };
-  }
-  if (values.status === "done") {
-    if (!values.ownerId) return { message: "Choose who completed this work before marking it Done.", fieldId: "work-owner" };
-    if (!values.completion) return { message: "Record the result that means this work is Done.", fieldId: "work-completion" };
-  }
-  if (values.status === "waiting" && !values.blocker) return { message: "Say which person, answer, file, or event this work is waiting for.", fieldId: "work-blocker" };
-  if (values.status === "review" && !values.approverId) return { message: "Choose another team member to review this work.", fieldId: "work-approver" };
-  if (values.approverId && values.ownerId === values.approverId) return { message: "Choose someone other than the owner to approve this work.", fieldId: "work-approver" };
-  const existing = taskById(editingId);
-  if (values.status === "done" && values.approverId && !isAdmin()) {
-    if (!existing) return { message: "Save this for Review first. The chosen approver can mark it Done afterward.", fieldId: "work-status" };
-    if (!existing.approver_id) return { message: "Save the approver first. Then that person can mark the item Done.", fieldId: "work-status" };
-  }
-  if (!validWebUrl(values.sourceUrl)) return { message: "Remove spaces from the source link and make sure it starts with http:// or https://.", fieldId: "work-source-url" };
-  if (!validWebUrl(values.latestFileUrl, true)) return { message: "Remove spaces from the file link and make sure it starts with https://.", fieldId: "work-latest-file-url" };
-  return capacityError(values, editingId);
+  const editableMemberIds = new Set(state.members
+    .filter((member) => !member.archived_at && ROLE_RANK[member.role] >= ROLE_RANK.member)
+    .map((member) => member.user_id));
+  return validateWorkValues(values, {
+    editingId,
+    tasks: state.tasks,
+    editableMemberIds,
+    isAdmin: isAdmin()
+  });
 }
 
 function humanRepositoryError(error) {
-  const issue = (message, fieldId = "") => ({ message, fieldId });
-  if (!(error instanceof HubRepositoryError)) return issue("The Hub could not save this change. Check your connection and try again.");
-  const server = error.serverMessage.toLowerCase();
-
-  if (server.includes("owner must be an active member")) return issue("That owner can no longer edit work. Refresh and choose an active team member.", "work-owner");
-  if (server.includes("approver must be an active member")) return issue("That approver is no longer available. Refresh and choose another active team member.", "work-approver");
-  if (server.includes("workspace admin can create completed approval-bound")) return issue("Save this for Review first. The approver can mark it Done afterward.", "work-status");
-  if (server.includes("workspace admin can change an assigned approver")) return issue("The approver is locked after assignment. Ask a workspace owner to change it.", "work-approver");
-  if (server.includes("approval must be assigned before completion")) return issue("Save the approver first. Then that person can mark the item Done.", "work-status");
-  if (server.includes("archive this task")) return issue("Only this item's approver or a workspace owner can archive it.");
-  if (server.includes("move this review")) return issue("This review is waiting for its approver. Only that person or a workspace owner can move it.", "work-status");
-  if (server.includes("reopen this task")) return issue("Only this item's approver or a workspace owner can reopen it.", "work-status");
-  if (server.includes("complete this task")) return issue("Only the assigned approver or a workspace owner can mark this Done.", "work-status");
-  if (server.includes("the this week lane is limited to three tasks")) return issue("This week already has three items. Move or finish one before adding another.", "work-status");
-  if (server.includes("tasks_one_doing_per_owner_active_uidx") || server.includes("one active doing")) {
-    return issue("That owner already has one item in Doing. Finish or move it before starting another.", "work-owner");
+  if (!(error instanceof HubRepositoryError)) {
+    return { message: "The Hub could not save this change. Check your connection and try again.", fieldId: "" };
   }
-
-  if (server.includes("tasks_title_length")) return issue("Add a title of 240 characters or fewer.", "work-title-input");
-  if (server.includes("tasks_status_allowed")) return issue("Choose one of the available stages.", "work-status");
-  if (server.includes("tasks_priority_allowed")) return issue("Choose one of the available priorities.", "work-priority");
-  if (server.includes("tasks_flags_allowed")) return issue("Choose only the available attention flags.");
-  if (server.includes("tasks_source_url_http")) return issue("Remove spaces from the source link and make sure it starts with http:// or https://.", "work-source-url");
-  if (server.includes("tasks_latest_file_url_https")) return issue("Remove spaces from the file link and make sure it starts with https://.", "work-latest-file-url");
-  if (server.includes("tasks_waiting_has_reason")) return issue("Say which person, answer, file, or event this work is waiting for.", "work-blocker");
-  if (server.includes("tasks_review_has_separate_approver")) return issue("Choose someone other than the owner to approve this work.", "work-approver");
-  if (server.includes("tasks_active_work_fields_present")) {
-    const current = valuesFromForm();
-    if (!current.ownerId) return issue("Choose who owns this active work.", "work-owner");
-    if (!current.dueOn) return issue("Add a due date for this active work.", "work-date");
-    if (!current.nextAction) return issue("Write the next concrete step for this active work.", "work-next-action");
-    if (!current.completion) return issue("Describe the result that will mean this work is Done.", "work-completion");
-    return issue("Review the required details for this active work, save it, and try again.");
-  }
-  if (server.includes("tasks_done_fields_present")) {
-    const current = valuesFromForm();
-    if (!current.ownerId) return issue("Choose who completed this work.", "work-owner");
-    if (!current.completion) return issue("Record the result that made this work complete.", "work-completion");
-    return issue("Review the completion details, save the item, and try again.");
-  }
-
-  if (error.code === "23505") return issue("This item conflicts with another saved change. Refresh the Hub and try again.");
-  if (error.code === "23503") {
-    if (server.includes("tasks_workstream_fk")) return issue("That area is no longer available. Refresh and choose another area.", "work-workstream");
-    if (server.includes("tasks_owner_fk")) return issue("That owner is no longer available. Refresh and choose another team member.", "work-owner");
-    if (server.includes("tasks_approver_fk")) return issue("That approver is no longer available. Refresh and choose another team member.", "work-approver");
-    return issue("A linked idea, design, or workspace changed. Refresh the Hub and try again.");
-  }
-  if (error.code === "23514") return issue("This older item does not meet a current Hub rule. Review its status details, save it, and try again.");
-  if (["42501", "PGRST301"].includes(error.code)) return issue("Your workspace access changed. Refresh the Hub or sign in again.");
-  return issue("The Hub could not save this change. Check your connection, then refresh and try again.");
+  return translateWorkRepositoryError(error, valuesFromForm());
 }
 
-function setSaving(saving) {
+function setSaving(saving, busyLabel = "Saving…") {
   state.saving = saving;
-  saveButton.disabled = saving;
-  archiveButton.disabled = saving;
+  form.setAttribute("aria-busy", String(saving));
+  if (saving) {
+    form.querySelectorAll("input, select, textarea").forEach((control) => {
+      control.disabled = true;
+    });
+  } else {
+    const task = taskById(get("work-id").value);
+    setFormReadOnly(Boolean(state.conflictDraft) || !canEdit());
+    if (task && !state.conflictDraft) configureApprovalControls(task);
+    if (state.conflictDraft) {
+      get("work-dialog-title").textContent = state.conflictDraft.locked
+        ? "Draft — item is now locked"
+        : "Work item changed";
+      get("cancel-work-button").textContent = "Cancel";
+    }
+  }
+  saveButton.disabled = saving
+    || Boolean(state.conflictDraft)
+    || Boolean(state.conflictReview?.unresolvedKeys?.length);
+  archiveButton.disabled = saving
+    || Boolean(state.conflictDraft)
+    || Boolean(state.conflictReview?.unresolvedKeys?.length);
+  reloadLatestButton.disabled = saving;
+  newWorkButton.disabled = saving || !canEdit();
+  refreshButton.disabled = saving || state.refreshing;
   get("close-work-dialog").disabled = saving;
   get("cancel-work-button").disabled = saving;
-  saveButton.textContent = saving ? "Saving…" : "Save work";
+  saveButton.textContent = saving ? busyLabel : "Save work";
+}
+
+async function reloadLatestConflict() {
+  const conflict = state.conflictDraft;
+  const userId = state.user?.id;
+  if (!conflict || !userId || state.saving || !state.repository) return;
+  const generation = state.generation;
+  setSaving(true, "Reloading…");
+  clearDialogStatus();
+  clearFormError();
+  try {
+    const workspaceData = await state.repository.loadWorkspace(userId);
+    if (generation !== state.generation || state.user?.id !== userId) return;
+    if (!workspaceData) {
+      showAccessDenied();
+      return;
+    }
+
+    state.membership = workspaceData.membership;
+    state.workspace = workspaceData.workspace;
+    state.members = workspaceData.members;
+    state.workstreams = workspaceData.workstreams;
+    state.tasks = workspaceData.tasks;
+    state.stale = false;
+    state.lastRefreshedAt = Date.now();
+    const latest = taskById(conflict.id);
+    if (!latest) {
+      state.conflictDraft = { ...conflict, removed: true };
+      reloadLatestButton.hidden = true;
+      setFormReadOnly(true);
+      renderBoard();
+      showFormError("This item was archived or removed by someone else. Your draft remains visible here, but it can no longer be saved.");
+      return;
+    }
+
+    if (!canEdit()) {
+      state.conflictDraft = { ...conflict, locked: true, accessChanged: true };
+      reloadLatestButton.hidden = true;
+      setFormReadOnly(true);
+      renderBoard();
+      showFormError("Your workspace access changed while this draft was open. The draft remains visible so you can copy it, but it can no longer be saved.");
+      return;
+    }
+
+    const permissions = workApprovalPermissions(latest, state.membership.user_id, isAdmin());
+    if (permissions.readOnly) {
+      state.conflictDraft = { ...conflict, locked: true };
+      reloadLatestButton.hidden = true;
+      renderBoard();
+      showFormError("This item was approved by someone else and is now locked. Your unsaved draft is still visible here so you can copy it, but it cannot be saved.");
+      return;
+    }
+
+    populateReferenceControls();
+    addMissingReferenceOption(get("work-workstream"), latest.workstream_id, "Archived area");
+    addMissingReferenceOption(get("work-workstream"), conflict.draftValues.workstreamId, "No longer active");
+    addMissingReferenceOption(ownerInput, latest.owner_id, "Former member");
+    addMissingReferenceOption(approverInput, latest.approver_id, "Former member");
+    addMissingReferenceOption(ownerInput, conflict.draftValues.ownerId, "No longer active");
+    addMissingReferenceOption(approverInput, conflict.draftValues.approverId, "No longer active");
+    get("work-updated-at").value = latest.updated_at;
+    state.originalApproverId = latest.approver_id || "";
+
+    const latestValues = valuesFromTask(latest);
+    const merged = reconcileWorkDraft(
+      conflict.baseValues,
+      conflict.draftValues,
+      latestValues,
+      permissions
+    );
+    const protectedFields = merged.protectedFields;
+    const unresolvedKeys = merged.unresolvedFields;
+
+    state.conflictReview = unresolvedKeys.length ? {
+      unresolvedKeys: [...unresolvedKeys],
+      protectedFields: [...protectedFields],
+      draftValues: conflict.draftValues,
+      latestValues,
+      mergedValues: merged.values
+    } : null;
+    applyValuesToForm(latestValues);
+    syncRequirements();
+    captureFormBaseline();
+    applyValuesToForm(merged.values);
+    syncRequirements();
+    setFormReadOnly(!canEdit());
+    configureApprovalControls(latest);
+    state.conflictDraft = null;
+    reloadLatestButton.hidden = true;
+    renderConflictReview();
+    renderBoard();
+    if (unresolvedKeys.length) {
+      const labels = unresolvedKeys.map((key) => CONFLICT_FIELD_LABELS[key]).filter(Boolean).join(", ");
+      showDialogStatus(`Latest version loaded. Choose which ${labels || "conflicting values"} to keep before saving.${protectedConflictNote(state.conflictReview)}`, { focus: true });
+    } else if (protectedFields.length) {
+      const labels = protectedFields.map((key) => CONFLICT_FIELD_LABELS[key]?.toLowerCase()).filter(Boolean).join(", ");
+      showDialogStatus(`Latest version loaded. Your other edits are still here; the latest ${labels || "approval workflow"} was kept because approval authority changed.`, { focus: true });
+    } else {
+      showDialogStatus("Latest version loaded. Your edits are still here and ready to review.", { focus: true });
+    }
+    boardStatus.textContent = "Latest item loaded; draft ready to review.";
+  } catch {
+    showFormError("The latest version could not be loaded. Check your connection and try again.");
+  } finally {
+    if (generation === state.generation) setSaving(false);
+  }
 }
 
 function startMutation() {
@@ -1069,6 +1447,7 @@ async function refreshTasks({ quiet = false } = {}) {
     hideAppError();
     if (dialog.open) {
       state.formBaseline = null;
+      state.formBaselineValues = null;
       dialog.close();
     }
     renderWorkspace();
@@ -1091,20 +1470,26 @@ async function refreshTasks({ quiet = false } = {}) {
 
 async function saveTask(event) {
   event.preventDefault();
-  if (!canEdit() || state.saving) return;
+  if (
+    !canEdit()
+    || state.saving
+    || state.conflictDraft
+    || state.conflictReview?.unresolvedKeys?.length
+  ) return;
+  clearDialogStatus();
   syncRequirements();
-  if (!form.checkValidity()) {
-    const invalidControl = form.querySelector("input:invalid, select:invalid, textarea:invalid");
-    if (invalidControl && get("work-more-details").contains(invalidControl)) get("work-more-details").open = true;
-    showFormError("Complete this field before saving.", invalidControl?.id || "");
-    form.reportValidity();
-    return;
-  }
   const id = get("work-id").value;
   const values = valuesFromForm();
   const invalid = validationError(values, id);
   if (invalid) {
     showFormError(invalid.message, invalid.fieldId);
+    return;
+  }
+  if (!form.checkValidity()) {
+    const invalidControl = form.querySelector("input:invalid, select:invalid, textarea:invalid");
+    if (invalidControl && get("work-more-details").contains(invalidControl)) get("work-more-details").open = true;
+    showFormError("Check this field and try again.", invalidControl?.id || "");
+    form.reportValidity();
     return;
   }
 
@@ -1117,12 +1502,25 @@ async function saveTask(event) {
       : await state.repository.createTask(values);
     if (!mutationIsCurrent(mutation)) return;
     if (!saved) {
-      showFormError("This item changed elsewhere or your access changed, so your draft was not saved. Your typing is still here. Close this window, refresh the Hub, and reopen the item before trying again.");
+      state.conflictReview = null;
+      renderConflictReview();
+      state.conflictDraft = {
+        id,
+        baseValues: state.formBaselineValues || values,
+        draftValues: values
+      };
+      reloadLatestButton.hidden = false;
+      showFormError("This item changed elsewhere, so your draft was not saved. Choose Reload latest version below; your typing will stay here for review.");
       boardStatus.textContent = "Draft not saved because the item changed elsewhere.";
       return;
     }
+    state.conflictDraft = null;
+    state.conflictReview = null;
+    renderConflictReview();
+    reloadLatestButton.hidden = true;
     setMobileWorkStatus(values.status);
     state.formBaseline = null;
+    state.formBaselineValues = null;
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${values.title} saved.`;
@@ -1143,7 +1541,14 @@ async function saveTask(event) {
 async function archiveTask() {
   const id = get("work-id").value;
   const task = taskById(id);
-  if (!task || !canEdit() || state.saving || archiveButton.hidden) return;
+  if (
+    !task
+    || !canEdit()
+    || state.saving
+    || state.conflictDraft
+    || state.conflictReview?.unresolvedKeys?.length
+    || archiveButton.hidden
+  ) return;
   const archiveMessage = isFormDirty()
     ? `Archive “${task.title}”? It will leave the active board and unsaved edits will be discarded.`
     : `Archive “${task.title}”? It will leave the active board.`;
@@ -1158,7 +1563,10 @@ async function archiveTask() {
       boardStatus.textContent = "The item was not archived because it changed elsewhere.";
       return;
     }
+    state.conflictDraft = null;
+    reloadLatestButton.hidden = true;
     state.formBaseline = null;
+    state.formBaselineValues = null;
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
     boardStatus.textContent = `${task.title} archived.`;
@@ -1188,6 +1596,7 @@ async function reconcileSession(session, event = "MANUAL") {
   setSaving(false);
   state.refreshing = false;
   state.formBaseline = null;
+  state.formBaselineValues = null;
   if (dialog.open) dialog.close();
   if (!session) {
     showSignedOut();
@@ -1337,6 +1746,15 @@ async function retryAccess() {
 
 function handleDialogClose() {
   state.formBaseline = null;
+  state.formBaselineValues = null;
+  state.conflictDraft = null;
+  state.conflictReview = null;
+  reloadLatestButton.hidden = true;
+  renderConflictReview();
+  clearDialogStatus();
+  if (!state.saving) saveButton.disabled = false;
+  const shouldRefresh = state.refreshWhenDialogCloses;
+  state.refreshWhenDialogCloses = false;
   window.requestAnimationFrame(() => {
     let target = state.dialogOpener;
     const isVisible = (element) => Boolean(element?.isConnected && element.getClientRects().length);
@@ -1349,6 +1767,7 @@ function handleDialogClose() {
     state.dialogOpener = null;
     state.dialogOpenerTaskId = "";
   });
+  if (shouldRefresh) window.setTimeout(refreshAfterReturning, 0);
 }
 
 function bindEvents() {
@@ -1366,6 +1785,12 @@ function bindEvents() {
   form.addEventListener("input", clearEditedFieldError);
   form.addEventListener("change", clearEditedFieldError);
   archiveButton.addEventListener("click", archiveTask);
+  reloadLatestButton.addEventListener("click", reloadLatestConflict);
+  conflictFields.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-conflict-key]");
+    if (!button) return;
+    resolveConflictChoice(button.dataset.conflictKey, button.dataset.conflictChoice);
+  });
   get("close-work-dialog").addEventListener("click", requestDialogClose);
   get("cancel-work-button").addEventListener("click", requestDialogClose);
   statusInput.addEventListener("change", syncRequirements);
@@ -1377,6 +1802,8 @@ function bindEvents() {
     if (link) activateSection(link.getAttribute("href").slice(1));
   });
   window.addEventListener("hashchange", () => activateSection(sectionIdFromHash()));
+  window.addEventListener("focus", refreshAfterReturning);
+  document.addEventListener("visibilitychange", refreshAfterReturning);
   window.addEventListener("beforeunload", (event) => {
     if (!isFormDirty()) return;
     event.preventDefault();
@@ -1388,6 +1815,7 @@ function bindEvents() {
       return;
     }
     state.formBaseline = null;
+    state.formBaselineValues = null;
   });
   dialog.addEventListener("close", handleDialogClose);
   board.addEventListener("click", (event) => {
@@ -1401,6 +1829,17 @@ function bindEvents() {
   get("home-attention-list").addEventListener("click", (event) => {
     const row = event.target.closest("[data-open-task-id]");
     if (row) window.setTimeout(() => openTask(row.dataset.openTaskId), 0);
+  });
+  get("home-focus-action").addEventListener("click", (event) => {
+    const taskId = event.currentTarget.dataset.taskId;
+    const homeAction = event.currentTarget.dataset.homeAction;
+    window.location.hash = "work";
+    if (taskId) window.setTimeout(() => openTask(taskId), 0);
+    else if (homeAction === "create") window.setTimeout(openNewTask, 0);
+    else {
+      if (homeAction === "open-backlog") setMobileWorkStatus("backlog");
+      window.setTimeout(() => get("work").focus(), 0);
+    }
   });
 }
 
