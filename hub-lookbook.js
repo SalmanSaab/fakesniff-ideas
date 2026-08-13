@@ -113,7 +113,13 @@ export function mount(root, ctx) {
     const r = await fetch(`${cfg.storageUrl}/object/sign/${BUCKET}/${encodeURI(path)}`, {
       method: "POST", headers, body: JSON.stringify({ expiresIn: 3600 }),
     });
-    if (!r.ok) return "";
+    if (!r.ok) {
+      /* Claude — 2026-08-13: this used to fail silently, which is how a
+         Content-Security-Policy blocking the storage host looked like "no
+         photos" rather than an error. Say something. */
+      console.warn("lookbook: could not sign image url", r.status, await r.text().catch(() => ""));
+      return "";
+    }
     const { signedURL } = await r.json();
     return signedURL ? cfg.storageUrl.replace(/\/storage\/v1$/, "") + "/storage/v1" + signedURL : "";
   }
