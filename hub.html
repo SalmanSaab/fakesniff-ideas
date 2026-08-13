@@ -146,9 +146,10 @@
           <p class="hero-note">One place for what is moving, what is blocked, and what needs a decision.</p>
         </div>
         <div class="week-signal home-focus" role="group" aria-label="Your next move">
+          <!-- Codex — 2026-08-13: truthful first-use copy prevents an empty workspace from looking stuck while authenticated data is resolved. -->
           <span id="home-focus-date" class="signal-label">Today</span>
-          <span id="home-focus-value" class="signal-value">Loading your next move…</span>
-          <span id="home-focus-detail" class="signal-detail">Checking the shared work board.</span>
+          <span id="home-focus-value" class="signal-value">Nothing is planned yet.</span>
+          <span id="home-focus-detail" class="signal-detail" role="status" aria-live="polite" aria-atomic="true">Open Work to create the first shared item.</span>
           <button id="home-focus-action" class="signal-action" type="button" hidden>Open item</button>
         </div>
 

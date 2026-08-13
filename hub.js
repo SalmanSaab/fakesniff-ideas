@@ -399,8 +399,12 @@ function clearWorkspaceState() {
   setMobileWorkStatus("this_week");
 }
 
+function hasEditRole() {
+  return ROLE_RANK[state.membership?.role] >= ROLE_RANK.member;
+}
+
 function canEdit() {
-  return ROLE_RANK[state.membership?.role] >= ROLE_RANK.member && !state.stale;
+  return hasEditRole() && !state.stale;
 }
 
 function isAdmin() {
@@ -618,23 +622,34 @@ function renderHomeFocus() {
   if (!focus) {
     const teamHasActiveWork = state.tasks.some((task) => ACTIVE_STATUSES.has(task.status));
     const backlogCount = state.tasks.filter((task) => task.status === "backlog").length;
-    get("home-focus-value").textContent = teamHasActiveWork
-      ? "Nothing needs you right now."
-      : (backlogCount ? "Choose what moves next." : "Nothing is planned yet.");
     if (backlogCount && !teamHasActiveWork) {
+      get("home-focus-value").textContent = "Choose what moves next.";
       get("home-focus-detail").textContent = `${backlogCount} backlog ${backlogCount === 1 ? "item is" : "items are"} ready to plan.`;
       action.textContent = "Review backlog";
       action.setAttribute("aria-label", "Open the Work backlog");
       action.dataset.homeAction = "open-backlog";
-    } else if (canEdit() && !teamHasActiveWork) {
-      get("home-focus-detail").textContent = "Create the first work item, or add a backlog item to this week.";
-      action.textContent = "Create work";
-      action.setAttribute("aria-label", "Create the first work item");
-      action.dataset.homeAction = "create";
+    } else if (hasEditRole() && !teamHasActiveWork) {
+      if (state.stale) {
+        get("home-focus-value").textContent = "Work needs a refresh.";
+        get("home-focus-detail").textContent = "Editing is paused until the shared board reconnects.";
+        action.textContent = "Refresh board";
+        action.setAttribute("aria-label", "Refresh the shared Work board");
+        action.dataset.homeAction = "refresh";
+      } else {
+        // Codex — 2026-08-13: a first visit teaches the smallest safe action instead of presenting an empty dashboard.
+        get("home-focus-value").textContent = "Add the first thing we need to do.";
+        get("home-focus-detail").textContent = "Start it in Backlog with just a title. Add details when the team chooses it for This week.";
+        action.textContent = "Create first work item";
+        action.setAttribute("aria-label", "Create the first work item");
+        action.dataset.homeAction = "create";
+      }
+    } else if (!teamHasActiveWork) {
+      get("home-focus-value").textContent = "No work has been added yet.";
+      get("home-focus-detail").textContent = "A workspace member can add the first work item.";
+      action.hidden = true;
     } else {
-      get("home-focus-detail").textContent = teamHasActiveWork
-        ? "The team's active work is on the board."
-        : "Open Work to see the shared board.";
+      get("home-focus-value").textContent = "Nothing needs you right now.";
+      get("home-focus-detail").textContent = "The team's active work is on the board.";
       action.textContent = "Open Work";
       action.setAttribute("aria-label", "Open the shared Work board");
       action.dataset.homeAction = "open-work";
@@ -676,7 +691,12 @@ function renderSummary() {
   get("home-waiting-count").textContent = String(waiting.length).padStart(2, "0");
   renderHomeFocus();
 
-  renderHomeList(get("home-week-list"), week, (task) => task.next_action || "Next step not recorded", "No work has been chosen for this week.");
+  renderHomeList(
+    get("home-week-list"),
+    week,
+    (task) => task.next_action || "Next step not recorded",
+    "Nothing is planned for this week yet. Choose up to three items from Backlog when the team is ready."
+  );
   const memberId = state.membership?.user_id;
   const attention = [...review, ...waiting].sort((left, right) => {
     const leftMine = left.approver_id === memberId ? 0 : 1;
@@ -691,7 +711,7 @@ function renderSummary() {
     get("home-attention-list"),
     attention.slice(0, 5),
     (task) => task.status === "waiting" ? task.blocker_note : `Review by ${memberName(task.approver_id, "Approver needed")}`,
-    "No reviews or blockers need attention."
+    "All clear — nothing is waiting for review or blocked."
   );
 }
 
@@ -1462,6 +1482,7 @@ async function refreshTasks({ quiet = false } = {}) {
     state.stale = true;
     newWorkButton.disabled = true;
     if (dialog.open) setFormReadOnly(true);
+    renderHomeFocus();
     setSyncState("Refresh failed", false);
     showAppError("The last loaded board is still visible, but editing is paused until refresh succeeds.");
     return false;
@@ -1833,6 +1854,10 @@ function bindEvents() {
   get("home-focus-action").addEventListener("click", (event) => {
     const taskId = event.currentTarget.dataset.taskId;
     const homeAction = event.currentTarget.dataset.homeAction;
+    if (homeAction === "refresh") {
+      void requestWorkspaceRefresh();
+      return;
+    }
     window.location.hash = "work";
     if (taskId) window.setTimeout(() => openTask(taskId), 0);
     else if (homeAction === "create") window.setTimeout(openNewTask, 0);

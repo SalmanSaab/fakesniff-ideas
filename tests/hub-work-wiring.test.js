@@ -93,6 +93,21 @@ test("Home exposes one dynamic next-action control", () => {
   assert.match(hubSource, /get\("home-focus-action"\)\.addEventListener\("click"/);
 });
 
+// Codex — 2026-08-13: an empty board is a valid first-use state, not an endless loading state.
+test("Home gives an actionable empty-workspace fallback", () => {
+  assert.doesNotMatch(hubHtml, /Loading your next move/i);
+  assert.match(hubHtml, /Nothing is planned yet\./);
+  const source = functionSource("renderHomeFocus", "renderSummary");
+  assert.match(source, /Add the first thing we need to do\./);
+  assert.match(source, /Start it in Backlog with just a title\./);
+  assert.match(source, /Create first work item/);
+  assert.match(source, /action\.dataset\.homeAction = "create"/);
+  assert.match(source, /action\.dataset\.homeAction = "open-work"/);
+  assert.match(source, /A workspace member can add the first work item\.[\s\S]*action\.hidden = true/);
+  assert.match(source, /state\.stale[\s\S]*action\.dataset\.homeAction = "refresh"/);
+  assert.match(hubSource, /homeAction === "refresh"[\s\S]*requestWorkspaceRefresh\(\)/);
+});
+
 test("returning to a stale, closed board quietly refreshes it", () => {
   const source = functionSource("refreshAfterReturning", "clearFieldError");
   assert.match(source, /Date\.now\(\) - state\.lastRefreshedAt >= 30_000/);
@@ -100,6 +115,14 @@ test("returning to a stale, closed board quietly refreshes it", () => {
   assert.match(source, /refreshTasks\(\{ quiet: true \}\)/);
   assert.match(hubSource, /visibilitychange.*refreshAfterReturning/);
   assert.match(hubSource, /refreshWhenDialogCloses/);
+});
+
+test("a failed refresh replaces an unusable Home create action", () => {
+  const source = functionSource("refreshTasks", "saveTask");
+  const staleIndex = source.indexOf("state.stale = true");
+  const focusIndex = source.indexOf("renderHomeFocus()", staleIndex);
+  assert.notEqual(staleIndex, -1);
+  assert.ok(focusIndex > staleIndex);
 });
 
 test("an optional area never blocks creating work", () => {
