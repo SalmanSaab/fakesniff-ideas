@@ -439,6 +439,11 @@ export function mount(root, ctx) {
           line: i.line || "", concept: i.concept || "",
         }));
       } catch { /* the picker in Designs still works without this */ }
+      /* Claude — 2026-08-13: close the sheet FIRST. Without this the hash
+         changed, Designs mounted correctly, and all of it happened behind a
+         modal that was still covering the screen — so pressing the button
+         looked like pressing nothing. */
+      closeDetail();
       location.hash = "#designs";
     };
     sheet.querySelector(".ilab-close").onclick = closeDetail;
