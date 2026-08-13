@@ -1875,6 +1875,8 @@ function boot() {
     get("work-tools").open = !event.matches;
   });
   bindEvents();
+  // Codex — 2026-08-13: consume a deep link that existed before listeners were bound.
+  activateSection(sectionIdFromHash());
   const validation = validateHubConfig(globalThis.FAKESNIFF_HUB_CONFIG);
   state.config = validation.config;
   if (!validation.ok || state.config.mode === "setup") {

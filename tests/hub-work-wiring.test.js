@@ -130,3 +130,18 @@ test("an optional area never blocks creating work", () => {
   assert.doesNotMatch(source, /activeWorkstreams|Area setup is incomplete/);
   assert.match(source, /newWorkButton\.disabled = !canEdit\(\)/);
 });
+
+// Codex — 2026-08-13: initial module links must not depend on hashchange.
+test("boot consumes Decisions and Lookbook deep links before any configuration early return", () => {
+  assert.match(hubHtml, /<section id="lookbook" class="page-section"/);
+  assert.match(hubHtml, /<section id="decisions" class="page-section"/);
+  const source = functionSource("boot");
+  const bindIndex = source.indexOf("bindEvents()");
+  const activateIndex = source.indexOf("activateSection(sectionIdFromHash())");
+  const validationIndex = source.indexOf("validateHubConfig");
+  assert.notEqual(bindIndex, -1);
+  assert.notEqual(activateIndex, -1);
+  assert.notEqual(validationIndex, -1);
+  assert.ok(bindIndex < activateIndex);
+  assert.ok(activateIndex < validationIndex);
+});

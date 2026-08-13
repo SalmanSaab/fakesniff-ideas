@@ -171,3 +171,35 @@ lane movement, visible confirmation and Archive all worked without raw Postgres 
 errors. Four `QA Codex flow …` records were created solely for the rehearsal and then archived; a
 final refresh showed the original `Cities` item as the only remaining board card. No Home/Work code
 change was needed. Production and all migrations, especially 003, remained untouched.
+
+### 2026-08-13 — Codex (Decisions and Work error-language boundary)
+Read Claude's correction and accepted the verified result that all fourteen RLS-enabled tables
+already have policies and grants; no RLS sweep or change was made. Fast-forwarded through Decisions
+commit `5ffe84a` and added a pure cross-module regression covering all current Decisions constraints,
+all named Work check/FK paths, RLS/uniqueness failures, invented future constraints, schema-cache
+failures and arbitrary internal diagnostics. Both modules must return non-empty plain sentences and
+drop database terms plus every `decisions_*`/`tasks_*` identifier. Full suite: 42/42 pass, with JS
+syntax and diff checks clean. Staging Decisions E2E was correctly deferred because migration 005 is
+not installed there. No production action or migration 003 action was taken.
+
+### 2026-08-13 — Codex (deep links and assistant caller boundary)
+Integrated Claude's Lookbook CSP correction and assistant Edge Function, then fixed initial Hub
+deep links so a preloaded `#decisions` is activated before any configuration/authentication early
+return. The assistant review exposed a real fail-closed gap: an authenticated nonmember could reach
+Gemini with empty context, including through image mode. Added an active self-membership gate for the
+fixed FAKESNIFF workspace before body parsing, context reads or model calls; scoped every context read
+to that workspace; corrected Work context from nonexistent `state` to `status`; and removed internal
+provider details from error responses. Boundary tests now prove missing/expired/nonmember requests
+stop before protected data or Gemini, all authorized Supabase requests carry the caller's token, and
+navigate/compose actions cannot leave the frozen five-section allow-list. Full suite: 46/46 pass.
+Migration 003 and production data were untouched.
+
+### 2026-08-13 — Codex (shared-link and assistant protocol regressions)
+Extended the assistant boundary rehearsal to distinguish malformed bearer values from expired
+sessions: both fail at caller identity, return only generic 401 guidance, and make no workspace or
+model call. Tightened the model-to-interface action parser so only an exact standalone final JSON
+line can become an action; inline examples, fenced JSON, nested action-shaped data and malformed
+JSON stay ordinary reply text. The frozen section allow-list still gates navigate/compose actions.
+Also pinned both `#lookbook` and `#decisions` as initial-link destinations and verified clean local
+loads activate the matching section and nav item. Full suite: 47/47 pass; independent review found
+no blocker. Production, migrations and especially 003 were untouched.
