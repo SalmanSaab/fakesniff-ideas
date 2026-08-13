@@ -46,6 +46,19 @@
   --fs-danger-dim:  rgba(207,106,92,.13);
   --fs-info:        #7fa8c9;
 
+  /* ── channels, for tints ───────────────────────────────────────────────── */
+  /* Claude — 2026-08-13: the reason the first token pass did not visibly change
+     anything. Swapping the solid colours above left every translucent tint
+     (glows, hover fills, soft borders) still written as the old literal rgba,
+     and tints cover most of the surface. A colour needs both forms or half the
+     interface keeps the old palette. Keep each pair in step. */
+  --fs-accent-rgb: 126, 201, 106;   /* --fs-accent */
+  --fs-bg-rgb:      20,  19,  17;   /* --fs-bg */
+  --fs-surface-rgb: 27,  25,  23;   /* --fs-surface */
+  --fs-ink-rgb:    236, 230, 218;   /* --fs-ink */
+  --fs-warn-rgb:   217, 164,  65;   /* --fs-warn */
+  --fs-danger-rgb: 207, 106,  92;   /* --fs-danger */
+
   /* ── type ──────────────────────────────────────────────────────────────── */
   --fs-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --fs-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;  /* the wordmark voice */

@@ -216,7 +216,7 @@ select {
 }
 
 .nav-count-warn {
-  border-color: rgba(218, 168, 80, 0.5);
+  border-color: rgba(var(--fs-warn-rgb), 0.5);
   color: var(--yellow);
 }
 
@@ -247,7 +247,7 @@ select {
   height: 7px;
   border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 0 4px rgba(120, 199, 103, 0.1);
+  box-shadow: 0 0 0 4px rgba(var(--fs-accent-rgb), 0.1);
 }
 
 .rail-footer p {
@@ -270,7 +270,7 @@ select {
   gap: 24px;
   padding: 11px clamp(22px, 4vw, 58px);
   border-bottom: 1px solid var(--line);
-  background: rgba(15, 15, 14, 0.94);
+  background: rgba(var(--fs-bg-rgb), 0.94);
   backdrop-filter: blur(12px);
 }
 
@@ -409,8 +409,8 @@ select {
   gap: 18px;
   margin-top: 50px;
   padding: 16px 20px;
-  border: 1px solid rgba(120, 199, 103, 0.28);
-  background: linear-gradient(90deg, rgba(120, 199, 103, 0.09), rgba(120, 199, 103, 0.015));
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.28);
+  background: linear-gradient(90deg, rgba(var(--fs-accent-rgb), 0.09), rgba(var(--fs-accent-rgb), 0.015));
 }
 
 .home-focus {
@@ -455,7 +455,7 @@ select {
 
 .signal-value {
   padding-left: 18px;
-  border-left: 1px solid rgba(120, 199, 103, 0.25);
+  border-left: 1px solid rgba(var(--fs-accent-rgb), 0.25);
   font-weight: 750;
 }
 
@@ -480,11 +480,11 @@ select {
   padding: 22px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  background: rgba(23, 23, 22, 0.65);
+  background: rgba(var(--fs-surface-rgb), 0.65);
 }
 
 .stat-card-alert {
-  background: linear-gradient(145deg, rgba(218, 168, 80, 0.08), rgba(23, 23, 22, 0.65));
+  background: linear-gradient(145deg, rgba(var(--fs-warn-rgb), 0.08), rgba(var(--fs-surface-rgb), 0.65));
 }
 
 .stat-number {
@@ -625,7 +625,7 @@ select {
 }
 
 .owner-s {
-  border-color: rgba(120, 199, 103, 0.45);
+  border-color: rgba(var(--fs-accent-rgb), 0.45);
   color: var(--green);
 }
 
@@ -635,12 +635,12 @@ select {
 }
 
 .owner-m {
-  border-color: rgba(218, 168, 80, 0.5);
+  border-color: rgba(var(--fs-warn-rgb), 0.5);
   color: var(--yellow);
 }
 
 .owner-team {
-  border-color: rgba(238, 233, 223, 0.25);
+  border-color: rgba(var(--fs-ink-rgb), 0.25);
   color: var(--ink);
 }
 
@@ -741,18 +741,18 @@ select {
 
 .status-waiting,
 .status-review {
-  border-color: rgba(218, 168, 80, 0.45);
+  border-color: rgba(var(--fs-warn-rgb), 0.45);
   color: var(--yellow);
 }
 
 .status-decision {
-  border-color: rgba(203, 90, 78, 0.45);
+  border-color: rgba(var(--fs-danger-rgb), 0.45);
   color: #df8277;
 }
 
 .status-live,
 .status-develop {
-  border-color: rgba(120, 199, 103, 0.45);
+  border-color: rgba(var(--fs-accent-rgb), 0.45);
   color: var(--green);
 }
 
@@ -772,9 +772,9 @@ select {
   bottom: -110px;
   width: 240px;
   height: 240px;
-  border: 1px solid rgba(15, 15, 14, 0.16);
+  border: 1px solid rgba(var(--fs-bg-rgb), 0.16);
   border-radius: 50%;
-  box-shadow: 0 0 0 28px rgba(15, 15, 14, 0.035), 0 0 0 58px rgba(15, 15, 14, 0.025);
+  box-shadow: 0 0 0 28px rgba(var(--fs-bg-rgb), 0.035), 0 0 0 58px rgba(var(--fs-bg-rgb), 0.025);
   content: "";
 }
 
@@ -825,7 +825,7 @@ select {
 
 .signin-form input {
   padding: 0 13px;
-  border: 1px solid rgba(15, 15, 14, 0.25);
+  border: 1px solid rgba(var(--fs-bg-rgb), 0.25);
   background: rgba(255, 255, 255, 0.2);
   color: var(--bg);
 }
@@ -931,8 +931,8 @@ select {
   gap: 20px;
   margin-bottom: 20px;
   padding: 18px 20px;
-  border: 1px solid rgba(218, 168, 80, 0.3);
-  background: rgba(218, 168, 80, 0.055);
+  border: 1px solid rgba(var(--fs-warn-rgb), 0.3);
+  background: rgba(var(--fs-warn-rgb), 0.055);
 }
 
 .integration-notice h3 {
@@ -954,7 +954,7 @@ select {
   justify-content: center;
   gap: 3px;
   padding: 8px;
-  border: 1px solid rgba(218, 168, 80, 0.4);
+  border: 1px solid rgba(var(--fs-warn-rgb), 0.4);
   border-radius: 2px;
 }
 
@@ -977,12 +977,12 @@ select {
 
 /* Codex — 2026-08-11: interactive Hub-owned Work module. */
 .integration-notice-confirmed {
-  border-color: rgba(120, 199, 103, 0.3);
-  background: rgba(120, 199, 103, 0.055);
+  border-color: rgba(var(--fs-accent-rgb), 0.3);
+  background: rgba(var(--fs-accent-rgb), 0.055);
 }
 
 .integration-notice-confirmed .notice-icon {
-  border-color: rgba(120, 199, 103, 0.4);
+  border-color: rgba(var(--fs-accent-rgb), 0.4);
 }
 
 .integration-notice-confirmed .notice-icon span {
@@ -1011,7 +1011,7 @@ select {
   margin-bottom: 16px;
   padding: 14px;
   border: 1px solid var(--line);
-  background: rgba(23, 23, 22, 0.72);
+  background: rgba(var(--fs-surface-rgb), 0.72);
 }
 
 .work-control {
@@ -1064,7 +1064,7 @@ select {
 
 .work-more-details {
   border: 1px solid var(--line);
-  background: rgba(15, 15, 14, 0.45);
+  background: rgba(var(--fs-bg-rgb), 0.45);
 }
 
 .work-more-details summary {
@@ -1191,7 +1191,7 @@ select {
 }
 
 .task-card-done {
-  background: rgba(120, 199, 103, 0.035);
+  background: rgba(var(--fs-accent-rgb), 0.035);
 }
 
 .task-card-shell {
@@ -1274,7 +1274,7 @@ select {
 
 .task-flag {
   padding: 3px 6px;
-  border: 1px solid rgba(218, 168, 80, 0.25);
+  border: 1px solid rgba(var(--fs-warn-rgb), 0.25);
   border-radius: 20px;
   color: var(--yellow);
   font-size: 9px;
@@ -1284,12 +1284,14 @@ select {
 }
 
 .task-flag-owner {
-  border-color: rgba(203, 90, 78, 0.35);
+  border-color: rgba(var(--fs-danger-rgb), 0.35);
   color: #df8277;
 }
 
+/* Claude — 2026-08-13: was the pre-token green at 38%, which sat a shade off
+   the accent next to it. The token carries the same intent. */
 .task-flag-approval {
-  border-color: rgba(120, 199, 103, 0.38);
+  border-color: var(--fs-accent-edge);
   color: var(--green);
 }
 
@@ -1307,7 +1309,7 @@ select {
 }
 
 .owner-unassigned {
-  border-color: rgba(203, 90, 78, 0.35);
+  border-color: rgba(var(--fs-danger-rgb), 0.35);
   color: #df8277;
 }
 
@@ -1480,8 +1482,8 @@ select {
 .form-error {
   margin: 18px 0 0;
   padding: 11px 13px;
-  border: 1px solid rgba(203, 90, 78, 0.45);
-  background: rgba(203, 90, 78, 0.08);
+  border: 1px solid rgba(var(--fs-danger-rgb), 0.45);
+  background: rgba(var(--fs-danger-rgb), 0.08);
   color: #ef9990;
   font-size: 11px;
 }
@@ -1492,7 +1494,7 @@ select {
   margin: 0;
   padding: 11px 13px;
   border-left: 2px solid var(--green);
-  background: rgba(120, 199, 103, 0.055);
+  background: rgba(var(--fs-accent-rgb), 0.055);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
@@ -1502,11 +1504,13 @@ select {
   margin-top: 18px;
 }
 
+/* Claude — 2026-08-13: "two people edited this" is a warning, so it uses the
+   warn token rather than a yellow that existed in neither palette. */
 .conflict-review {
   margin-top: 18px;
   padding: 16px;
-  border: 1px solid rgba(225, 181, 87, 0.42);
-  background: rgba(225, 181, 87, 0.055);
+  border: 1px solid var(--fs-warn);
+  background: var(--fs-warn-dim);
 }
 
 .conflict-review h4,
@@ -1563,7 +1567,7 @@ select {
 }
 
 .form-field [aria-invalid="true"] {
-  border-color: rgba(203, 90, 78, 0.78);
+  border-color: rgba(var(--fs-danger-rgb), 0.78);
 }
 
 .dialog-actions {
@@ -1582,7 +1586,7 @@ select {
 .danger-button {
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid rgba(203, 90, 78, 0.5);
+  border: 1px solid rgba(var(--fs-danger-rgb), 0.5);
   background: transparent;
   color: #df8277;
   font-size: 9px;
@@ -1592,7 +1596,7 @@ select {
 }
 
 .danger-button:hover {
-  background: rgba(203, 90, 78, 0.08);
+  background: rgba(var(--fs-danger-rgb), 0.08);
 }
 
 .task-type {
@@ -1739,7 +1743,7 @@ select {
 .machine-card {
   padding: 27px;
   background:
-    radial-gradient(circle at 85% 20%, rgba(120, 199, 103, 0.08), transparent 35%),
+    radial-gradient(circle at 85% 20%, rgba(var(--fs-accent-rgb), 0.08), transparent 35%),
     var(--panel);
 }
 
@@ -1775,7 +1779,7 @@ select {
   left: 61%;
   width: 1px;
   background: var(--green);
-  box-shadow: 0 0 15px rgba(120, 199, 103, 0.55);
+  box-shadow: 0 0 15px rgba(var(--fs-accent-rgb), 0.55);
 }
 
 .machine-stats {
@@ -1814,7 +1818,7 @@ select {
   min-height: 205px;
   padding: 20px;
   border: 1px solid var(--line);
-  background: rgba(23, 23, 22, 0.5);
+  background: rgba(var(--fs-surface-rgb), 0.5);
 }
 
 .pipeline-stage.is-full {
@@ -1891,7 +1895,7 @@ select {
 .design-preview::before,
 .design-preview::after {
   position: absolute;
-  border: 1px solid rgba(238, 233, 223, 0.08);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.08);
   content: "";
 }
 
@@ -1914,7 +1918,7 @@ select {
 
 .preview-matrix::before,
 .preview-matrix::after {
-  border-color: rgba(15, 15, 14, 0.13);
+  border-color: rgba(var(--fs-bg-rgb), 0.13);
 }
 
 .preview-quiet {
@@ -2123,7 +2127,7 @@ select {
   width: 21px;
   height: 21px;
   place-items: center;
-  border: 1px solid rgba(120, 199, 103, 0.45);
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.45);
   border-radius: 50%;
   color: var(--green);
   font-size: 10px;
@@ -2152,7 +2156,7 @@ select {
   width: 29px;
   height: 29px;
   place-items: center;
-  border: 1px solid rgba(203, 90, 78, 0.45);
+  border: 1px solid rgba(var(--fs-danger-rgb), 0.45);
   border-radius: 50%;
   color: #df8277;
   font-family: Georgia, "Times New Roman", serif;
@@ -2681,8 +2685,8 @@ select {
     margin-bottom: -20px;
     margin-left: -20px;
     padding: 16px 20px max(20px, calc(var(--safe-bottom) + 12px));
-    background: rgba(23, 23, 22, 0.98);
-    box-shadow: 0 -16px 30px rgba(15, 15, 14, 0.86);
+    background: rgba(var(--fs-surface-rgb), 0.98);
+    box-shadow: 0 -16px 30px rgba(var(--fs-bg-rgb), 0.86);
   }
 
   .dialog-action-spacer {
@@ -2852,9 +2856,9 @@ select {
   bottom: -180px;
   width: 360px;
   height: 360px;
-  border: 1px solid rgba(15, 15, 14, 0.15);
+  border: 1px solid rgba(var(--fs-bg-rgb), 0.15);
   border-radius: 50%;
-  box-shadow: 0 0 0 42px rgba(15, 15, 14, 0.03), 0 0 0 86px rgba(15, 15, 14, 0.02);
+  box-shadow: 0 0 0 42px rgba(var(--fs-bg-rgb), 0.03), 0 0 0 86px rgba(var(--fs-bg-rgb), 0.02);
   content: "";
   pointer-events: none;
 }
@@ -2931,7 +2935,7 @@ select {
   position: relative;
   z-index: 1;
   margin-top: 10px;
-  border-color: rgba(15, 15, 14, 0.3);
+  border-color: rgba(var(--fs-bg-rgb), 0.3);
   background: transparent;
   color: var(--bg);
 }
@@ -3001,7 +3005,7 @@ select {
 
 .pulse-warn {
   background: var(--yellow);
-  box-shadow: 0 0 0 4px rgba(218, 168, 80, 0.1);
+  box-shadow: 0 0 0 4px rgba(var(--fs-warn-rgb), 0.1);
 }
 
 .app-error {
@@ -3013,7 +3017,7 @@ select {
   align-items: center;
   gap: 10px;
   padding: 11px clamp(22px, 4vw, 58px);
-  border-bottom: 1px solid rgba(203, 90, 78, 0.45);
+  border-bottom: 1px solid rgba(var(--fs-danger-rgb), 0.45);
   background: #331b18;
   color: #f0b0aa;
   font-size: 11px;
@@ -3042,7 +3046,7 @@ select {
   justify-content: space-between;
   gap: 16px;
   padding: 13px 13px 13px 16px;
-  border: 1px solid rgba(120, 199, 103, 0.45);
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.45);
   background: #172017;
   color: var(--ink);
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45);
