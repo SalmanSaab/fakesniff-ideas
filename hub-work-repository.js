@@ -6,6 +6,7 @@ const TASK_COLUMNS = [
   "blocker_note", "flags", "source_url", "latest_file_url", "position",
   "completed_at", "created_at", "updated_at", "archived_at"
 ].join(",");
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class HubRepositoryError extends Error {
   constructor(message, cause, operation) {
@@ -117,5 +118,34 @@ export function createConnectedWorkRepository(client, workspaceId) {
     return assertResponse(response, "task archive");
   }
 
-  return { verifyMembership, loadWorkspace, createTask, updateTask, archiveTask };
+  /* Codex — 2026-08-13: Home receives only the sanitized RPC result. Raw
+     activity_events.event_data never crosses the repository boundary. */
+  async function loadHomeChanges(expectedUserId, limit = 5) {
+    const response = await client.rpc("get_home_changes", {
+      p_workspace_id: workspaceId,
+      p_expected_user_id: expectedUserId,
+      p_limit: Math.max(1, Math.min(Number(limit) || 5, 10))
+    });
+    return assertResponse(response, "Home changes load");
+  }
+
+  async function acknowledgeHomeChanges(expectedUserId, eventIds = []) {
+    const uniqueIds = [...new Set(Array.isArray(eventIds) ? eventIds.map(String).filter((id) => UUID_PATTERN.test(id)) : [])].slice(0, 500);
+    const response = await client.rpc("ack_home_changes", {
+      p_workspace_id: workspaceId,
+      p_expected_user_id: expectedUserId,
+      p_event_ids: uniqueIds
+    });
+    return assertResponse(response, "Home changes acknowledgement");
+  }
+
+  return {
+    verifyMembership,
+    loadWorkspace,
+    createTask,
+    updateTask,
+    archiveTask,
+    loadHomeChanges,
+    acknowledgeHomeChanges
+  };
 }

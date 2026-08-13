@@ -161,6 +161,25 @@
           <button id="home-focus-action" class="signal-action" type="button" hidden>Open item</button>
         </div>
 
+        <!-- Codex — 2026-08-13: a private, server-receipted check-in that
+             speaks first without sending raw audit snapshots to the browser. -->
+        <article class="panel home-changes-panel" aria-labelledby="home-changes-title">
+          <div class="panel-heading home-changes-heading">
+            <div>
+              <p class="eyebrow">Automatic check-in</p>
+              <h2 id="home-changes-title">Since your last look</h2>
+            </div>
+            <div class="home-changes-actions">
+              <span id="home-changes-status" class="micro-status" role="status" aria-live="polite">Checking…</span>
+              <button id="home-changes-retry" class="micro-link home-changes-retry" type="button" hidden>Try again</button>
+            </div>
+          </div>
+          <div id="home-changes-list" class="home-changes-list" aria-live="polite" aria-busy="true">
+            <p class="module-empty-copy">Checking recent changes…</p>
+          </div>
+          <p id="home-changes-note" class="home-changes-note" hidden></p>
+        </article>
+
         <div class="stat-grid" aria-label="Workspace snapshot">
           <article class="stat-card">
             <span id="home-active-work-count" class="stat-number">00</span>

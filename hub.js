@@ -2,6 +2,7 @@
 
 import { createHubAuth, validateHubConfig } from "./hub-auth.js";
 import { createConnectedWorkRepository, HubRepositoryError } from "./hub-work-repository.js";
+import { composeHomeActivity, normalizeHomeChanges } from "./hub-home-activity.js";
 import {
   ACTIVE_WORK_STATUSES as ACTIVE_STATUSES,
   WORK_STATUSES as STATUSES,
@@ -31,6 +32,7 @@ const FLAG_LABELS = {
 };
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions"]);
+const PRODUCTION_SUPABASE_HOST = "kayxejofqyxoqlberrgw.supabase.co";
 const registeredSections = new Map();
 
 const state = {
@@ -61,7 +63,16 @@ const state = {
   conflictReview: null,
   noticeTimer: null,
   dialogOpener: null,
-  dialogOpenerTaskId: ""
+  dialogOpenerTaskId: "",
+  homeActivityRequestSequence: 0,
+  homeActivityAckSequence: 0,
+  homeActivityObserver: null,
+  homeActivity: {
+    status: "idle",
+    payload: null,
+    acknowledgementWarning: false,
+    lastRefreshedAt: 0
+  }
 };
 
 const get = (id) => document.getElementById(id);
@@ -234,6 +245,7 @@ async function mountRegisteredSection(sectionId) {
 
 function activateSection(sectionId) {
   const normalized = get(sectionId)?.classList.contains("page-section") ? sectionId : "home";
+  const sectionChanged = state.activeSectionId !== normalized;
   state.activeSectionId = normalized;
   // Claude — 2026-08-12: show only the active section. Without this every
   // section renders at once and the nav appears not to work.
@@ -247,6 +259,29 @@ function activateSection(sectionId) {
     else link.removeAttribute("aria-current");
   });
   void mountRegisteredSection(normalized);
+  if (normalized !== "home") {
+    disconnectHomeActivityObserver();
+  } else if (
+    sectionChanged
+    || ["idle", "error"].includes(state.homeActivity.status)
+    || Date.now() - state.homeActivity.lastRefreshedAt >= 30_000
+  ) {
+    void refreshHomeActivity();
+  }
+}
+
+/* Codex — 2026-08-13: the environment marker belongs to the shell, not an
+   optional feature module. Staging must remain unmistakable even if the
+   assistant fails to load. */
+function applyEnvironmentMarker(config) {
+  let isStaging = false;
+  try {
+    isStaging = config?.mode === "connected"
+      && new URL(config.supabaseUrl).hostname !== PRODUCTION_SUPABASE_HOST;
+  } catch {
+    isStaging = false;
+  }
+  document.body.classList.toggle("is-staging", isStaging);
 }
 
 function registerSection(sectionId, module) {
@@ -329,6 +364,9 @@ function showAccessDenied() {
 function clearWorkspaceState() {
   state.refreshSequence += 1;
   state.mutationSequence += 1;
+  state.homeActivityRequestSequence += 1;
+  state.homeActivityAckSequence += 1;
+  disconnectHomeActivityObserver();
   state.conflictDraft = null;
   state.conflictReview = null;
   setSaving(false);
@@ -350,6 +388,12 @@ function clearWorkspaceState() {
   state.stale = false;
   state.dialogOpener = null;
   state.dialogOpenerTaskId = "";
+  state.homeActivity = {
+    status: "idle",
+    payload: null,
+    acknowledgementWarning: false,
+    lastRefreshedAt: 0
+  };
   if (dialog?.open) dialog.close();
   form?.reset();
   clearFormError();
@@ -383,6 +427,12 @@ function clearWorkspaceState() {
   boardStatus.textContent = "";
   get("home-week-list")?.replaceChildren();
   get("home-attention-list")?.replaceChildren();
+  get("home-changes-status").textContent = "Checking…";
+  get("home-changes-retry").hidden = true;
+  get("home-changes-list").replaceChildren(createElement("p", "module-empty-copy", "Checking recent changes…"));
+  get("home-changes-list").setAttribute("aria-busy", "true");
+  get("home-changes-note").textContent = "";
+  get("home-changes-note").hidden = true;
   hideAppError();
   get("work-nav-count").textContent = "0";
   get("work-nav-count").setAttribute("aria-label", "0 active work items");
@@ -607,6 +657,245 @@ function localDateIso(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function homeActivityTime(value, now = Date.now()) {
+  const timestamp = Date.parse(value || "");
+  if (!Number.isFinite(timestamp)) return "Recently";
+  const minutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  if (hours < 48) return "Yesterday";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(timestamp));
+}
+
+function homeActivityKindLabel(kind) {
+  return {
+    task_waiting: "Waiting",
+    task_review: "Review",
+    decision_recorded: "Decision",
+    decision_agreed: "Agreed",
+    review_stale: "Untouched"
+  }[kind] || "Update";
+}
+
+function homeActivityDetail(item) {
+  if (item.kind === "task_waiting") {
+    return `${item.actorName} moved this to Waiting.`;
+  }
+  if (item.kind === "task_review") {
+    if (item.needsYou) return "Ready for your review.";
+    return `${item.actorName} sent this for review.`;
+  }
+  if (item.kind === "decision_recorded") return `${item.actorName} recorded this decision.`;
+  if (item.kind === "decision_agreed") return `${item.actorName} marked this decision agreed.`;
+  if (item.kind === "review_stale") {
+    const task = taskById(item.entityId);
+    const days = Math.max(1, Math.floor(item.hoursUntouched / 24));
+    if (item.needsYou) return `Waiting for your review for ${days} ${days === 1 ? "day" : "days"}.`;
+    return `Still waiting for ${memberName(task?.approver_id, "an approver")} after ${days} ${days === 1 ? "day" : "days"}.`;
+  }
+  return "Open this item to see what changed.";
+}
+
+function makeHomeActivityRow(item) {
+  const row = createElement("article", "home-change-row");
+
+  const copy = createElement("span", "home-change-copy");
+  const detail = homeActivityDetail(item);
+  copy.append(
+    createElement("strong", "", item.title),
+    createElement("small", "", detail)
+  );
+
+  const meta = createElement("span", "home-change-meta");
+  const attention = item.needsYou || item.kind === "task_waiting" || item.kind === "review_stale";
+  meta.append(
+    createElement("span", `home-change-kind${attention ? " is-attention" : ""}`, homeActivityKindLabel(item.kind)),
+    createElement("span", "home-change-time", item.kind === "review_stale" ? "Still open" : homeActivityTime(item.occurredAt))
+  );
+  row.append(copy, meta);
+  return row;
+}
+
+function renderHomeActivity() {
+  const list = get("home-changes-list");
+  const status = get("home-changes-status");
+  const note = get("home-changes-note");
+  const retry = get("home-changes-retry");
+  const hasPayload = Boolean(state.homeActivity.payload);
+  const payload = state.homeActivity.payload || { firstVisit: false, hasMore: false, items: [] };
+  const digest = composeHomeActivity(payload, state.tasks, state.membership?.user_id || "", Date.now(), 5);
+  const newCount = digest.items.filter((item) => item.eventId).length;
+
+  list.setAttribute("aria-busy", state.homeActivity.status === "loading" ? "true" : "false");
+  let receiptGroups = [];
+  if (state.homeActivity.status === "loading" && !hasPayload) {
+    list.replaceChildren(createElement("p", "module-empty-copy", "Checking recent changes…"));
+  } else if (!digest.items.length) {
+    const copy = state.homeActivity.status === "error"
+      ? "Couldn’t check recent changes. Your Work board is still available."
+      : digest.firstVisit
+        ? "First check-in. Changes recorded today will appear here."
+        : "Nothing new since your last look.";
+    list.replaceChildren(createElement("p", "module-empty-copy", copy));
+  } else {
+    const rows = digest.items.map(makeHomeActivityRow);
+    list.replaceChildren(...rows);
+    receiptGroups = digest.items
+      .map((item, index) => ({
+        element: rows[index],
+        receiptEventIds: Object.freeze([...(item.receiptEventIds || [])])
+      }))
+      .filter((group) => group.receiptEventIds.length);
+  }
+
+  if (state.homeActivity.status === "loading") status.textContent = "Checking…";
+  else if (state.homeActivity.status === "error") status.textContent = "Couldn’t check";
+  else if (digest.firstVisit && newCount) status.textContent = "Today";
+  else if (newCount) status.textContent = `${newCount} new`;
+  else if (digest.items.length) status.textContent = "Still open";
+  else status.textContent = "Up to date";
+  retry.hidden = state.homeActivity.status !== "error";
+
+  const notes = [];
+  if (digest.hasMore) notes.push("Showing the newest changes. Open Work and Decisions for the rest.");
+  if (state.homeActivity.acknowledgementWarning) notes.push("This check-in may repeat because its seen marker could not be saved.");
+  if (state.homeActivity.status === "error" && hasPayload && payload.items.length) notes.push("The items shown are from the last successful check.");
+  note.textContent = notes.join(" ");
+  note.hidden = !notes.length;
+
+  return Object.freeze({
+    digest,
+    receiptGroups: Object.freeze(
+      receiptGroups.length
+        ? receiptGroups.map(Object.freeze)
+        : [Object.freeze({ element: list, receiptEventIds: Object.freeze([]) })]
+    )
+  });
+}
+
+function homeActivityRequestIsCurrent(generation, userId, requestSequence) {
+  return Boolean(
+    generation === state.generation
+    && requestSequence === state.homeActivityRequestSequence
+    && userId
+    && state.user?.id === userId
+    && state.membership?.user_id === userId
+  );
+}
+
+function disconnectHomeActivityObserver() {
+  state.homeActivityObserver?.disconnect();
+  state.homeActivityObserver = null;
+  state.homeActivityAckSequence += 1;
+}
+
+function scheduleHomeActivityAcknowledgement(receiptGroups, generation, userId, requestSequence) {
+  disconnectHomeActivityObserver();
+  if (typeof window.IntersectionObserver !== "function") return;
+  const pending = new Map(
+    receiptGroups.map((group) => [
+      group.element,
+      Object.freeze([...new Set(group.receiptEventIds)].slice(0, 500))
+    ])
+  );
+  if (!pending.size) return;
+  const ackSequence = ++state.homeActivityAckSequence;
+  const observer = new window.IntersectionObserver((entries) => {
+    const visibleEntries = entries.filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.6);
+    if (!visibleEntries.length) return;
+    const exactIds = [];
+    visibleEntries.forEach((entry) => {
+      exactIds.push(...(pending.get(entry.target) || []));
+      pending.delete(entry.target);
+      observer.unobserve(entry.target);
+    });
+    if (!pending.size) {
+      observer.disconnect();
+      if (state.homeActivityObserver === observer) state.homeActivityObserver = null;
+    }
+    if (
+      !homeActivityRequestIsCurrent(generation, userId, requestSequence)
+      || ackSequence !== state.homeActivityAckSequence
+      || state.activeSectionId !== "home"
+      || document.hidden
+    ) return;
+
+    void (async () => {
+      try {
+        const acknowledgement = await state.repository.acknowledgeHomeChanges(userId, exactIds);
+        if (
+          !homeActivityRequestIsCurrent(generation, userId, requestSequence)
+          || ackSequence !== state.homeActivityAckSequence
+        ) return;
+        if (acknowledgement?.openedAt && state.homeActivity.payload) {
+          state.homeActivity.payload = Object.freeze({
+            ...state.homeActivity.payload,
+            lastOpenedAt: acknowledgement.openedAt
+          });
+        }
+      } catch {
+        if (
+          homeActivityRequestIsCurrent(generation, userId, requestSequence)
+          && ackSequence === state.homeActivityAckSequence
+        ) {
+          state.homeActivity.acknowledgementWarning = true;
+          renderHomeActivity();
+        }
+      }
+    })();
+  }, { threshold: [0.6] });
+  state.homeActivityObserver = observer;
+  pending.forEach((_eventIds, element) => observer.observe(element));
+}
+
+async function refreshHomeActivity() {
+  if (
+    state.activeSectionId !== "home"
+    || appShell.hidden
+    || document.hidden
+    || !state.repository
+    || !state.membership
+    || !state.user
+    || state.homeActivity.status === "loading"
+  ) return false;
+
+  const generation = state.generation;
+  const userId = state.user.id;
+  const requestSequence = ++state.homeActivityRequestSequence;
+  disconnectHomeActivityObserver();
+  state.homeActivity.status = "loading";
+  state.homeActivity.acknowledgementWarning = false;
+  renderHomeActivity();
+
+  try {
+    const raw = await state.repository.loadHomeChanges(userId, 5);
+    if (!homeActivityRequestIsCurrent(generation, userId, requestSequence)) return false;
+    const payload = normalizeHomeChanges(raw);
+    state.homeActivity = {
+      status: "ready",
+      payload,
+      acknowledgementWarning: false,
+      lastRefreshedAt: Date.now()
+    };
+    const rendered = renderHomeActivity();
+    scheduleHomeActivityAcknowledgement(
+      rendered.receiptGroups,
+      generation,
+      userId,
+      requestSequence
+    );
+    return true;
+  } catch {
+    if (!homeActivityRequestIsCurrent(generation, userId, requestSequence)) return false;
+    state.homeActivity.status = "error";
+    state.homeActivity.lastRefreshedAt = Date.now();
+    renderHomeActivity();
+    return false;
+  }
+}
+
 function renderHomeFocus() {
   const action = get("home-focus-action");
   const today = new Date();
@@ -713,6 +1002,7 @@ function renderSummary() {
     (task) => task.status === "waiting" ? task.blocker_note : `Review by ${memberName(task.approver_id, "Approver needed")}`,
     "All clear — nothing is waiting for review or blocked."
   );
+  renderHomeActivity();
 }
 
 function appendOption(select, value, label) {
@@ -859,18 +1149,34 @@ function refreshAfterReturning() {
   const refreshIsDue = Date.now() - state.lastRefreshedAt >= 30_000;
   if (dialog.open && refreshIsDue && state.user && state.membership) {
     state.refreshWhenDialogCloses = true;
-    return;
+    return true;
   }
+  if (state.refreshing) return true;
   if (
     document.visibilityState !== "visible"
     || !state.user
     || !state.membership
-    || state.refreshing
     || state.saving
     || dialog.open
     || !refreshIsDue
-  ) return;
+  ) return false;
   void refreshTasks({ quiet: true });
+  return true;
+}
+
+function refreshHomeAfterReturning() {
+  const workRefreshOwnsReturn = refreshAfterReturning();
+  if (
+    !workRefreshOwnsReturn
+    && !state.refreshing
+    && !state.saving
+    && !dialog.open
+    && document.visibilityState === "visible"
+    && state.activeSectionId === "home"
+    && Date.now() - state.homeActivity.lastRefreshedAt >= 30_000
+  ) {
+    void refreshHomeActivity();
+  }
 }
 
 function clearFieldError(control) {
@@ -1442,6 +1748,12 @@ async function refreshTasks({ quiet = false } = {}) {
   const refreshSequence = ++state.refreshSequence;
   const userId = state.user?.id;
   if (!userId) return false;
+  // Codex — 2026-08-13: Work refresh owns the return path. Cancel any older
+  // Home request/visibility receipt; renderWorkspace starts exactly one fresh
+  // Home check after the current task state is installed.
+  state.homeActivityRequestSequence += 1;
+  disconnectHomeActivityObserver();
+  if (state.homeActivity.status === "loading") state.homeActivity.status = "idle";
   state.refreshing = true;
   newWorkButton.disabled = true;
   refreshButton.disabled = true;
@@ -1823,8 +2135,8 @@ function bindEvents() {
     if (link) activateSection(link.getAttribute("href").slice(1));
   });
   window.addEventListener("hashchange", () => activateSection(sectionIdFromHash()));
-  window.addEventListener("focus", refreshAfterReturning);
-  document.addEventListener("visibilitychange", refreshAfterReturning);
+  window.addEventListener("focus", refreshHomeAfterReturning);
+  document.addEventListener("visibilitychange", refreshHomeAfterReturning);
   window.addEventListener("beforeunload", (event) => {
     if (!isFormDirty()) return;
     event.preventDefault();
@@ -1850,6 +2162,9 @@ function bindEvents() {
   get("home-attention-list").addEventListener("click", (event) => {
     const row = event.target.closest("[data-open-task-id]");
     if (row) window.setTimeout(() => openTask(row.dataset.openTaskId), 0);
+  });
+  get("home-changes-retry").addEventListener("click", () => {
+    void refreshHomeActivity();
   });
   get("home-focus-action").addEventListener("click", (event) => {
     const taskId = event.currentTarget.dataset.taskId;
@@ -1879,6 +2194,7 @@ function boot() {
   activateSection(sectionIdFromHash());
   const validation = validateHubConfig(globalThis.FAKESNIFF_HUB_CONFIG);
   state.config = validation.config;
+  applyEnvironmentMarker(state.config);
   if (!validation.ok || state.config.mode === "setup") {
     showSetupMode(validation.errors);
     return;

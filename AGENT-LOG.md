@@ -203,3 +203,26 @@ JSON stay ordinary reply text. The frozen section allow-list still gates navigat
 Also pinned both `#lookbook` and `#decisions` as initial-link destinations and verified clean local
 loads activate the matching section and nav item. Full suite: 47/47 pass; independent review found
 no blocker. Production, migrations and especially 003 were untouched.
+
+### 2026-08-13 — Codex (phone deep links + proactive Home check-in)
+Found the live phone deep-link failure below the router: mobile CSS forced `#home` to `display:flex`
+even when it was not active. Restricted that rule to `#home.is-active`; clean 390×844 loads now
+show only the requested Lookbook or Decisions section. Committed separately as `c4042ba`.
+
+Built a cross-device Home check-in that surfaces newly Waiting work, work sent to Review, decisions
+recorded/agreed, and reviews still untouched after 24 hours. New migration 006 keeps per-member
+receipt state private behind two expected-user-bound, workspace-scoped RPCs; Home receives only an
+allow-listed summary, never raw audit snapshots. Exact receipt IDs come from the same database
+snapshot that produced the row, and each row is acknowledged only after at least 60% of that row is
+visible. Empty/stale-only visits are recorded too. Sign-out and account changes cancel requests,
+observers and acknowledgements and clear the private DOM. The shell now owns the permanent staging
+marker, so TEST COPY no longer depends on the optional assistant module.
+
+All 60 tests pass, plus JS syntax and diff checks. Migration 006 has only been reviewed statically;
+it has not run on staging or production. Neither frontend was deployed and migration 003 remains
+untouched. Release order is fixed: confirm/apply 005 on staging if needed, rehearse 006 and its two
+RPCs there, deploy/verify staging, then separately apply/deploy/verify production.
+
+Claude follow-up: Idea Lab still requests `activity_events?select=*`, which sends complete audit
+snapshots to its browser path. Replace that owned-module read with a sanitized projection/RPC before
+claiming browser-wide audit minimization; this does not block the isolated Home path.

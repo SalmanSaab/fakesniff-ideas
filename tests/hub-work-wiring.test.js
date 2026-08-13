@@ -109,12 +109,53 @@ test("Home gives an actionable empty-workspace fallback", () => {
   assert.match(hubSource, /homeAction === "refresh"[\s\S]*requestWorkspaceRefresh\(\)/);
 });
 
+test("Home checks sanitized changes only while Home is visible", () => {
+  assert.match(hubHtml, /id="home-changes-title">Since your last look</);
+  assert.match(hubHtml, /id="home-changes-list"/);
+  const activate = functionSource("activateSection", "registerSection");
+  assert.match(activate, /normalized !== "home"[\s\S]*disconnectHomeActivityObserver/);
+  assert.match(activate, /refreshHomeActivity\(\)/);
+
+  const source = functionSource("refreshHomeActivity", "renderHomeFocus");
+  assert.match(source, /state\.activeSectionId !== "home"/);
+  assert.match(source, /document\.hidden/);
+  assert.match(source, /state\.repository\.loadHomeChanges\(userId, 5\)/);
+  assert.match(source, /normalizeHomeChanges\(raw\)/);
+  assert.match(source, /const rendered = renderHomeActivity\(\)/);
+  assert.match(source, /rendered\.receiptGroups/);
+  assert.match(hubSource, /IntersectionObserver[\s\S]*intersectionRatio >= 0\.6/);
+  assert.match(hubSource, /observer\.unobserve\(entry\.target\)/);
+  assert.match(hubSource, /state\.repository\.acknowledgeHomeChanges\(userId, exactIds\)/);
+  assert.doesNotMatch(source, /requestAnimationFrame/);
+  assert.match(source, /homeActivityRequestIsCurrent/);
+  assert.doesNotMatch(source, /state\.stale\s*=\s*true|showAppError\(/);
+});
+
+test("returning coordinates one Work refresh before one Home check", () => {
+  const source = functionSource("refreshHomeAfterReturning", "clearFieldError");
+  assert.match(source, /const workRefreshOwnsReturn = refreshAfterReturning\(\)/);
+  assert.match(source, /!workRefreshOwnsReturn/);
+  assert.match(source, /!state\.refreshing/);
+  assert.match(source, /lastRefreshedAt >= 30_000/);
+  const refresh = functionSource("refreshTasks", "saveTask");
+  assert.match(refresh, /state\.homeActivityRequestSequence \+= 1/);
+  assert.match(refresh, /disconnectHomeActivityObserver\(\)/);
+});
+
+test("the core shell marks staging without depending on the assistant", () => {
+  const marker = functionSource("applyEnvironmentMarker", "registerSection");
+  assert.match(marker, /document\.body\.classList\.toggle\("is-staging", isStaging\)/);
+  const bootSource = functionSource("boot");
+  assert.match(bootSource, /state\.config = validation\.config;[\s\S]*applyEnvironmentMarker\(state\.config\)/);
+});
+
 test("returning to a stale, closed board quietly refreshes it", () => {
   const source = functionSource("refreshAfterReturning", "clearFieldError");
   assert.match(source, /Date\.now\(\) - state\.lastRefreshedAt >= 30_000/);
   assert.match(source, /dialog\.open/);
   assert.match(source, /refreshTasks\(\{ quiet: true \}\)/);
-  assert.match(hubSource, /visibilitychange.*refreshAfterReturning/);
+  assert.match(hubSource, /visibilitychange.*refreshHomeAfterReturning/);
+  assert.match(hubSource, /function refreshHomeAfterReturning\(\)[\s\S]*refreshAfterReturning\(\)/);
   assert.match(hubSource, /refreshWhenDialogCloses/);
 });
 
