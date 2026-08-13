@@ -1,0 +1,246 @@
+/* FAKESNIFF Hub — the assistant.
+ *
+ * A Supabase Edge Function, which exists for one reason: the Gemini key must
+ * never reach the browser. Anything in page JavaScript is readable by anyone
+ * who opens the page. So the key lives here as a Supabase secret and the
+ * browser only ever talks to this function.
+ *
+ * The design that makes this safe is worth stating plainly:
+ *
+ *   This function acts as the CALLER, never as the service role.
+ *
+ * It takes the user's own access token and uses that for every database read.
+ * Row-level security therefore applies to the assistant exactly as it applies
+ * to the person. A viewer's assistant cannot see or change more than the
+ * viewer can, and that is a property of the architecture rather than a rule we
+ * have to remember to enforce. There is no service-role key in this file and
+ * there must never be one.
+ *
+ * It also does not write. It answers, and it proposes an action; the browser
+ * carries the action out using the same session. So a suggestion Marco does not
+ * want is a suggestion he declines, not something that already happened.
+ */
+
+const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+const GEMINI_ROOT = "https://generativelanguage.googleapis.com/v1beta";
+const TEXT_MODELS = ["gemini-flash-latest", "gemini-2.0-flash"];
+const IMAGE_MODEL = "gemini-2.5-flash-image";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+
+/* The sections the assistant is allowed to send someone to. An open string here
+   would let a model invent a destination that does not exist. */
+const SECTIONS = ["home", "work", "idea-lab", "lookbook", "decisions"];
+
+const SYSTEM = `You are the assistant inside FAKESNIFF's company hub.
+
+FAKESNIFF is a small Dutch streetwear brand. Three people use this: Marco (owner),
+Emiel (operations) and Salman. Marco and Emiel are not technical. Write the way
+you would speak to a colleague who is good at their job and has never used a
+project tool. Short sentences. No jargon, no headings, no bullet lists unless
+they genuinely asked for a list.
+
+The hub has these places:
+- home       an overview of what needs attention
+- work       tasks moving through backlog, this week, doing, review, done
+- idea-lab   raw cultural material the scanner collects, turned into ideas
+- lookbook   photographs of garments, fabrics and details worth remembering
+- decisions  what the company agreed: fabric, price, minimum orders, delivery
+
+You know which page the person is on. Answer for where they are. If what they
+want lives somewhere else, offer to take them.
+
+You may propose ONE action per reply by ending with a single line of JSON:
+{"action":"navigate","section":"lookbook"}
+{"action":"compose","section":"decisions"}     opens the form, prefilled if you pass fields
+{"action":"image","prompt":"..."}              generates a picture
+Only use an action when it genuinely helps. Most replies need none.
+
+Never invent what is in the workspace. You are given the real counts and recent
+items below; if something is not there, say you cannot see it rather than
+guessing. If the workspace is empty, say so plainly and suggest the smallest
+useful first step.`;
+
+async function callerIdentity(token: string) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) return null;
+  const user = await r.json();
+  return user?.id ? user : null;
+}
+
+/* Every read below goes through the caller's token on purpose. If they are not
+   a member, RLS returns nothing and the assistant simply has no context — it
+   cannot be tricked into reading another workspace. */
+async function readAsCaller(token: string, path: string) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return [];
+    return await r.json();
+  } catch {
+    return [];
+  }
+}
+
+async function gatherContext(token: string) {
+  const [member, tasks, decisions, lookbook, ideas] = await Promise.all([
+    readAsCaller(token, "members?select=display_name,role&limit=1"),
+    readAsCaller(token, "tasks?select=title,state,next_action&archived_at=is.null&order=updated_at.desc&limit=12"),
+    readAsCaller(token, "decisions?select=title,status,topic,counterparty&archived_at=is.null&order=updated_at.desc&limit=8"),
+    readAsCaller(token, "lookbook_items?select=title,category,ai_analysis&archived_at=is.null&order=created_at.desc&limit=8"),
+    readAsCaller(token, "ideas?select=line,status&order=created_at.desc&limit=8"),
+  ]);
+
+  const who = member?.[0] ?? { display_name: "someone", role: "member" };
+  const lines = [
+    `The person is ${who.display_name}, role ${who.role}.`,
+    `Work items: ${tasks.length}${tasks.length ? " — " + tasks.map((t: any) => `${t.title} (${t.state})`).join("; ") : " (none yet)"}`,
+    `Decisions: ${decisions.length}${decisions.length ? " — " + decisions.map((d: any) => `${d.title} [${d.status}${d.counterparty ? ", with " + d.counterparty : ""}]`).join("; ") : " (none yet)"}`,
+    `Lookbook photos: ${lookbook.length}${lookbook.length ? " — " + lookbook.map((l: any) => l.title || l.category).join("; ") : " (none yet)"}`,
+    `Ideas on the board: ${ideas.length}`,
+  ];
+  return { who, summary: lines.join("\n") };
+}
+
+async function askGemini(messages: any[], systemText: string) {
+  let lastError = "";
+  for (const model of TEXT_MODELS) {
+    try {
+      const r = await fetch(`${GEMINI_ROOT}/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemText }] },
+          contents: messages,
+          generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
+        }),
+      });
+      if (!r.ok) { lastError = `${model}: ${(await r.text()).slice(0, 160)}`; continue; }
+      const data = await r.json();
+      const text = (data?.candidates?.[0]?.content?.parts ?? [])
+        .map((p: any) => p.text ?? "").join("").trim();
+      if (text) return { text, model };
+      lastError = `${model}: empty reply`;
+    } catch (e) {
+      lastError = `${model}: ${String(e).slice(0, 120)}`;
+    }
+  }
+  throw new Error(lastError || "no model answered");
+}
+
+async function makeImage(prompt: string) {
+  const r = await fetch(`${GEMINI_ROOT}/models/${IMAGE_MODEL}:generateContent?key=${GEMINI_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["IMAGE"] },
+    }),
+  });
+  if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+  const data = await r.json();
+  for (const part of data?.candidates?.[0]?.content?.parts ?? []) {
+    const inline = part.inlineData ?? part.inline_data;
+    if (inline?.data) {
+      return { dataUrl: `data:${inline.mimeType ?? inline.mime_type ?? "image/png"};base64,${inline.data}` };
+    }
+  }
+  throw new Error("the model returned no image");
+}
+
+/* Pull a trailing action line off the reply, and refuse anything that names a
+   place we do not have. */
+function splitAction(text: string) {
+  const match = text.match(/\{\s*"action"[\s\S]*\}\s*$/);
+  if (!match) return { reply: text.trim(), action: null };
+  let action: any = null;
+  try { action = JSON.parse(match[0]); } catch { return { reply: text.trim(), action: null }; }
+  const reply = text.slice(0, match.index).trim();
+
+  if (action?.action === "navigate" || action?.action === "compose") {
+    if (!SECTIONS.includes(String(action.section))) return { reply, action: null };
+  } else if (action?.action !== "image") {
+    return { reply, action: null };
+  }
+  return { reply, action };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+
+  if (!GEMINI_KEY || !SUPABASE_URL || !ANON_KEY) {
+    return json({ error: "The assistant is not configured yet." }, 500);
+  }
+
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return json({ error: "Sign in to use the assistant." }, 401);
+
+  const user = await callerIdentity(token);
+  if (!user) return json({ error: "That session is no longer valid. Sign in again." }, 401);
+
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "Bad request." }, 400); }
+
+  /* Image generation is its own path — no chat history, no context. */
+  if (body?.mode === "image") {
+    const prompt = String(body.prompt ?? "").trim().slice(0, 900);
+    if (!prompt) return json({ error: "Say what you want a picture of." }, 400);
+    try {
+      const { dataUrl } = await makeImage(prompt);
+      return json({ image: dataUrl });
+    } catch (e) {
+      return json({ error: "That picture could not be generated. Try describing it differently." , detail: String(e).slice(0,200) }, 502);
+    }
+  }
+
+  const message = String(body?.message ?? "").trim().slice(0, 2000);
+  if (!message) return json({ error: "Say something first." }, 400);
+
+  const section = SECTIONS.includes(String(body?.section)) ? String(body.section) : "home";
+  const history = Array.isArray(body?.history) ? body.history.slice(-8) : [];
+
+  const { who, summary } = await gatherContext(token);
+
+  const contents = [
+    ...history.map((h: any) => ({
+      role: h.role === "assistant" ? "model" : "user",
+      parts: [{ text: String(h.text ?? "").slice(0, 2000) }],
+    })),
+    { role: "user", parts: [{ text: message }] },
+  ];
+
+  const systemText = `${SYSTEM}
+
+They are currently on the "${section}" page.
+
+What is actually in the workspace right now:
+${summary}`;
+
+  try {
+    const { text, model } = await askGemini(contents, systemText);
+    const { reply, action } = splitAction(text);
+    return json({ reply, action, model, who: who.display_name });
+  } catch (e) {
+    return json({
+      error: "The assistant could not answer just now. Nothing was lost — try again.",
+      detail: String(e).slice(0, 200),
+    }, 502);
+  }
+});
