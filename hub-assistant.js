@@ -106,6 +106,16 @@ export function createAssistant(config) {
     if (e.key === "Escape" && !panel.hidden) close();
   });
 
+  /* Claude — 2026-08-13: these live ABOVE the return on purpose. Anything
+     declared with let/const after a return is never initialised — the line
+     does not run — while function declarations are hoisted and work fine.
+     That mismatch is what made greet() and the action buttons throw. */
+  let lastGreetedSection = "";
+  const prettySection = (id) => ({
+    home: "Home", work: "Work", "idea-lab": "the Idea Lab",
+    lookbook: "the Lookbook", decisions: "Decisions",
+  }[id] || id);
+
   return { open, close, destroy: () => root.remove() };
 
   function open() {
@@ -120,7 +130,6 @@ export function createAssistant(config) {
     root.classList.remove("as-is-open");
   }
 
-  let lastGreetedSection = "";
   function greet() {
     const here = currentSection();
     if (here === lastGreetedSection && log.childElementCount) return;
@@ -220,10 +229,6 @@ export function createAssistant(config) {
     log.scrollTop = log.scrollHeight;
   }
 
-  const prettySection = (id) => ({
-    home: "Home", work: "Work", "idea-lab": "the Idea Lab",
-    lookbook: "the Lookbook", decisions: "Decisions",
-  }[id] || id);
 
   async function runAction(action, btn) {
     if (action.action === "navigate" || action.action === "compose") {
