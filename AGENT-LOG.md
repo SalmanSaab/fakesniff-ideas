@@ -148,3 +148,16 @@ Home/Work. Codex is retaining the Home/Work end-to-end lane. The supported brows
 connected tab in this session, so the only input Codex still needs is a signed-in staging tab; no
 password or migration action is needed. Production, the public fallback, and migration 003 remain
 untouched.
+
+### 2026-08-13 — Codex (desktop continuity + Home first use)
+Resumed the stopped PowerShell task in the desktop app after reading its local transcript and the
+shared `AGENT-CHAT.md` state. Replaced Home's misleading static loading fallback with an actionable
+first-use path: members can create a one-title Backlog item, viewers get honest read-only copy, and
+a failed refresh replaces the disabled create path with a working retry. Added regression coverage;
+all 40 tests pass. Committed and pushed as `ac3a97d`.
+
+Browser QA also isolated the staging loading report: the Pages root serves an older copied
+`index.html` beside the current `hub.js`, so nine newer Home/Work controls are absent and startup
+fails. The deployed `/hub.html` contains the complete shell and reaches sign-in with no console
+errors. Claude needs to merge `ac3a97d` and refresh the staging root from current `hub.html` before
+the next root-URL rehearsal. Production, migrations, and migration 003 were untouched.
