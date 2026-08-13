@@ -125,22 +125,62 @@ async function activeCallerMembership(token: string, userId: string) {
   ) ?? null;
 }
 
+/* Claude — 2026-08-13: how many there ARE, not how many we fetched.
+ *
+ * The summary reported the length of a limited sample as the total, so the
+ * assistant told Salman he had eight ideas when he had twenty-seven — and said
+ * it with complete confidence. A number someone will repeat to a supplier has
+ * to be the real one. PostgREST returns the true total in Content-Range when
+ * asked; if that ever fails we say "at least N" rather than invent a figure. */
+async function countAsCaller(token: string, path: string): Promise<number | null> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${token}`,
+        Prefer: "count=exact",
+        Range: "0-0",
+      },
+    });
+    const total = Number((r.headers.get("content-range") ?? "").split("/")[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch {
+    return null;
+  }
+}
+
+function countLine(label: string, total: number | null, shown: any[], describe: (x: any) => string) {
+  if (total === 0) return `${label}: none yet`;
+  const head = total === null ? `${label}: at least ${shown.length}` : `${label}: ${total}`;
+  if (!shown.length) return head;
+  const more = total !== null && total > shown.length ? `, and ${total - shown.length} more` : "";
+  return `${head} — most recent: ${shown.map(describe).join("; ")}${more}`;
+}
+
 async function gatherContext(token: string, member: any) {
   const workspace = `workspace_id=eq.${WORKSPACE_ID}`;
-  const [tasks, decisions, lookbook, ideas] = await Promise.all([
+  const [tasks, decisions, lookbook, ideas, nTasks, nDecisions, nLookbook, nIdeas] = await Promise.all([
     readAsCaller(token, `tasks?select=title,status,next_action&${workspace}&archived_at=is.null&order=updated_at.desc&limit=12`),
     readAsCaller(token, `decisions?select=title,status,topic,counterparty&${workspace}&archived_at=is.null&order=updated_at.desc&limit=8`),
     readAsCaller(token, `lookbook_items?select=title,category,ai_analysis&${workspace}&archived_at=is.null&order=created_at.desc&limit=8`),
     readAsCaller(token, `ideas?select=line,status&${workspace}&order=created_at.desc&limit=8`),
+    countAsCaller(token, `tasks?select=id&${workspace}&archived_at=is.null`),
+    countAsCaller(token, `decisions?select=id&${workspace}&archived_at=is.null`),
+    countAsCaller(token, `lookbook_items?select=id&${workspace}&archived_at=is.null`),
+    countAsCaller(token, `ideas?select=id&${workspace}`),
   ]);
 
   const who = member;
   const lines = [
     `The person is ${who.display_name}, role ${who.role}.`,
-    `Work items: ${tasks.length}${tasks.length ? " — " + tasks.map((t: any) => `${t.title} (${t.status})`).join("; ") : " (none yet)"}`,
-    `Decisions: ${decisions.length}${decisions.length ? " — " + decisions.map((d: any) => `${d.title} [${d.status}${d.counterparty ? ", with " + d.counterparty : ""}]`).join("; ") : " (none yet)"}`,
-    `Lookbook photos: ${lookbook.length}${lookbook.length ? " — " + lookbook.map((l: any) => l.title || l.category).join("; ") : " (none yet)"}`,
-    `Ideas on the board: ${ideas.length}`,
+    countLine("Work items", nTasks as number | null, tasks, (t: any) => `${t.title} (${t.status})`),
+    countLine("Decisions", nDecisions as number | null, decisions,
+      (d: any) => `${d.title} [${d.status}${d.counterparty ? ", with " + d.counterparty : ""}]`),
+    countLine("Lookbook photos", nLookbook as number | null, lookbook,
+      (l: any) => l.title || l.category || "untitled"),
+    countLine("Ideas on the board", nIdeas as number | null, ideas, (i: any) => i.line),
+    "The lists above are only the most recent few. The totals are the real",
+    "counts — never state a number that is not given here.",
   ];
   return { who, summary: lines.join("\n") };
 }

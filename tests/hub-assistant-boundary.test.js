@@ -152,7 +152,15 @@ test("an active member's context reads stay inside the fixed workspace", async (
     assert.equal(options.headers.apikey, "test-anon-key");
   }
   const contextCalls = calls.filter(({ url }) => /\/rest\/v1\/(tasks|decisions|lookbook_items|ideas)\?/.test(url));
-  assert.equal(contextCalls.length, 4);
+  /* Claude — 2026-08-13: eight, not four. Each of the four tables is now read
+     twice — a small sample for the model to quote, and an exact count so the
+     assistant stops reporting its own query limit as the total. It told Salman
+     he had eight ideas when he had twenty-seven. The assertion that matters is
+     the one below: every one of these, sample or count, stays inside the fixed
+     workspace and carries the caller's token. */
+  assert.equal(contextCalls.length, 8);
+  const countCalls = contextCalls.filter(({ options }) => options?.headers?.Prefer === "count=exact");
+  assert.equal(countCalls.length, 4);
   for (const { url } of contextCalls) assert.match(url, new RegExp(`workspace_id=eq\\.${WORKSPACE_ID}`));
   const taskCall = contextCalls.find(({ url }) => url.includes("/tasks?")).url;
   assert.match(taskCall, /select=title,status,next_action/);
