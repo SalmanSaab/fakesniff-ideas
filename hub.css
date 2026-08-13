@@ -2517,7 +2517,9 @@ select {
 
   /* Codex — 2026-08-12: phones put today's actions before dashboard ceremony;
      Work filters collapse to one source-ordered disclosure row. */
-  #home {
+  /* Codex — 2026-08-13: qualify this layout override so an inactive Home stays
+     hidden when a phone opens a shared #lookbook or #decisions link. */
+  #home.is-active {
     display: flex;
     flex-direction: column;
   }

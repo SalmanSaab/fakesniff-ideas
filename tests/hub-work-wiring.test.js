@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const hubSource = await readFile(new URL("../hub.js", import.meta.url), "utf8");
 const hubHtml = await readFile(new URL("../hub.html", import.meta.url), "utf8");
+const hubCss = await readFile(new URL("../hub.css", import.meta.url), "utf8");
 
 function functionSource(name, nextName) {
   const start = hubSource.indexOf(`function ${name}`);
@@ -144,4 +145,8 @@ test("boot consumes Decisions and Lookbook deep links before any configuration e
   assert.notEqual(validationIndex, -1);
   assert.ok(bindIndex < activateIndex);
   assert.ok(activateIndex < validationIndex);
+  // Codex — 2026-08-13: the phone layout must not override the router's
+  // hidden inactive sections with a higher-specificity bare Home selector.
+  assert.match(hubCss, /#home\.is-active\s*\{\s*display:\s*flex;/);
+  assert.doesNotMatch(hubCss, /#home\s*\{[^}]*display:\s*flex;/);
 });
