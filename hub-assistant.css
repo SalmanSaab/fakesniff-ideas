@@ -1,0 +1,110 @@
+/* FAKESNIFF Hub — assistant panel. Owner: Claude.
+   External file so it satisfies the hub CSP (style-src 'self').
+   Colours come from hub-tokens.css. Never write a literal here.
+
+   The open button sits bottom-LEFT on purpose: the Lookbook and Decisions
+   both put their add button bottom-right, and two circles fighting over the
+   same corner is how a phone interface starts feeling careless. */
+
+.as { position: relative; }
+.as * { box-sizing: border-box; }
+.as-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.as-open {
+  position: fixed; left: 18px; bottom: calc(18px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: var(--fs-2);
+  background: var(--fs-surface-2); color: var(--fs-ink);
+  border: 1px solid var(--fs-accent-edge);
+  padding: 0 var(--fs-4); height: 48px; border-radius: var(--fs-radius-pill);
+  font-family: var(--fs-sans); font-size: var(--fs-size-base); cursor: pointer;
+  box-shadow: var(--fs-shadow-lg); z-index: var(--fs-z-float);
+}
+.as-open:hover { border-color: var(--fs-accent); }
+.as-open span[aria-hidden] { color: var(--fs-accent); font-size: var(--fs-size-md); }
+.as-is-open .as-open { display: none; }
+
+.as-panel {
+  position: fixed; right: 0; top: 0; bottom: 0; width: min(420px, 100%);
+  background: var(--fs-surface); border-left: 1px solid var(--fs-line);
+  display: flex; flex-direction: column; z-index: var(--fs-z-sheet);
+  box-shadow: var(--fs-shadow-lg);
+}
+.as-panel[hidden] { display: none; }
+
+.as-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: var(--fs-5) var(--fs-4) var(--fs-3);
+  border-bottom: 1px solid var(--fs-line);
+  padding-top: calc(var(--fs-5) + env(safe-area-inset-top));
+}
+.as-eyebrow {
+  font-size: var(--fs-size-xs); letter-spacing: var(--fs-track-label);
+  text-transform: uppercase; color: var(--fs-ink-3); margin: 0 0 var(--fs-1);
+}
+.as-title { font-size: var(--fs-size-lg); margin: 0; line-height: var(--fs-leading-tight); }
+.as-close {
+  background: none; border: none; color: var(--fs-ink-3);
+  font-size: 30px; line-height: 1; cursor: pointer; padding: 0 var(--fs-2);
+}
+.as-close:hover { color: var(--fs-ink); }
+
+.as-log {
+  flex: 1; overflow-y: auto; padding: var(--fs-4);
+  display: flex; flex-direction: column; gap: var(--fs-3);
+}
+.as-msg p {
+  margin: 0; font-size: var(--fs-size-base); line-height: var(--fs-leading-body);
+}
+.as-you {
+  align-self: flex-end; max-width: 85%;
+  background: var(--fs-surface-2); border: 1px solid var(--fs-line);
+  padding: var(--fs-2) var(--fs-3); border-radius: var(--fs-radius-lg);
+}
+.as-assistant { align-self: flex-start; max-width: 95%; color: var(--fs-ink); }
+.as-assistant p { color: var(--fs-ink-2); }
+.as-thinking p { color: var(--fs-ink-3); letter-spacing: .3em; }
+
+.as-action { align-self: flex-start; }
+.as-do {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: var(--fs-3) var(--fs-4); border-radius: var(--fs-radius);
+  font-family: inherit; font-size: var(--fs-size-base); font-weight: 700;
+  cursor: pointer; min-height: var(--fs-touch);
+}
+.as-do[disabled] { opacity: .6; cursor: progress; }
+
+.as-img {
+  display: block; width: 100%; margin-top: var(--fs-2);
+  border-radius: var(--fs-radius); border: 1px solid var(--fs-line);
+}
+
+.as-form {
+  display: flex; gap: var(--fs-2); align-items: flex-end;
+  padding: var(--fs-3) var(--fs-4) calc(var(--fs-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--fs-line);
+}
+.as-input {
+  flex: 1; resize: none; font-family: inherit;
+  font-size: 16px;                     /* 16px stops iOS zooming the page on focus */
+  background: var(--fs-surface-2); color: var(--fs-ink);
+  border: 1px solid var(--fs-line); border-radius: var(--fs-radius);
+  padding: var(--fs-3); max-height: 140px; line-height: var(--fs-leading-body);
+}
+.as-input:focus { outline: none; border-color: var(--fs-accent); }
+.as-send {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: 0 var(--fs-4); height: var(--fs-touch); border-radius: var(--fs-radius);
+  font-family: inherit; font-size: var(--fs-size-base); font-weight: 700; cursor: pointer;
+}
+
+.as :focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+
+/* On a phone the panel is the whole screen — a 420px drawer on a 390px
+   viewport is just a broken full screen. */
+@media (max-width: 640px) {
+  .as-panel { width: 100%; border-left: none; }
+  .as-open { left: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
