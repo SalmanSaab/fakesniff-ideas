@@ -217,8 +217,9 @@ def main():
         print("nothing to describe")
         return
 
-    model = resolve_model()
-    print(f"describing {len(pending)} item(s) with {model}\n")
+    models = candidate_models()
+    model = None   # settled on the first candidate that answers, then reused
+    print(f"describing {len(pending)} item(s)\n")
 
     done = failed = 0
     for item in pending:
