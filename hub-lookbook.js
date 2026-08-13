@@ -80,6 +80,13 @@ export function mount(root, ctx) {
   const state = {
     items: [], fCategory: "all", query: "", searchTimer: null,
     urls: new Map(),        // item id -> signed image URL
+    objectUrls: new Set(),  // authenticated blob fallbacks we must revoke
+    hydrationController: new AbortController(),
+    selectedIds: new Set(),
+    exporting: false,
+    exportController: null,
+    exportResultUrl: "",
+    destroyed: false,
     lastFocused: null,
   };
   const q = (sel) => el.querySelector(sel);
@@ -123,11 +130,11 @@ export function mount(root, ctx) {
    * holds the image in memory, but it works whenever the person is allowed to
    * read the object at all — no separate signing step to go wrong.
    */
-  async function signedUrl(path) {
+  async function requestSignedUrl(path, signal) {
     const headers = await authHeaders({ "Content-Type": "application/json" });
     try {
       const r = await fetch(`${cfg.storageUrl}/object/sign/${BUCKET}/${encodeURI(path)}`, {
-        method: "POST", headers, body: JSON.stringify({ expiresIn: 3600 }),
+        method: "POST", headers, body: JSON.stringify({ expiresIn: 3600 }), signal,
       });
       if (r.ok) {
         const body = await r.json();
@@ -145,31 +152,75 @@ export function mount(root, ctx) {
         console.warn("lookbook: sign failed", r.status, (await r.text().catch(() => "")).slice(0, 200));
       }
     } catch (e) {
+      if (e?.name === "AbortError") throw e;
       console.warn("lookbook: sign threw", String(e).slice(0, 160));
     }
-    return await blobUrl(path);
+    return "";
   }
 
-  async function blobUrl(path) {
+  async function directImageBlob(path, signal) {
     try {
       const headers = await authHeaders();
-      const r = await fetch(`${cfg.storageUrl}/object/${BUCKET}/${encodeURI(path)}`, { headers });
+      const r = await fetch(`${cfg.storageUrl}/object/${BUCKET}/${encodeURI(path)}`, { headers, signal });
       if (!r.ok) {
         console.warn("lookbook: direct fetch failed", r.status, (await r.text().catch(() => "")).slice(0, 200));
-        return "";
+        return null;
       }
-      return URL.createObjectURL(await r.blob());
+      return await r.blob();
     } catch (e) {
+      if (e?.name === "AbortError") throw e;
       console.warn("lookbook: direct fetch threw", String(e).slice(0, 160));
+      return null;
+    }
+  }
+
+  async function signedUrl(path, signal = state.hydrationController.signal) {
+    const signed = await requestSignedUrl(path, signal);
+    if (signed) return signed;
+    return await blobUrl(path, signal);
+  }
+
+  async function blobUrl(path, signal = state.hydrationController.signal) {
+    const blob = await directImageBlob(path, signal);
+    if (!blob) return "";
+    const url = URL.createObjectURL(blob);
+    if (state.destroyed) {
+      URL.revokeObjectURL(url);
       return "";
     }
+    state.objectUrls.add(url);
+    return url;
+  }
+
+  /* Codex — 2026-08-13: PDF export needs original authenticated bytes, not a
+     screenshot of the card thumbnail. Keep both of Claude's proven routes:
+     accept both signed URL response shapes, then fall back to the caller's
+     authenticated object download if the signed fetch fails. */
+  async function fetchImageBlob(path, signal) {
+    const signed = await requestSignedUrl(path, signal);
+    if (signed) {
+      try {
+        const response = await fetch(signed, { signal });
+        if (response.ok) return await response.blob();
+        console.warn("lookbook: signed export fetch failed", response.status);
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        console.warn("lookbook: signed export fetch threw", String(error).slice(0, 160));
+      }
+    }
+    const blob = await directImageBlob(path, signal);
+    if (!blob) throw new Error("The photograph could not be downloaded.");
+    return blob;
   }
 
   async function load() {
     try {
       const items = await api(
         `lookbook_items?select=*&archived_at=is.null&order=created_at.desc&limit=300${wsFilter()}`);
+      if (state.destroyed) return;
       state.items = items || [];
+      const liveIds = new Set(state.items.map((item) => String(item.id)));
+      for (const id of state.selectedIds) if (!liveIds.has(id)) state.selectedIds.delete(id);
       q(".lb-err").replaceChildren();
       render();
       hydrateImages();
@@ -181,8 +232,19 @@ export function mount(root, ctx) {
   /* Sign image URLs after the grid paints, so the page appears immediately. */
   async function hydrateImages() {
     for (const it of state.items) {
+      if (state.destroyed) return;
       if (!it.storage_path || state.urls.has(it.id)) continue;
-      const url = await signedUrl(it.storage_path);
+      let url = "";
+      try {
+        url = await signedUrl(it.storage_path, state.hydrationController.signal);
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        continue;
+      }
+      if (state.destroyed) {
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+        return;
+      }
       if (!url) continue;
       state.urls.set(it.id, url);
       const img = q(`img[data-for="${it.id}"]`);
@@ -199,6 +261,48 @@ export function mount(root, ctx) {
   }
 
   /* ----- render ----- */
+  const itemName = (item) => String(item?.title || item?.category || "reference").trim() || "reference";
+
+  function renderSelectionControls() {
+    const visibleIds = new Set(visible().map((item) => String(item.id)));
+    const total = state.selectedIds.size;
+    const hiddenCount = [...state.selectedIds].filter((id) => !visibleIds.has(id)).length;
+    const bar = q(".lb-bar");
+    const count = q("#lb-selected-count");
+    const clear = q("#lb-clear-selection");
+    const button = q("#lb-export");
+    bar.classList.toggle("has-selection", total > 0);
+    count.textContent = total
+      ? `${total} selected${hiddenCount ? ` · ${hiddenCount} not shown` : ""}`
+      : "";
+    clear.hidden = total === 0;
+    button.disabled = total === 0 || state.exporting;
+    button.textContent = state.exporting ? "Building PDF…" : "Export PDF";
+    button.setAttribute("aria-label", total
+      ? `Export ${total} selected reference${total === 1 ? "" : "s"} as PDF`
+      : "Export selected references as PDF");
+  }
+
+  function setSelected(id, selected) {
+    const key = String(id);
+    const findCheckbox = () => [...el.querySelectorAll(".lb-select")]
+      .find((node) => String(node.dataset.selectId) === key);
+    if (selected && !state.selectedIds.has(key) && state.selectedIds.size >= 40) {
+      showErr("one PDF can hold up to 40 references. Clear one selection to add another.");
+      const checkbox = findCheckbox();
+      if (checkbox) checkbox.checked = false;
+      return;
+    }
+    if (selected) state.selectedIds.add(key);
+    else state.selectedIds.delete(key);
+    const checkbox = findCheckbox();
+    if (checkbox) {
+      checkbox.checked = selected;
+      checkbox.closest(".lb-cardwrap")?.classList.toggle("is-selected", selected);
+    }
+    renderSelectionControls();
+  }
+
   function render() {
     const counts = {};
     for (const i of state.items) counts[i.category] = (counts[i.category] || 0) + 1;
@@ -223,6 +327,7 @@ export function mount(root, ctx) {
       host.innerHTML = `<div class="lb-empty">${
         state.query ? `nothing matches "${esc(state.query)}"`
                     : "nothing saved yet. tap + to add the first thing."}</div>`;
+      renderSelectionControls();
       return;
     }
     host.innerHTML = list.map((i) => {
@@ -232,17 +337,29 @@ export function mount(root, ctx) {
       const media = i.storage_path
         ? `<img class="lb-thumb ${cached ? "" : "lb-loading"}" data-for="${i.id}" ${cached ? `src="${esc(cached)}"` : ""} alt="${esc(i.title || "reference")}" loading="lazy">`
         : `<div class="lb-thumb lb-nolink"><span>${url ? esc(shortHost(url)) : "note"}</span></div>`;
+      const selected = state.selectedIds.has(String(i.id));
       return `
-        <button class="lb-card" data-id="${i.id}">
-          ${media}
-          <div class="lb-meta">
-            ${i.title ? `<span class="lb-title">${esc(i.title)}</span>` : ""}
-            <span class="lb-cat">${esc(cat)}</span>
-            ${i.ai_analysed_at ? `<span class="lb-ai" title="described automatically">✦</span>` : ""}
-          </div>
-        </button>`;
+        <article class="lb-cardwrap ${selected ? "is-selected" : ""}">
+          <button class="lb-card" data-id="${i.id}" aria-label="Open ${esc(itemName(i))}">
+            ${media}
+            <div class="lb-meta">
+              ${i.title ? `<span class="lb-title">${esc(i.title)}</span>` : ""}
+              <span class="lb-cat">${esc(cat)}</span>
+              ${i.ai_analysed_at ? `<span class="lb-ai" title="described automatically">✦</span>` : ""}
+            </div>
+          </button>
+          <label class="lb-select-control" title="Select for PDF">
+            <input class="lb-select" type="checkbox" data-select-id="${i.id}"
+              aria-label="Select ${esc(itemName(i))} for PDF" ${selected ? "checked" : ""}>
+            <span class="lb-select-mark" aria-hidden="true">✓</span>
+          </label>
+        </article>`;
     }).join("");
     host.querySelectorAll(".lb-card").forEach((c) => (c.onclick = () => openItem(c.dataset.id)));
+    host.querySelectorAll(".lb-select").forEach((checkbox) => {
+      checkbox.onchange = () => setSelected(checkbox.dataset.selectId, checkbox.checked);
+    });
+    renderSelectionControls();
   }
 
   function visible() {
@@ -256,6 +373,175 @@ export function mount(root, ctx) {
         || (i.tags || []).some((t) => String(t).toLowerCase().includes(s))
         || JSON.stringify(i.ai_analysis || {}).toLowerCase().includes(s);
     });
+  }
+
+  /* ----- factory PDF export ----- */
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  }
+
+  function clearExportResult() {
+    if (state.exportResultUrl) URL.revokeObjectURL(state.exportResultUrl);
+    state.exportResultUrl = "";
+  }
+
+  function selectedSnapshot() {
+    return state.items.filter((item) => state.selectedIds.has(String(item.id)));
+  }
+
+  function showExportProgress(total) {
+    const sheet = q("#lb-sheet");
+    sheet.innerHTML = `
+      <h2 class="lb-h" id="lb-export-title">Building the lookbook</h2>
+      <p class="lb-note" id="lb-export-status" role="status" aria-live="polite">Preparing the first photograph…</p>
+      <progress class="lb-export-progress" id="lb-export-progress" max="${total}" value="0"></progress>
+      <p class="lb-hint">Photos are resized one at a time, so you can keep using this tab.</p>
+      <button class="lb-export-cancel" id="lb-export-cancel" type="button">Cancel export</button>`;
+    openSheet("lb-export-title");
+    sheet.querySelector("#lb-export-cancel").onclick = () => {
+      const controller = state.exportController;
+      state.exportController = null;
+      state.exporting = false;
+      controller?.abort();
+      renderSelectionControls();
+      closeSheet({ force: true });
+    };
+  }
+
+  function updateExportProgress(progress) {
+    const bar = q("#lb-export-progress");
+    const status = q("#lb-export-status");
+    if (!bar || !status) return;
+    bar.max = Math.max(1, progress.total || 1);
+    bar.value = Math.max(0, Math.min(bar.max, progress.current || 0));
+    if (progress.phase === "preparing") {
+      status.textContent = `Preparing photo ${progress.current} of ${progress.total}`;
+    } else if (progress.phase === "building") {
+      status.textContent = `Laying out reference ${progress.current} of ${progress.total}`;
+    } else {
+      status.textContent = "Finishing the PDF…";
+    }
+  }
+
+  function showExportFailure(error, allowMissingPhotos) {
+    const sheet = q("#lb-sheet");
+    const isPhotoError = error?.name === "LookbookImageError";
+    const isTooLarge = error?.name === "LookbookTooLargeError";
+    const names = isPhotoError ? (error.items || []).map((item) => item.title).filter(Boolean) : [];
+    sheet.innerHTML = `
+      <button class="lb-close" aria-label="Close">&times;</button>
+      <h2 class="lb-h" id="lb-export-error-title" tabindex="-1">The PDF was not created</h2>
+      <p class="lb-note">${isPhotoError
+        ? `We could not prepare ${esc(names[0] || "one photograph")}. Nothing was downloaded.`
+        : error?.name === "LookbookTooLargeError"
+          ? "This selection is too large to build safely on this device. Select fewer references and try again."
+          : error?.name === "LookbookTextError"
+            ? `This PDF cannot yet print some characters in ${esc(error.itemTitle || "one reference")}. Use Latin letters and try again.`
+          : "Something interrupted the export. Your selection is still here."}</p>
+      <div class="lb-export-actions">
+        <button class="lb-export-primary" id="lb-export-retry" type="button">${isTooLarge ? "Close and select fewer" : "Try again"}</button>
+        ${isPhotoError && !allowMissingPhotos
+          ? `<button class="lb-export-secondary" id="lb-export-without" type="button">Make PDF without that photo</button>`
+          : ""}
+      </div>`;
+    sheet.setAttribute("aria-labelledby", "lb-export-error-title");
+    sheet.querySelector(".lb-close").onclick = () => closeSheet({ force: true });
+    sheet.querySelector("#lb-export-retry").onclick = () => {
+      if (isTooLarge) closeSheet({ force: true });
+      else void startExport({ allowMissingPhotos });
+    };
+    sheet.querySelector("#lb-export-without")?.addEventListener("click", () => {
+      void startExport({ allowMissingPhotos: true });
+    });
+    sheet.querySelector("#lb-export-error-title").focus();
+  }
+
+  function showExportReady(result) {
+    clearExportResult();
+    state.exportResultUrl = URL.createObjectURL(result.blob);
+    const file = typeof File === "function"
+      ? new File([result.blob], result.fileName, { type: "application/pdf" })
+      : null;
+    const canShare = file && typeof navigator.share === "function"
+      && typeof navigator.canShare === "function"
+      && navigator.canShare({ files: [file] });
+    const sheet = q("#lb-sheet");
+    sheet.innerHTML = `
+      <button class="lb-close" aria-label="Close">&times;</button>
+      <h2 class="lb-h" id="lb-export-ready-title" tabindex="-1">Lookbook ready</h2>
+      <p class="lb-note">${result.pageCount} pages · ${formatBytes(result.blob.size)}</p>
+      ${result.missingPhotos
+        ? `<p class="lb-export-warning">${result.missingPhotos} unavailable photo${result.missingPhotos === 1 ? "" : "s"} became a clearly labelled reference page.</p>`
+        : ""}
+      <div class="lb-export-actions">
+        ${canShare ? `<button class="lb-export-primary" id="lb-export-share" type="button">Share PDF</button>` : ""}
+        <a class="lb-export-secondary" id="lb-export-download" href="${esc(state.exportResultUrl)}"
+           download="${esc(result.fileName)}" target="_blank" rel="noopener">Open / save PDF</a>
+      </div>
+      <p class="lb-hint">Visual references only — confirm artwork, measurements and colours separately with the factory.</p>`;
+    sheet.setAttribute("aria-labelledby", "lb-export-ready-title");
+    sheet.querySelector(".lb-close").onclick = () => closeSheet({ force: true });
+    sheet.querySelector("#lb-export-share")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await navigator.share({ files: [file], title: "FAKESNIFF factory reference lookbook" });
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          q("#lb-export-ready-title").insertAdjacentHTML("afterend",
+            `<p class="lb-export-warning">Sharing did not open. Use Open / save PDF instead.</p>`);
+        }
+      } finally {
+        button.disabled = false;
+      }
+    });
+    sheet.querySelector("#lb-export-ready-title").focus();
+  }
+
+  async function startExport({ allowMissingPhotos = false } = {}) {
+    if (state.exporting) return;
+    const items = selectedSnapshot();
+    if (!items.length) return;
+    if (items.length > 40) {
+      showErr("choose no more than 40 references for one PDF.");
+      return;
+    }
+
+    clearExportResult();
+    state.exporting = true;
+    const controller = new AbortController();
+    state.exportController = controller;
+    renderSelectionControls();
+    showExportProgress(items.length);
+
+    try {
+      const { exportLookbookPdf } = await import("./hub-lookbook-export.js");
+      const result = await exportLookbookPdf({
+        items,
+        signal: controller.signal,
+        allowMissingPhotos,
+        onProgress: updateExportProgress,
+        getImageBlob: (item, signal) => fetchImageBlob(item.storage_path, signal),
+      });
+      if (state.destroyed || state.exportController !== controller) return;
+      state.exporting = false;
+      state.exportController = null;
+      renderSelectionControls();
+      showExportReady(result);
+    } catch (error) {
+      if (state.destroyed || state.exportController !== controller) return;
+      const cancelled = error?.name === "AbortError";
+      state.exporting = false;
+      state.exportController = null;
+      renderSelectionControls();
+      if (cancelled) {
+        closeSheet({ force: true });
+        return;
+      }
+      showExportFailure(error, allowMissingPhotos);
+    }
   }
 
   /* ----- capture: the fast path ----- */
@@ -546,7 +832,7 @@ export function mount(root, ctx) {
   const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])';
   function openSheet(labelledById) {
     const d = q("#lb-detail"), sheet = q("#lb-sheet");
-    state.lastFocused = document.activeElement;
+    if (!d.classList.contains("open")) state.lastFocused = document.activeElement;
     d.classList.add("open");
     sheet.setAttribute("role", "dialog");
     sheet.setAttribute("aria-modal", "true");
@@ -554,12 +840,14 @@ export function mount(root, ctx) {
     document.body.classList.add("hub-sheet-open");   // stop the page scrolling behind
     (sheet.querySelector(FOCUSABLE) || sheet).focus?.();
   }
-  function closeSheet() {
+  function closeSheet({ force = false } = {}) {
     const d = q("#lb-detail");
     if (!d.classList.contains("open")) return;
+    if (state.exporting && !force) return;
     d.classList.remove("open");
     document.body.classList.remove("hub-sheet-open");
     q("#lb-sheet").removeAttribute("aria-busy");
+    clearExportResult();
     if (state.lastFocused && document.contains(state.lastFocused)) state.lastFocused.focus();
     state.lastFocused = null;
   }
@@ -576,6 +864,12 @@ export function mount(root, ctx) {
   /* ----- chrome ----- */
   if (!canEdit) { const a = q("#lb-add"); if (a) a.hidden = true; }
   q("#lb-add").onclick = addSheet;
+  q("#lb-export").onclick = () => void startExport();
+  q("#lb-clear-selection").onclick = () => {
+    state.selectedIds.clear();
+    render();
+    hydrateImages();
+  };
   q("#lb-detail").onclick = (e) => { if (e.target.id === "lb-detail") closeSheet(); };
   el.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); else trapFocus(e); });
   q("#lb-search").addEventListener("input", (e) => {
@@ -586,7 +880,18 @@ export function mount(root, ctx) {
 
   load();
   const timer = setInterval(load, 45000);
-  return { destroy() { clearInterval(timer); root.replaceChildren(); } };
+  return { destroy() {
+    state.destroyed = true;
+    clearInterval(timer);
+    clearTimeout(state.searchTimer);
+    state.hydrationController.abort();
+    state.exportController?.abort();
+    clearExportResult();
+    for (const url of state.objectUrls) URL.revokeObjectURL(url);
+    state.objectUrls.clear();
+    document.body.classList.remove("hub-sheet-open");
+    root.replaceChildren();
+  } };
 }
 
 /* ---------- ctx ---------- */
@@ -618,6 +923,11 @@ if (typeof window !== "undefined") {
 const TEMPLATE = `
   <div class="lb-bar">
     <div class="lb-mark">lookbook<small>things we liked</small></div>
+    <div class="lb-export-controls">
+      <span id="lb-selected-count" class="lb-selected-count" aria-live="polite"></span>
+      <button id="lb-clear-selection" class="lb-clear-selection" type="button" hidden>Clear</button>
+      <button id="lb-export" class="lb-export-button" type="button" disabled>Export PDF</button>
+    </div>
   </div>
   <input id="lb-search" class="lb-search" type="search" placeholder="search the lookbook..." autocomplete="off">
   <div class="lb-filters" id="lb-filters"></div>

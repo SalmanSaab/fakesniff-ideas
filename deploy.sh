@@ -26,7 +26,7 @@ STAGE="$TMP/hubstage"
 
 # Anything not shipped to the browser. Source, tests, database, notes.
 EXCLUDE=(
-  "supabase" "tests" "migrations" "node_modules" ".git" ".github"
+  "supabase" "tests" "migrations" "node_modules" "tmp" "output" ".git" ".github"
   "*.md" "*.sql" "*.py" "*.sh" "package.json" "package-lock.json"
   "hub-config.js" "hub-config.production.js" "hub-preview.local.*"
 )
@@ -73,6 +73,12 @@ copy_into() {
   # in upload code (photo.jpg), which are not assets and never will be.
   for asset in $(grep -ohE 'new URL\("[a-z0-9-]+\.(css|jpg|png)"|src="[a-z0-9-]+\.(jpg|png|webp)"' "$dest"/hub-*.js 2>/dev/null                  | grep -oE '[a-z0-9-]+\.(css|jpg|png|webp)' | sort -u); do
     [ -f "$dest/$asset" ] || echo "  note, $name: $asset is referenced by a module but not shipped"
+  done
+  # Codex — 2026-08-13: Lookbook PDF export has a worker plus a vendored
+  # dependency that HTML never names. Missing either makes Export fail only in
+  # production, so treat worker/importScripts references as hard dependencies.
+  for asset in $(grep -ohE 'hub-lookbook-export\.js|hub-lookbook-pdf-worker\.js|vendor-pdf-lib\.min\.js' "$dest"/hub-*.js 2>/dev/null | sort -u); do
+    [ -f "$dest/$asset" ] || { echo "  MISSING in $name: $asset"; missing=1; }
   done
   [ "$missing" -eq 0 ] && echo "  $name: every referenced asset is present"
   return $missing

@@ -2,3 +2,5 @@
 hub-preview.local.html
 hub-preview.local.js
 
+# Codex — 2026-08-13: render/browser QA files must never enter a Pages deploy.
+tmp/
