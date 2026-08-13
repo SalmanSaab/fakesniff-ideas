@@ -7,7 +7,7 @@
        photos live in a private bucket and are fetched through short-lived signed
        URLs on that host, so 'self' blocked every one of them and the module
        silently rendered nothing. Scoped to *.supabase.co only. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self'; img-src 'self' data: https://*.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="FAKESNIFF private company workspace.">
   <title>FAKESNIFF — company hub</title>

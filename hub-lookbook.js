@@ -107,21 +107,62 @@ export function mount(root, ctx) {
   const wsFilter = () => (cfg.workspaceId ? `&workspace_id=eq.${cfg.workspaceId}` : "");
   const stamp = (row) => (cfg.workspaceId ? { ...row, workspace_id: cfg.workspaceId } : row);
 
-  /* Images live in a private bucket, so each needs a short-lived signed URL. */
+  /* Images live in a private bucket, so they cannot be loaded by plain URL.
+   *
+   * Claude — 2026-08-13: this is deliberately belt and braces, because getting
+   * a photo on screen is the entire point of the Lookbook and it has failed
+   * twice for two different reasons already. First the CSP blocked the storage
+   * host; then signing produced nothing usable.
+   *
+   * Route 1 asks Storage for a short-lived signed URL. The REST API has
+   * returned that field as both `signedURL` and `signedUrl` across versions,
+   * so accept either rather than depending on which one this project speaks.
+   *
+   * Route 2, if that produced nothing, fetches the bytes with the same auth
+   * header everything else uses and hands the browser a blob. Slower and it
+   * holds the image in memory, but it works whenever the person is allowed to
+   * read the object at all — no separate signing step to go wrong.
+   */
   async function signedUrl(path) {
     const headers = await authHeaders({ "Content-Type": "application/json" });
-    const r = await fetch(`${cfg.storageUrl}/object/sign/${BUCKET}/${encodeURI(path)}`, {
-      method: "POST", headers, body: JSON.stringify({ expiresIn: 3600 }),
-    });
-    if (!r.ok) {
-      /* Claude — 2026-08-13: this used to fail silently, which is how a
-         Content-Security-Policy blocking the storage host looked like "no
-         photos" rather than an error. Say something. */
-      console.warn("lookbook: could not sign image url", r.status, await r.text().catch(() => ""));
+    try {
+      const r = await fetch(`${cfg.storageUrl}/object/sign/${BUCKET}/${encodeURI(path)}`, {
+        method: "POST", headers, body: JSON.stringify({ expiresIn: 3600 }),
+      });
+      if (r.ok) {
+        const body = await r.json();
+        const signed = body.signedURL || body.signedUrl || "";
+        if (signed) {
+          const origin = cfg.storageUrl.replace(/\/storage\/v1$/, "");
+          /* the field has been returned both with and without the /storage/v1
+             prefix, so normalise instead of assuming */
+          return signed.startsWith("http")
+            ? signed
+            : origin + (signed.startsWith("/storage/v1") ? "" : "/storage/v1") + signed;
+        }
+        console.warn("lookbook: sign returned no url", JSON.stringify(body).slice(0, 200));
+      } else {
+        console.warn("lookbook: sign failed", r.status, (await r.text().catch(() => "")).slice(0, 200));
+      }
+    } catch (e) {
+      console.warn("lookbook: sign threw", String(e).slice(0, 160));
+    }
+    return await blobUrl(path);
+  }
+
+  async function blobUrl(path) {
+    try {
+      const headers = await authHeaders();
+      const r = await fetch(`${cfg.storageUrl}/object/${BUCKET}/${encodeURI(path)}`, { headers });
+      if (!r.ok) {
+        console.warn("lookbook: direct fetch failed", r.status, (await r.text().catch(() => "")).slice(0, 200));
+        return "";
+      }
+      return URL.createObjectURL(await r.blob());
+    } catch (e) {
+      console.warn("lookbook: direct fetch threw", String(e).slice(0, 160));
       return "";
     }
-    const { signedURL } = await r.json();
-    return signedURL ? cfg.storageUrl.replace(/\/storage\/v1$/, "") + "/storage/v1" + signedURL : "";
   }
 
   async function load() {
