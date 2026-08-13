@@ -110,3 +110,12 @@
 .dg-ideapick:hover { border-color: var(--fs-accent-edge); background: var(--fs-surface-2); }
 .dg-ideal { color: var(--fs-ink); font-size: var(--fs-size-base); font-weight: 600; }
 .dg-ideac { color: var(--fs-ink-3); font-size: var(--fs-size-sm); }
+
+.dg-ideasearch {
+  width: 100%; background: var(--fs-surface-2); border: 1px solid var(--fs-line);
+  color: var(--fs-ink); padding: var(--fs-2) var(--fs-3); font-size: 16px;
+  border-radius: var(--fs-radius); font-family: inherit; margin-bottom: var(--fs-2);
+}
+.dg-ideasearch:focus { outline: none; border-color: var(--fs-accent); }
+.dg-idealist { display: grid; gap: var(--fs-1); }
+.dg-ideanone { color: var(--fs-ink-3); font-size: var(--fs-size-sm); margin: var(--fs-2) var(--fs-3); }

@@ -1,0 +1,25 @@
+# Claude — 2026-08-13: git's line-ending conversion rewrote 16 bytes inside
+# vendor-pdf-lib.min.js on checkout, so the file on disk no longer matched the
+# hash Codex pinned for it. A vendored library that silently differs from what
+# was reviewed is a supply-chain problem, not a formatting preference.
+#
+# Third-party and binary assets are byte-exact. Nothing may touch them.
+vendor-*.js      -text
+vendor-*.txt     -text
+*.min.js         -text
+*.jpg            binary
+*.jpeg           binary
+*.png            binary
+*.webp           binary
+
+# Everything we write stays LF in the repository, whatever the checkout does.
+*.js     text eol=lf
+*.mjs    text eol=lf
+*.ts     text eol=lf
+*.css    text eol=lf
+*.html   text eol=lf
+*.sql    text eol=lf
+*.py     text eol=lf
+*.sh     text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf

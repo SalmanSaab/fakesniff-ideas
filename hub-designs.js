@@ -155,6 +155,14 @@ export function mount(root, ctx) {
       const rows = await res.json();
       if (!Array.isArray(rows) || !rows.length) { box.textContent = "The Idea Lab is empty."; return; }
 
+      /* 27 ideas today and it only grows. Scrolling a list to find one you
+         already have in mind is the thing that makes people stop using it. */
+      const search = document.createElement("input");
+      search.type = "search";
+      search.className = "dg-ideasearch";
+      search.placeholder = "Search the board";
+      search.setAttribute("aria-label", "Search ideas");
+
       const buttons = rows.map((r) => {
         const b = document.createElement("button");
         b.type = "button";
@@ -178,7 +186,31 @@ export function mount(root, ctx) {
         });
         return b;
       });
-      box.replaceChildren(...buttons);
+      const list = document.createElement("div");
+      list.className = "dg-idealist";
+      list.append(...buttons);
+
+      search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        let shown = 0;
+        buttons.forEach((b, i) => {
+          const r = rows[i];
+          const hit = !q
+            || String(r.line || "").toLowerCase().includes(q)
+            || String(r.concept || "").toLowerCase().includes(q);
+          b.hidden = !hit;
+          if (hit) shown++;
+        });
+        empty.hidden = shown > 0;
+      });
+
+      const empty = document.createElement("p");
+      empty.className = "dg-ideanone";
+      empty.textContent = "Nothing on the board matches that.";
+      empty.hidden = true;
+
+      box.replaceChildren(search, list, empty);
+      search.focus();
     } catch (e) {
       box.textContent = `Could not read the board: ${String(e?.message || e).slice(0, 120)}`;
     }
