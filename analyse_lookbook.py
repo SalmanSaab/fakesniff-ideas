@@ -32,9 +32,8 @@ BUCKET       = "lookbook"
 # account actually exposes rather than failing on a stale name.
 PREFERRED_MODELS = [
     os.environ.get("GEMINI_MODEL", ""),
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
     "gemini-flash-latest",
+    "gemini-2.0-flash",
 ]
 GEMINI_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -113,29 +112,30 @@ def download_image(path):
         return r.read(), r.headers.get("Content-Type", "image/jpeg")
 
 
-def resolve_model():
-    """Pick a model that this key can actually use, rather than trusting a
-    hardcoded name that may have been renamed."""
+def candidate_models():
+    """Ordered models to try. Listing is not enough — a model can appear in the
+    catalogue and still be closed to new keys (gemini-2.5-flash does exactly
+    that), so we try in order and move on when one is refused."""
     try:
         req = urllib.request.Request(f"{GEMINI_ROOT}/models?key={GEMINI_KEY}")
         with urllib.request.urlopen(req, timeout=30) as r:
             available = json.load(r).get("models", [])
     except Exception as e:
         print(f"  could not list models ({str(e)[:60]}), trying preferences blind")
-        return next((m for m in PREFERRED_MODELS if m), "gemini-2.0-flash")
+        return [m for m in PREFERRED_MODELS if m] or ["gemini-2.0-flash"]
 
     names = [m.get("name", "").split("/")[-1] for m in available
              if "generateContent" in (m.get("supportedGenerationMethods") or [])]
-    for want in PREFERRED_MODELS:
-        if want and want in names:
-            return want
-    # any flash-family model is the right cost tier for tagging photos
-    flash = [n for n in names if "flash" in n and "thinking" not in n]
-    if flash:
-        return sorted(flash)[-1]
-    if names:
-        return names[0]
-    die("this API key exposes no models that support generateContent")
+    print(f"  models this key can see: {', '.join(names[:12])}{' ...' if len(names) > 12 else ''}")
+
+    ordered = [w for w in PREFERRED_MODELS if w and w in names]
+    # then any flash-family model, newest-looking first: right cost tier for tagging
+    flash = sorted((n for n in names if "flash" in n and "thinking" not in n), reverse=True)
+    ordered += [n for n in flash if n not in ordered]
+    ordered += [n for n in names if n not in ordered]
+    if not ordered:
+        die("this API key exposes no models that support generateContent")
+    return ordered
 
 
 def analyse(model, image_bytes, mime, note):
@@ -164,6 +164,27 @@ def analyse(model, image_bytes, mime, note):
     if not text:
         raise RuntimeError("empty response")
     return json.loads(text)
+
+
+def analyse_with_fallback(models, image_bytes, mime, note):
+    """Try each candidate until one answers. A 404 or 400 here means the model
+    is gone or closed to this key, not that the image is bad."""
+    last = None
+    for name in models:
+        try:
+            return analyse(name, image_bytes, mime, note), name
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 403, 404):
+                detail = ""
+                try:
+                    detail = json.loads(e.read()).get("error", {}).get("message", "")[:90]
+                except Exception:
+                    pass
+                print(f"  {name} unavailable: {detail}")
+                last = e
+                continue
+            raise
+    raise last or RuntimeError("no usable model")
 
 
 def write_back(item_id, result, current_category):
@@ -196,15 +217,20 @@ def main():
         print("nothing to describe")
         return
 
-    model = resolve_model()
-    print(f"describing {len(pending)} item(s) with {model}\n")
+    models = candidate_models()
+    model = None   # settled on the first candidate that answers, then reused
+    print(f"describing {len(pending)} item(s)\n")
 
     done = failed = 0
     for item in pending:
         label = (item.get("title") or item.get("note") or item["storage_path"]).strip()[:52]
         try:
             image, mime = download_image(item["storage_path"])
-            result = analyse(model, image, mime, item.get("note", ""))
+            if model:
+                result = analyse(model, image, mime, item.get("note", ""))
+            else:
+                result, model = analyse_with_fallback(models, image, mime, item.get("note", ""))
+                print(f"  using {model}")
             write_back(item["id"], result, item.get("category"))
             tags = ", ".join(result.get("tags", [])[:4])
             print(f"  ok   {label}\n       {tags}")
