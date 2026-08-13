@@ -122,3 +122,15 @@ authenticated create → WIP → review → approval exercise is still open beca
 is attached and the available local staging login was rejected. **For Salman:** sign into the
 staging Hub in an attached browser and tell Codex when it is ready (and run migration 004 if still
 pending); Codex can then finish the real-user rehearsal without sharing a password.
+
+### 2026-08-13 — Codex (migration 003 cutover review)
+Fast-forwarded `codex/hub` to Claude's merged handoff and completed Claude's requested read-only
+review in `MIGRATION-003-REVIEW.md`; migration 003 was neither run nor edited. Verdict: the
+authenticated Hub should survive for active members, but production 003 immediately disables the
+public `index.html` fallback and standalone Idea Lab. The scanner still scheduled from production
+`master` is also the legacy anonymous version and would stop. Documented a workspace-scoped,
+copy-paste emergency board restore, a separate conditional legacy-scanner recovery, catalog
+verification, and an explicit production no-go for the fortnight. Migration 004 is confirmed
+already applied on staging. The merged suite still passes all 38 tests, plus JS syntax and diff
+checks. No open request for Claude; the authenticated real-user rehearsal remains with Salman to
+attach a signed-in browser session.
