@@ -111,7 +111,7 @@ export function createAssistant(config) {
   function open() {
     panel.hidden = false;
     root.classList.add("as-is-open");
-    if (!log.childElementCount) greet();
+    greet();   // every time: the page you are on may have changed since last open
     input.focus();
   }
 
@@ -120,14 +120,18 @@ export function createAssistant(config) {
     root.classList.remove("as-is-open");
   }
 
+  let lastGreetedSection = "";
   function greet() {
+    const here = currentSection();
+    if (here === lastGreetedSection && log.childElementCount) return;
+    lastGreetedSection = here;
     const where = {
       home: "You are on Home. I can tell you what needs attention, or take you anywhere.",
       work: "You are on Work. Ask me what to do next, or what is waiting on someone.",
       "idea-lab": "You are in the Idea Lab. Ask me what is worth turning into something.",
       lookbook: "You are in the Lookbook. I can describe what you have saved, or make a picture.",
       decisions: "You are on Decisions. Ask me what we agreed, or record something new.",
-    }[currentSection()] || "Ask me anything about the workspace.";
+    }[here] || "Ask me anything about the workspace.";
     say("assistant", where);
   }
 
@@ -160,7 +164,7 @@ export function createAssistant(config) {
 
       const res = await fetch(`${base}${FN_PATH}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { apikey: config.supabasePublishableKey || "", Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ message, section: currentSection(), history: history.slice(-8) }),
       });
       const data = await res.json().catch(() => ({}));
@@ -174,9 +178,15 @@ export function createAssistant(config) {
       if (data.action) offerAction(data.action);
     } catch (err) {
       thinking.remove();
-      say("assistant", String(err.message) === "signed out"
+      /* Claude — 2026-08-13: this used to claim "could not reach the server"
+         for every failure, including ones that had nothing to do with the
+         network. Guessing at a cause we were not shown wasted a lot of time,
+         so say what actually happened. */
+      const why = String(err?.message || err);
+      say("assistant", why === "signed out"
         ? "Your session has expired. Sign in again and I will pick this back up."
-        : "That did not reach the server. Check your connection and try again.");
+        : `That did not work: ${why}`);
+      console.error("assistant:", err);
     } finally {
       busy = false;
       input.focus();
@@ -228,7 +238,7 @@ export function createAssistant(config) {
       try {
         const res = await fetch(`${base}${FN_PATH}`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${accessToken()}`, "Content-Type": "application/json" },
+          headers: { apikey: config.supabasePublishableKey || "", Authorization: `Bearer ${accessToken()}`, "Content-Type": "application/json" },
           body: JSON.stringify({ mode: "image", prompt: action.prompt }),
         });
         const data = await res.json().catch(() => ({}));
