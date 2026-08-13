@@ -1,0 +1,139 @@
+/* FAKESNIFF Hub — Decisions styles. Owner: Claude.
+   External file so it satisfies the hub CSP (style-src 'self').
+   Phone-first: this gets used standing in a factory holding a phone.
+   Colours come from hub-tokens.css. Never write a literal here. */
+
+.dc { color: var(--fs-ink); position: relative; }
+.dc * { box-sizing: border-box; }
+
+.dc-bar { display: flex; align-items: center; gap: var(--fs-3); margin-bottom: var(--fs-3); }
+.dc-mark { font-family: var(--fs-serif); font-style: italic; font-size: var(--fs-size-lg); line-height: 1; }
+.dc-mark small {
+  font-style: normal; font-family: var(--fs-sans); font-size: var(--fs-size-xs);
+  letter-spacing: var(--fs-track-label); text-transform: uppercase;
+  color: var(--fs-ink-3); display: block; margin-top: var(--fs-1);
+}
+
+.dc-search {
+  width: 100%; background: var(--fs-surface-2); border: 1px solid var(--fs-line);
+  color: var(--fs-ink); padding: var(--fs-3) var(--fs-4); font-size: 16px;
+  border-radius: var(--fs-radius); margin-bottom: var(--fs-3); font-family: inherit;
+}
+.dc-search:focus { outline: none; border-color: var(--fs-accent); }
+
+.dc-filters { display: flex; gap: var(--fs-1); flex-wrap: wrap; margin-bottom: var(--fs-4); }
+.dc-chip {
+  background: transparent; border: 1px solid var(--fs-line); color: var(--fs-ink-3);
+  padding: 6px var(--fs-3); border-radius: var(--fs-radius-pill);
+  font-size: var(--fs-size-sm); cursor: pointer; white-space: nowrap; font-family: inherit;
+}
+.dc-chip.on { border-color: var(--fs-accent); color: var(--fs-accent); }
+
+/* One column. A decision is a sentence you read, not a tile you scan. */
+.dc-list { display: grid; gap: var(--fs-2); }
+.dc-card {
+  display: grid; gap: 5px; text-align: left; width: 100%;
+  background: var(--fs-surface); border: 1px solid var(--fs-line);
+  border-left: 2px solid var(--fs-line-strong);
+  border-radius: var(--fs-radius); padding: var(--fs-3) var(--fs-4);
+  color: inherit; font: inherit; cursor: pointer; transition: border-color .12s;
+}
+.dc-card:hover { border-color: var(--fs-line-strong); }
+
+.dc-status {
+  font-size: var(--fs-size-xs); letter-spacing: var(--fs-track-label);
+  text-transform: uppercase; color: var(--fs-ink-3);
+}
+/* Status is not the accent. Accent means "press this", and none of these are. */
+.dc-decided    { color: var(--fs-accent); }
+.dc-proposed   { color: var(--fs-warn); }
+.dc-superseded { color: var(--fs-ink-3); }
+.dc-cancelled  { color: var(--fs-danger); }
+
+.dc-title { font-size: var(--fs-size-md); font-weight: 700; line-height: var(--fs-leading-tight); }
+.dc-what {
+  font-size: var(--fs-size-base); color: var(--fs-ink-2); line-height: var(--fs-leading-body);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.dc-meta { font-size: var(--fs-size-sm); color: var(--fs-ink-3); }
+
+.dc-empty {
+  color: var(--fs-ink-3); text-align: center; padding: var(--fs-7) var(--fs-5);
+  font-size: var(--fs-size-base); line-height: var(--fs-leading-body);
+}
+.dc-errbox {
+  background: var(--fs-danger-dim); border: 1px solid var(--fs-danger); color: var(--fs-danger);
+  padding: var(--fs-3); font-size: var(--fs-size-sm);
+  margin-bottom: var(--fs-3); border-radius: var(--fs-radius);
+}
+
+.dc-add {
+  position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom));
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  width: 58px; height: 58px; border-radius: 50%; font-size: 30px; line-height: 1;
+  cursor: pointer; box-shadow: var(--fs-shadow-lg); z-index: var(--fs-z-float);
+}
+.dc-readonly .dc-add { display: none; }
+
+/* sheet */
+.dc-sheetwrap {
+  position: fixed; inset: 0; z-index: var(--fs-z-sheet); background: rgba(0, 0, 0, .75);
+  display: none; align-items: flex-start; justify-content: center;
+  padding: var(--fs-5); overflow-y: auto;
+}
+.dc-sheetwrap.open { display: flex; }
+.dc-sheet {
+  background: var(--fs-surface); border: 1px solid var(--fs-line);
+  max-width: 620px; width: 100%; border-radius: var(--fs-radius-lg);
+  padding: var(--fs-5); margin: auto; position: relative;
+}
+.dc-close {
+  position: absolute; top: var(--fs-3); right: var(--fs-4); background: none; border: none;
+  color: var(--fs-ink-3); font-size: 28px; cursor: pointer; line-height: 1; padding: var(--fs-1) var(--fs-2);
+}
+.dc-h { font-size: var(--fs-size-xl); font-weight: 800; line-height: var(--fs-leading-tight); margin: 0 0 var(--fs-4); }
+
+.dc-form { display: grid; gap: var(--fs-1); }
+.dc-lbl {
+  font-size: var(--fs-size-xs); text-transform: uppercase;
+  letter-spacing: var(--fs-track-label); color: var(--fs-ink-3); margin-top: var(--fs-3);
+}
+.dc-input {
+  background: var(--fs-surface-2); border: 1px solid var(--fs-line); color: var(--fs-ink);
+  padding: var(--fs-3); font-size: 16px;   /* 16px stops iOS zooming the page on focus */
+  border-radius: var(--fs-radius); font-family: inherit; width: 100%;
+}
+.dc-area { min-height: 84px; resize: vertical; line-height: var(--fs-leading-body); }
+.dc-input:focus { outline: none; border-color: var(--fs-accent); }
+.dc-input:disabled { opacity: .65; cursor: not-allowed; }
+.dc-hint { color: var(--fs-ink-3); font-size: var(--fs-size-sm); margin: var(--fs-1) 0 0; }
+
+.dc-formerror {
+  background: var(--fs-danger-dim); border: 1px solid var(--fs-danger); color: var(--fs-danger);
+  padding: var(--fs-3); font-size: var(--fs-size-sm); border-radius: var(--fs-radius);
+  margin: var(--fs-4) 0 0; line-height: var(--fs-leading-body);
+}
+
+.dc-actions { display: flex; gap: var(--fs-2); flex-wrap: wrap; margin-top: var(--fs-5); align-items: center; }
+.dc-savebtn {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: var(--fs-3) var(--fs-5); font-size: var(--fs-size-md); font-weight: 700;
+  border-radius: var(--fs-radius); cursor: pointer; min-height: var(--fs-touch); flex: 1;
+}
+.dc-savebtn[disabled] { opacity: .6; cursor: progress; }
+.dc-archive {
+  background: transparent; border: 1px solid var(--fs-line); color: var(--fs-ink-3);
+  padding: var(--fs-3) var(--fs-4); font-size: var(--fs-size-sm);
+  border-radius: var(--fs-radius); cursor: pointer; min-height: var(--fs-touch);
+}
+.dc-archive:hover { border-color: var(--fs-danger); color: var(--fs-danger); }
+
+.dc :focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .dc-chip { padding: 9px var(--fs-3); font-size: var(--fs-size-sm); min-height: 38px; }
+  .dc-sheetwrap { padding: 0; }
+  .dc-sheet { padding: var(--fs-4) var(--fs-4) var(--fs-6); border-radius: 0; min-height: 100%; max-width: none; }
+  .dc-actions { flex-direction: column-reverse; align-items: stretch; }
+  .dc-archive { width: 100%; }
+}
