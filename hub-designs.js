@@ -130,27 +130,45 @@ export function mount(root, ctx) {
     }
   }
 
-  let ideasLoaded = false;
+  /* Claude — 2026-08-13: this used to cache "already loaded" and return early.
+     When the first load failed after the flag was set, every later click just
+     re-showed an empty box and never tried again — which is exactly what
+     Salman saw. It now fetches every time it opens. Sixty rows is nothing, and
+     a list that is always right beats one that is occasionally cheap. */
   async function toggleIdeas() {
     const box = $("#dg-ideas");
     if (!box.hidden) { box.hidden = true; return; }
     box.hidden = false;
-    if (ideasLoaded) return;
-    box.textContent = "Fetching the board…";
+    box.textContent = "Reading the board…";
+
+    if (cfg.mode !== "authed") { box.textContent = "Sign in to read the Idea Lab."; return; }
     try {
       const token = await cfg.getAccessToken();
-      const rows = await fetch(
+      const res = await fetch(
         `${cfg.restUrl}/ideas?select=id,line,concept,status&order=id.desc&limit=60`,
         { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } },
-      ).then((r) => (r.ok ? r.json() : []));
-      if (!rows.length) { box.textContent = "The Idea Lab is empty."; return; }
-      ideasLoaded = true;
-      box.replaceChildren(...rows.map((r) => {
+      );
+      if (!res.ok) {
+        box.textContent = `Could not read the board (${res.status}).`;
+        return;
+      }
+      const rows = await res.json();
+      if (!Array.isArray(rows) || !rows.length) { box.textContent = "The Idea Lab is empty."; return; }
+
+      const buttons = rows.map((r) => {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "dg-ideapick";
-        b.innerHTML = `<span class="dg-ideal">${esc(r.line || "untitled")}</span>` +
-          (r.concept ? `<span class="dg-ideac">${esc(r.concept)}</span>` : "");
+        const line = document.createElement("span");
+        line.className = "dg-ideal";
+        line.textContent = r.line || "untitled";
+        b.appendChild(line);
+        if (r.concept) {
+          const c = document.createElement("span");
+          c.className = "dg-ideac";
+          c.textContent = r.concept;
+          b.appendChild(c);
+        }
         b.addEventListener("click", () => {
           $("#dg-idea").value = r.concept
             ? `the words "${r.line}" set as the print, in the spirit of: ${r.concept}`
@@ -159,7 +177,8 @@ export function mount(root, ctx) {
           $("#dg-idea").focus();
         });
         return b;
-      }));
+      });
+      box.replaceChildren(...buttons);
     } catch (e) {
       box.textContent = `Could not read the board: ${String(e?.message || e).slice(0, 120)}`;
     }
