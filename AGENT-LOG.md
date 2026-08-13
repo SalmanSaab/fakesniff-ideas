@@ -181,3 +181,15 @@ failures and arbitrary internal diagnostics. Both modules must return non-empty 
 drop database terms plus every `decisions_*`/`tasks_*` identifier. Full suite: 42/42 pass, with JS
 syntax and diff checks clean. Staging Decisions E2E was correctly deferred because migration 005 is
 not installed there. No production action or migration 003 action was taken.
+
+### 2026-08-13 — Codex (deep links and assistant caller boundary)
+Integrated Claude's Lookbook CSP correction and assistant Edge Function, then fixed initial Hub
+deep links so a preloaded `#decisions` is activated before any configuration/authentication early
+return. The assistant review exposed a real fail-closed gap: an authenticated nonmember could reach
+Gemini with empty context, including through image mode. Added an active self-membership gate for the
+fixed FAKESNIFF workspace before body parsing, context reads or model calls; scoped every context read
+to that workspace; corrected Work context from nonexistent `state` to `status`; and removed internal
+provider details from error responses. Boundary tests now prove missing/expired/nonmember requests
+stop before protected data or Gemini, all authorized Supabase requests carry the caller's token, and
+navigate/compose actions cannot leave the frozen five-section allow-list. Full suite: 46/46 pass.
+Migration 003 and production data were untouched.

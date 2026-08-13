@@ -24,6 +24,10 @@
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+/* Codex — 2026-08-13: a valid Supabase account is not enough. Every assistant
+   request must prove active membership in this one workspace before any model
+   or workspace-data call is allowed. The UUID is already public Hub config. */
+const WORKSPACE_ID = "6b9f4ba4-e480-4c08-b67e-4d389db3f9d1";
 
 const GEMINI_ROOT = "https://generativelanguage.googleapis.com/v1beta";
 const TEXT_MODELS = ["gemini-flash-latest", "gemini-2.0-flash"];
@@ -43,7 +47,7 @@ const json = (body: unknown, status = 200) =>
 
 /* The sections the assistant is allowed to send someone to. An open string here
    would let a model invent a destination that does not exist. */
-const SECTIONS = ["home", "work", "idea-lab", "lookbook", "decisions"];
+export const SECTIONS = Object.freeze(["home", "work", "idea-lab", "lookbook", "decisions"]);
 
 const SYSTEM = `You are the assistant inside FAKESNIFF's company hub.
 
@@ -75,12 +79,16 @@ guessing. If the workspace is empty, say so plainly and suggest the smallest
 useful first step.`;
 
 async function callerIdentity(token: string) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) return null;
-  const user = await r.json();
-  return user?.id ? user : null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return null;
+    const user = await r.json();
+    return user?.id ? user : null;
+  } catch {
+    return null;
+  }
 }
 
 /* Every read below goes through the caller's token on purpose. If they are not
@@ -98,19 +106,30 @@ async function readAsCaller(token: string, path: string) {
   }
 }
 
-async function gatherContext(token: string) {
-  const [member, tasks, decisions, lookbook, ideas] = await Promise.all([
-    readAsCaller(token, "members?select=display_name,role&limit=1"),
-    readAsCaller(token, "tasks?select=title,state,next_action&archived_at=is.null&order=updated_at.desc&limit=12"),
-    readAsCaller(token, "decisions?select=title,status,topic,counterparty&archived_at=is.null&order=updated_at.desc&limit=8"),
-    readAsCaller(token, "lookbook_items?select=title,category,ai_analysis&archived_at=is.null&order=created_at.desc&limit=8"),
-    readAsCaller(token, "ideas?select=line,status&order=created_at.desc&limit=8"),
+async function activeCallerMembership(token: string, userId: string) {
+  const rows = await readAsCaller(
+    token,
+    `members?select=workspace_id,user_id,display_name,role,archived_at&workspace_id=eq.${WORKSPACE_ID}&user_id=eq.${encodeURIComponent(userId)}&archived_at=is.null&limit=1`,
+  );
+  if (!Array.isArray(rows)) return null;
+  return rows.find((row: any) =>
+    row?.workspace_id === WORKSPACE_ID && row?.user_id === userId && !row?.archived_at
+  ) ?? null;
+}
+
+async function gatherContext(token: string, member: any) {
+  const workspace = `workspace_id=eq.${WORKSPACE_ID}`;
+  const [tasks, decisions, lookbook, ideas] = await Promise.all([
+    readAsCaller(token, `tasks?select=title,status,next_action&${workspace}&archived_at=is.null&order=updated_at.desc&limit=12`),
+    readAsCaller(token, `decisions?select=title,status,topic,counterparty&${workspace}&archived_at=is.null&order=updated_at.desc&limit=8`),
+    readAsCaller(token, `lookbook_items?select=title,category,ai_analysis&${workspace}&archived_at=is.null&order=created_at.desc&limit=8`),
+    readAsCaller(token, `ideas?select=line,status&${workspace}&order=created_at.desc&limit=8`),
   ]);
 
-  const who = member?.[0] ?? { display_name: "someone", role: "member" };
+  const who = member;
   const lines = [
     `The person is ${who.display_name}, role ${who.role}.`,
-    `Work items: ${tasks.length}${tasks.length ? " — " + tasks.map((t: any) => `${t.title} (${t.state})`).join("; ") : " (none yet)"}`,
+    `Work items: ${tasks.length}${tasks.length ? " — " + tasks.map((t: any) => `${t.title} (${t.status})`).join("; ") : " (none yet)"}`,
     `Decisions: ${decisions.length}${decisions.length ? " — " + decisions.map((d: any) => `${d.title} [${d.status}${d.counterparty ? ", with " + d.counterparty : ""}]`).join("; ") : " (none yet)"}`,
     `Lookbook photos: ${lookbook.length}${lookbook.length ? " — " + lookbook.map((l: any) => l.title || l.category).join("; ") : " (none yet)"}`,
     `Ideas on the board: ${ideas.length}`,
@@ -166,7 +185,7 @@ async function makeImage(prompt: string) {
 
 /* Pull a trailing action line off the reply, and refuse anything that names a
    place we do not have. */
-function splitAction(text: string) {
+export function splitAction(text: string) {
   const match = text.match(/\{\s*"action"[\s\S]*\}\s*$/);
   if (!match) return { reply: text.trim(), action: null };
   let action: any = null;
@@ -195,6 +214,12 @@ Deno.serve(async (req) => {
   const user = await callerIdentity(token);
   if (!user) return json({ error: "That session is no longer valid. Sign in again." }, 401);
 
+  /* Codex — 2026-08-13: this gate intentionally precedes body parsing, image
+     generation, Gemini and all other table reads. A valid non-member learns
+     nothing and cannot use the assistant as a generic model proxy. */
+  const member = await activeCallerMembership(token, String(user.id));
+  if (!member) return json({ error: "This account does not have access to the assistant." }, 403);
+
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "Bad request." }, 400); }
 
@@ -205,8 +230,8 @@ Deno.serve(async (req) => {
     try {
       const { dataUrl } = await makeImage(prompt);
       return json({ image: dataUrl });
-    } catch (e) {
-      return json({ error: "That picture could not be generated. Try describing it differently." , detail: String(e).slice(0,200) }, 502);
+    } catch {
+      return json({ error: "That picture could not be generated. Try describing it differently." }, 502);
     }
   }
 
@@ -216,7 +241,7 @@ Deno.serve(async (req) => {
   const section = SECTIONS.includes(String(body?.section)) ? String(body.section) : "home";
   const history = Array.isArray(body?.history) ? body.history.slice(-8) : [];
 
-  const { who, summary } = await gatherContext(token);
+  const { who, summary } = await gatherContext(token, member);
 
   const contents = [
     ...history.map((h: any) => ({
@@ -237,10 +262,9 @@ ${summary}`;
     const { text, model } = await askGemini(contents, systemText);
     const { reply, action } = splitAction(text);
     return json({ reply, action, model, who: who.display_name });
-  } catch (e) {
+  } catch {
     return json({
       error: "The assistant could not answer just now. Nothing was lost — try again.",
-      detail: String(e).slice(0, 200),
     }, 502);
   }
 });
