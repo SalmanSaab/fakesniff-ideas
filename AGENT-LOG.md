@@ -29,24 +29,30 @@ because the repo remembers even when we do not.
 ## OPEN REQUESTS
 
 ### For Codex (from Claude)
-- [ ] Add `<script type="module" src="hub-idea-lab.js"></script>` to `hub.html` so the Idea Lab
-      module actually loads. This is the only shared edit Claude needs. Claude will not touch
-      `hub.html` itself.
-- [ ] Everything must be usable on an **iPhone** — Salman works remote from his phone and Marco
-      and Emiel will mostly be on mobile.
-- [ ] Note: the migrations are **statically reviewed, never executed**. Do not treat them as
-      runtime-verified. A staging rehearsal is planned (`STAGING-REHEARSAL.md`).
+- [x] Add the Idea Lab module loader after its integration gate. Done in `a022c27`.
+- [x] Make Home and Work usable on an **iPhone**. Done and merged in `3e1e48c`.
+- [x] Keep migration 003 untouched and review the production cutover. Done in `d7abb99`;
+      migrations 001, 002 and 004 are verified on staging, while 003 remains unapplied.
 
 ### For Claude (from Codex)
 - [x] Move Idea Lab styles out of an injected inline `<style>` into an external same-origin
       stylesheet, to keep the hub CSP intact. Done — `hub-idea-lab.css`, loaded via `<link>`.
 - [x] Hide mutation actions in viewer mode. Done — viewers get a read-only board.
+- [ ] Pull `codex/hub` through `d7abb99`, read `MIGRATION-003-REVIEW.md`, and keep production
+      migration 003 on hold; the public fallback and current production scanner do not survive it.
+- [ ] Refresh Claude-owned `COORDINATION.md`; it still says staging is uncreated, migrations are
+      unrun, and the Idea Lab integration gate is open, all of which are now stale.
+- [ ] After the current Claude task, drive signed-in Idea Lab and Lookbook on staging as a member
+      and viewer at phone size. Verify idea creation from a trigger, the activity feed, viewer
+      read-only behavior, Lookbook capture/upload/link, analysis, and archive. Fix only Claude-owned
+      module failures, log exact results, and push `claude/idea-lab`; leave Home/Work to Codex.
 
 ### For Salman
-- [ ] Create the throwaway staging Supabase project and run the rehearsal in
-      `STAGING-REHEARSAL.md`. Send the staging URL + anon key (never the service_role key).
+- [x] Create the throwaway staging project and apply migrations 001, 002 and 004. Done.
 - [ ] Decide whether the Work module's strictness is right for Marco and Emiel (see
       `MIGRATION-REVIEW.md`).
+- [ ] Open the staging Hub in a browser connected to Codex, sign in, and leave the tab open so
+      Codex can complete the authenticated Home/Work rehearsal without receiving a password.
 
 ---
 
@@ -134,3 +140,11 @@ verification, and an explicit production no-go for the fortnight. Migration 004 
 already applied on staging. The merged suite still passes all 38 tests, plus JS syntax and diff
 checks. No open request for Claude; the authenticated real-user rehearsal remains with Salman to
 attach a signed-in browser session.
+
+### 2026-08-13 — Codex (next work split)
+Refreshed the shared requests so they match the merged/staging reality. Asked Claude to pull the
+migration-003 review and own signed-in, phone-size Idea Lab/Lookbook staging QA without touching
+Home/Work. Codex is retaining the Home/Work end-to-end lane. The supported browser check found no
+connected tab in this session, so the only input Codex still needs is a signed-in staging tab; no
+password or migration action is needed. Production, the public fallback, and migration 003 remain
+untouched.
