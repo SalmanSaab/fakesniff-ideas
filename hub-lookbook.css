@@ -120,3 +120,17 @@
 /* Claude — 2026-08-12: see hub-idea-lab.css. Sheets clear the sticky chrome. */
 #lb-detail{z-index:2000}
 #lb-add{z-index:1200}
+
+/* Claude — 2026-08-13: a photo now describes itself the moment it lands, so
+   the card has to show that something is happening. Without this the person
+   uploads, sees nothing change, and assumes it failed — which is exactly what
+   Salman reported when the work was still on an hourly job. */
+.lb-analysing { position: relative; }
+.lb-analysing::after {
+  content: "reading the photo…";
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--fs-accent-dim); color: var(--fs-accent);
+  border-top: 1px solid var(--fs-accent-edge);
+  font-size: var(--fs-size-xs); letter-spacing: .06em;
+  text-align: center; padding: 5px 6px;
+}

@@ -342,20 +342,66 @@ export function mount(root, ctx) {
             added_by: cfg.member.name,
           })]),
         });
+        let uploadedPath = "";
         if (file) {
           const path = `${cfg.workspaceId}/lookbook/${row.id}/${Date.now()}-${safeName(file.name)}`;
           await uploadImage(path, file);
           await api(`lookbook_items?id=eq.${row.id}${wsFilter()}`, {
             method: "PATCH", body: JSON.stringify({ storage_path: path }),
           });
+          uploadedPath = path;
         }
         closeSheet(); await load();
+        /* Describe it now rather than waiting for the hourly job. Deliberately
+           after the sheet closes and the list reloads: the photo is saved and
+           visible whether or not this works, and a failure here must never
+           look like the upload failed. */
+        if (uploadedPath) void describeNow(row.id, uploadedPath, note);
       } catch (e) {
         showErr("could not save. " + String(e.message || e).slice(0, 120));
         saving = false; btn.disabled = false; btn.textContent = "Save";
         sheet.removeAttribute("aria-busy");
       }
     };
+  }
+
+  /* Ask the assistant function to describe a photo, then write the result back
+     and refresh that one card. The hourly job still exists as a safety net, so
+     if this fails the description simply arrives later instead of never. */
+  async function describeNow(itemId, storagePath, note) {
+    const card = document.querySelector(`[data-id="${itemId}"]`);
+    card?.classList.add("lb-analysing");
+    try {
+      const token = await cfg.getAccessToken();
+      const res = await fetch(`${cfg.restUrl.replace(/\/rest\/v1$/, "")}/functions/v1/assistant`, {
+        method: "POST",
+        headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "analyse", storagePath, note }),
+      });
+      if (!res.ok) { console.warn("lookbook: describe failed", res.status); return; }
+      const out = await res.json();
+      if (!out?.description) return;
+
+      const patch = {
+        ai_analysis: { description: out.description, tags: out.tags || [], source: "gemini" },
+        ai_analysed_at: new Date().toISOString(),
+      };
+      if (out.tags?.length) patch.tags = out.tags;
+      /* Only file it when the person left it unsorted. A category someone chose
+         is never overwritten by the machine. */
+      const existing = state.items.find((i) => String(i.id) === String(itemId));
+      if (out.category && (!existing?.category || existing.category === "unsorted")) {
+        patch.category = out.category;
+      }
+      await api(`lookbook_items?id=eq.${itemId}${wsFilter()}`, {
+        method: "PATCH", body: JSON.stringify(patch),
+      });
+      await load();
+    } catch (e) {
+      console.warn("lookbook: describe threw", String(e).slice(0, 160));
+    } finally {
+      document.querySelector(`[data-id="${itemId}"]`)?.classList.remove("lb-analysing");
+    }
   }
 
   const safeName = (n) => String(n || "photo.jpg").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-60);

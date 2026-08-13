@@ -212,6 +212,90 @@ export function splitAction(text: string) {
   return { reply, action };
 }
 
+
+/* ---------------------------------------------------------------------------
+ * Describing a Lookbook photo.
+ *
+ * Claude — 2026-08-13: this already existed as an hourly GitHub Action, which
+ * is the wrong shape for someone standing in a factory: a photo taken now
+ * could sit undescribed for fifty minutes. Doing it here means seconds.
+ *
+ * The image is fetched with the CALLER's token, so a person can only ever have
+ * their own workspace's photos described. The hourly job stays as a safety net
+ * for anything that fails here.
+ * ------------------------------------------------------------------------ */
+const LOOKBOOK_BRIEF = `Look at this clothing or material reference and describe it for a small streetwear brand's design library.
+
+Return JSON only, with exactly these keys:
+  "description": 2-3 plain sentences on what the item is, the fabric or material,
+                 the fit or cut, the colours, and any construction detail worth
+                 noticing (seams, ribbing, hardware, print method).
+  "tags":        3-6 short lowercase tags we could file it under.
+  "category":    one of: tee, hoodie, sweat, longsleeve, jacket, knit, trousers,
+                 headwear, accessory, print, graphic, typography, colour, fabric,
+                 detail, fit, packaging, campaign, store, other
+
+Be concrete and factual. Describe what is actually there, not what it evokes.
+Do not guess a brand name. If something is genuinely unclear from the photo, say
+so in the description rather than inventing it.`;
+
+const LOOKBOOK_CATEGORIES = new Set([
+  "tee", "hoodie", "sweat", "longsleeve", "jacket", "knit", "trousers",
+  "headwear", "accessory", "print", "graphic", "typography", "colour",
+  "fabric", "detail", "fit", "packaging", "campaign", "store", "other",
+]);
+
+async function describePhoto(token: string, storagePath: string, note: string) {
+  const img = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/lookbook/${encodeURI(storagePath)}`,
+    { headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` } },
+  );
+  if (!img.ok) throw new Error("could not read that photo");
+
+  const mime = img.headers.get("Content-Type") ?? "image/jpeg";
+  const bytes = new Uint8Array(await img.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  const b64 = btoa(binary);
+
+  let prompt = LOOKBOOK_BRIEF;
+  if (note) prompt += `
+
+The person who saved it wrote: "${note}" — treat that as a hint about what mattered to them, not as fact.`;
+
+  let lastError = "";
+  for (const model of TEXT_MODELS) {
+    try {
+      const r = await fetch(`${GEMINI_ROOT}/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+        }),
+      });
+      if (!r.ok) { lastError = `${model}: ${(await r.text()).slice(0, 140)}`; continue; }
+      const data = await r.json();
+      const text = (data?.candidates?.[0]?.content?.parts ?? []).map((x: any) => x.text ?? "").join("").trim();
+      if (!text) { lastError = `${model}: empty`; continue; }
+      const parsed = JSON.parse(text);
+      const tags = (Array.isArray(parsed.tags) ? parsed.tags : [])
+        .map((t: any) => String(t).trim().toLowerCase().slice(0, 40)).filter(Boolean).slice(0, 6);
+      const category = String(parsed.category ?? "").trim().toLowerCase();
+      return {
+        description: String(parsed.description ?? "").trim().slice(0, 2000),
+        tags,
+        category: LOOKBOOK_CATEGORIES.has(category) ? category : "",
+      };
+    } catch (e) {
+      lastError = `${model}: ${String(e).slice(0, 120)}`;
+    }
+  }
+  throw new Error(lastError || "no model answered");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -244,6 +328,18 @@ Deno.serve(async (req) => {
       return json({ image: dataUrl });
     } catch {
       return json({ error: "That picture could not be generated. Try describing it differently." }, 502);
+    }
+  }
+
+  /* Describing a photo the moment it is uploaded. */
+  if (body?.mode === "analyse") {
+    const path = String(body.storagePath ?? "").trim();
+    if (!path) return json({ error: "No photo to look at." }, 400);
+    try {
+      const result = await describePhoto(token, path, String(body.note ?? "").slice(0, 400));
+      return json(result);
+    } catch (e) {
+      return json({ error: "That photo could not be described just now.", detail: String(e).slice(0, 200) }, 502);
     }
   }
 
