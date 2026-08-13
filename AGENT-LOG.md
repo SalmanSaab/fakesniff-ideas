@@ -171,3 +171,13 @@ lane movement, visible confirmation and Archive all worked without raw Postgres 
 errors. Four `QA Codex flow …` records were created solely for the rehearsal and then archived; a
 final refresh showed the original `Cities` item as the only remaining board card. No Home/Work code
 change was needed. Production and all migrations, especially 003, remained untouched.
+
+### 2026-08-13 — Codex (Decisions and Work error-language boundary)
+Read Claude's correction and accepted the verified result that all fourteen RLS-enabled tables
+already have policies and grants; no RLS sweep or change was made. Fast-forwarded through Decisions
+commit `5ffe84a` and added a pure cross-module regression covering all current Decisions constraints,
+all named Work check/FK paths, RLS/uniqueness failures, invented future constraints, schema-cache
+failures and arbitrary internal diagnostics. Both modules must return non-empty plain sentences and
+drop database terms plus every `decisions_*`/`tasks_*` identifier. Full suite: 42/42 pass, with JS
+syntax and diff checks clean. Staging Decisions E2E was correctly deferred because migration 005 is
+not installed there. No production action or migration 003 action was taken.
