@@ -170,6 +170,11 @@ export function createAssistant(config) {
       const data = await res.json().catch(() => ({}));
       thinking.remove();
 
+      if (res.status === 404) {
+        say("assistant", "The assistant is not installed on this copy of the Hub. "
+          + "You are on the test version — open salmansaab.github.io/fakesniff-hub and I will be there.");
+        return;
+      }
       if (!res.ok) { say("assistant", data.error || "That did not work. Try again."); return; }
 
       const reply = data.reply || "…";
@@ -262,6 +267,10 @@ if (typeof window !== "undefined") {
   const tick = setInterval(() => {
     const cfg = globalThis.FAKESNIFF_HUB_CONFIG;
     const shellVisible = !document.getElementById("app-shell")?.hidden;
+    /* Mark the throwaway copy so it can never be mistaken for the real one. */
+    if (cfg?.supabaseUrl && !cfg.supabaseUrl.includes("kayxejofqyxoqlberrgw")) {
+      document.body.classList.add("is-staging");
+    }
     if (cfg?.supabaseUrl && shellVisible && accessToken()) {
       clearInterval(tick);
       createAssistant(cfg);

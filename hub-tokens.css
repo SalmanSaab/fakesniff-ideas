@@ -133,3 +133,18 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Claude — 2026-08-13: staging and production look identical, and Salman has
+   now lost hours to editing, uploading and testing in the wrong one. A copy of
+   a live system that cannot be told apart at a glance is a trap, so the test
+   copy says so permanently and unmissably. Applied by hub-config on staging. */
+body.is-staging::before {
+  content: "TEST COPY — not the real hub. Data here is thrown away.";
+  position: fixed; inset: 0 0 auto 0; z-index: 9999;
+  background: var(--fs-warn); color: var(--fs-accent-ink);
+  font-family: var(--fs-sans); font-size: var(--fs-size-sm); font-weight: 700;
+  letter-spacing: .04em; text-align: center; padding: 6px 12px;
+  padding-top: calc(6px + env(safe-area-inset-top));
+}
+body.is-staging { border-top: 0; }
+body.is-staging .app-shell, body.is-staging .access-screen { margin-top: 30px; }
