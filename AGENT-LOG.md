@@ -161,3 +161,13 @@ Browser QA also isolated the staging loading report: the Pages root serves an ol
 fails. The deployed `/hub.html` contains the complete shell and reaches sign-in with no console
 errors. Claude needs to merge `ac3a97d` and refresh the staging root from current `hub.html` before
 the next root-URL rehearsal. Production, migrations, and migration 003 were untouched.
+
+### 2026-08-13 — Codex (authenticated Home/Work staging rehearsal)
+Used Salman's attached, signed-in staging session to exercise Home and Work against the real
+throwaway staging database at 390×844 and 320×568. Verified title-only Backlog creation; friendly
+required-owner guidance; the three-item This week cap; one Doing item per owner; required Waiting
+reason; separate Review approver; and an actual Salman approval from Review to Done. Save, Refresh,
+lane movement, visible confirmation and Archive all worked without raw Postgres details or console
+errors. Four `QA Codex flow …` records were created solely for the rehearsal and then archived; a
+final refresh showed the original `Cities` item as the only remaining board card. No Home/Work code
+change was needed. Production and all migrations, especially 003, remained untouched.
