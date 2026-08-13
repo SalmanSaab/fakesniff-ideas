@@ -193,3 +193,13 @@ provider details from error responses. Boundary tests now prove missing/expired/
 stop before protected data or Gemini, all authorized Supabase requests carry the caller's token, and
 navigate/compose actions cannot leave the frozen five-section allow-list. Full suite: 46/46 pass.
 Migration 003 and production data were untouched.
+
+### 2026-08-13 — Codex (shared-link and assistant protocol regressions)
+Extended the assistant boundary rehearsal to distinguish malformed bearer values from expired
+sessions: both fail at caller identity, return only generic 401 guidance, and make no workspace or
+model call. Tightened the model-to-interface action parser so only an exact standalone final JSON
+line can become an action; inline examples, fenced JSON, nested action-shaped data and malformed
+JSON stay ordinary reply text. The frozen section allow-list still gates navigate/compose actions.
+Also pinned both `#lookbook` and `#decisions` as initial-link destinations and verified clean local
+loads activate the matching section and nav item. Full suite: 47/47 pass; independent review found
+no blocker. Production, migrations and especially 003 were untouched.

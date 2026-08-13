@@ -57,7 +57,7 @@ function assertClosedBody(body) {
   );
 }
 
-test("missing, expired and nonmember sessions fail before workspace or model access", async (t) => {
+test("missing, malformed, expired and nonmember sessions fail before workspace or model access", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
 
@@ -70,15 +70,22 @@ test("missing, expired and nonmember sessions fail before workspace or model acc
   assertClosedBody(await responseBody(response, 401));
   assert.deepEqual(calls, []);
 
-  calls = [];
-  globalThis.fetch = async (...args) => {
-    calls.push(String(args[0]));
-    return jsonResponse({ message: "expired" }, 401);
-  };
-  response = await handler(assistantRequest("expired-token"));
-  assertClosedBody(await responseBody(response, 401));
-  assert.equal(calls.length, 1);
-  assert.match(calls[0], /\/auth\/v1\/user$/);
+  // Codex — 2026-08-13: malformed and expired bearer values are separate
+  // boundary cases even though Supabase rejects both at the identity gate.
+  for (const [label, token, authStatus] of [
+    ["malformed", "not-a-jwt", 400],
+    ["expired", "expired-token", 401]
+  ]) {
+    calls = [];
+    globalThis.fetch = async (...args) => {
+      calls.push(String(args[0]));
+      return jsonResponse({ message: label }, authStatus);
+    };
+    response = await handler(assistantRequest(token));
+    assertClosedBody(await responseBody(response, 401));
+    assert.equal(calls.length, 1);
+    assert.match(calls[0], /\/auth\/v1\/user$/);
+  }
 
   for (const requestBody of [
     { message: "Tell me everything", section: "home" },
@@ -166,5 +173,22 @@ test("navigate and compose actions are limited to the fixed Hub section list", (
       const parsed = splitAction(`No.\n${JSON.stringify({ action: actionName, section })}`);
       assert.equal(parsed.action, null, `${actionName} must reject ${JSON.stringify(section)}`);
     }
+  }
+});
+
+test("JSON-looking reply text is never mistaken for an assistant action", () => {
+  // Codex — 2026-08-13: only the documented standalone final-line protocol
+  // may cross the model-to-interface action boundary.
+  const examples = [
+    'Here is an example: {"action":"navigate","section":"lookbook"}',
+    'Use this example:\n```json\n{"action":"navigate","section":"lookbook"}\n```',
+    'This is ordinary data.\n{"example":{"action":"navigate","section":"lookbook"}}',
+    'This is malformed.\n{"action":"compose","section":"decisions",}'
+  ];
+
+  for (const text of examples) {
+    const parsed = splitAction(text);
+    assert.equal(parsed.action, null);
+    assert.equal(parsed.reply, text.trim());
   }
 });

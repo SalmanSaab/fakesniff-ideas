@@ -183,19 +183,31 @@ async function makeImage(prompt: string) {
   throw new Error("the model returned no image");
 }
 
-/* Pull a trailing action line off the reply, and refuse anything that names a
-   place we do not have. */
+/* Codex — 2026-08-13: only an exact standalone final line can be an action.
+   JSON shown inline, fenced as an example, or nested inside ordinary data must
+   remain reply text. Refuse any destination the Hub does not have. */
 export function splitAction(text: string) {
-  const match = text.match(/\{\s*"action"[\s\S]*\}\s*$/);
-  if (!match) return { reply: text.trim(), action: null };
+  const original = String(text ?? "").trim();
+  const lines = original.split(/\r?\n/);
+  const candidate = lines.at(-1)?.trim() ?? "";
+  if (!candidate.startsWith("{") || !candidate.endsWith("}")) {
+    return { reply: original, action: null };
+  }
+
   let action: any = null;
-  try { action = JSON.parse(match[0]); } catch { return { reply: text.trim(), action: null }; }
-  const reply = text.slice(0, match.index).trim();
+  try { action = JSON.parse(candidate); } catch { return { reply: original, action: null }; }
+  if (!action || Array.isArray(action) || typeof action !== "object" || typeof action.action !== "string") {
+    return { reply: original, action: null };
+  }
+
+  const reply = lines.slice(0, -1).join("\n").trim();
 
   if (action?.action === "navigate" || action?.action === "compose") {
-    if (!SECTIONS.includes(String(action.section))) return { reply, action: null };
+    if (typeof action.section !== "string" || !SECTIONS.includes(action.section)) {
+      return { reply, action: null };
+    }
   } else if (action?.action !== "image") {
-    return { reply, action: null };
+    return { reply: original, action: null };
   }
   return { reply, action };
 }
