@@ -188,6 +188,43 @@ export function mount(root, ctx) {
     host.replaceChildren(d);
   }
 
+  /* Generate an actual product photograph of the idea, using the shared house
+     brief so it looks like a FAKESNIFF product rather than generic streetwear. */
+  async function makeRealShot(idea) {
+    const out = q("#ilab-shotout");
+    const btn = q("#ilab-makeshot");
+    if (!out || !btn) return;
+    if (cfg.mode !== "authed") { out.textContent = "Sign in to generate pictures."; return; }
+    btn.disabled = true; btn.textContent = "Making it…";
+    out.textContent = "";
+    try {
+      const { promptFromIdea, referenceFromLookbook } = await import("./hub-brand.js");
+      const token = await cfg.getAccessToken();
+      const auth = { apikey: cfg.anonKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+      const refRows = await fetch(
+        `${cfg.restUrl}/lookbook_items?select=ai_analysis&ai_analysed_at=not.is.null&archived_at=is.null&limit=6`,
+        { headers: auth },
+      ).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+
+      const res = await fetch(`${cfg.restUrl.replace(/\/rest\/v1$/, "")}/functions/v1/assistant`, {
+        method: "POST", headers: auth,
+        body: JSON.stringify({ mode: "image", prompt: promptFromIdea(idea, referenceFromLookbook(refRows || [])) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.image) { out.textContent = data.error || "That picture could not be made."; return; }
+      const img = document.createElement("img");
+      img.className = "ilab-shotimg";
+      img.src = data.image;
+      img.alt = `${idea.line} on a t-shirt`;
+      out.replaceChildren(img);
+    } catch (e) {
+      out.textContent = `That did not work: ${String(e?.message || e).slice(0, 140)}`;
+    } finally {
+      btn.disabled = false; btn.textContent = "Make another";
+    }
+  }
+
   /* ----- shirt preview ----- */
   function shirtImage(mode) {
     if (shirtCache[mode]) return shirtCache[mode];
@@ -344,6 +381,14 @@ export function mount(root, ctx) {
         <div class="ilab-shirtbox"><canvas id="ilab-sv-b"></canvas><span>black</span></div>
         <div class="ilab-shirtbox"><canvas id="ilab-sv-c"></canvas><span>cream</span></div>
       </div>
+      <!-- Claude — 2026-08-13: the two canvases above are text drawn on a photo
+           of a blank. Useful for reading the line, useless for judging whether
+           the thing is worth making. This makes the real one. -->
+      <div class="ilab-realshot">
+        <button id="ilab-makeshot" class="ilab-makeshot" type="button">See it made</button>
+        <span class="ilab-shothint">a real photograph, using our own materials</span>
+        <div id="ilab-shotout" class="ilab-shotout"></div>
+      </div>
       ${i.sparked_by ? `<div class="ilab-src">sparked by: ${esc(i.sparked_by)}
         ${sourceUrl ? `<br><a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(sourceUrl)}</a>` : ""}</div>` : ""}
       ${canEdit ? `
@@ -363,6 +408,8 @@ export function mount(root, ctx) {
     const sub = /^\(.*\)$/.test(i.concept || "") ? i.concept : "";
     drawShirt(q("#ilab-sv-b"), i.line, sub, "black");
     drawShirt(q("#ilab-sv-c"), i.line, sub, "cream");
+    const shotBtn = q("#ilab-makeshot");
+    if (shotBtn) shotBtn.onclick = () => makeRealShot(i);
     sheet.querySelector(".ilab-close").onclick = closeDetail;
     if (canEdit) {
       sheet.querySelectorAll("#ilab-setstatus button").forEach((b) => (b.onclick = async () => {

@@ -142,3 +142,20 @@
    topbar, and the page behind it must not scroll. Both were wrong on iOS. */
 body.hub-sheet-open{overflow:hidden;touch-action:none}
 #ilab-detail{z-index:2000}
+
+/* Claude — 2026-08-13: the drawn canvases show the words; this shows the
+   product. Marco will not judge an idea from text on a flat blank. */
+.ilab-realshot { margin-top: var(--fs-4); }
+.ilab-makeshot {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: var(--fs-3) var(--fs-4); border-radius: var(--fs-radius);
+  font-family: inherit; font-size: var(--fs-size-base); font-weight: 700;
+  cursor: pointer; min-height: var(--fs-touch);
+}
+.ilab-makeshot[disabled] { opacity: .6; cursor: progress; }
+.ilab-shothint { color: var(--fs-ink-3); font-size: var(--fs-size-sm); margin-left: var(--fs-3); }
+.ilab-shotout { margin-top: var(--fs-3); color: var(--fs-ink-2); font-size: var(--fs-size-sm); }
+.ilab-shotimg {
+  display: block; width: 100%; border-radius: var(--fs-radius);
+  border: 1px solid var(--fs-line);
+}

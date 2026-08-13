@@ -14,30 +14,9 @@
  * already stores, describes and files things properly.
  */
 
-const GARMENTS = [
-  ["hoodie", "Hoodie", "a heavyweight oversized pullover hoodie"],
-  ["tee", "T-shirt", "a boxy heavyweight cotton t-shirt"],
-  ["longsleeve", "Long sleeve", "a long-sleeve cotton top"],
-  ["sweat", "Sweatshirt", "a heavyweight crewneck sweatshirt"],
-  ["jacket", "Jacket", "a workwear-cut jacket"],
-  ["cap", "Cap", "a six-panel cap"],
-  ["beanie", "Beanie", "a ribbed knit beanie"],
-  ["trousers", "Trousers", "a pair of relaxed-fit trousers"],
-  ["tote", "Tote", "a heavy cotton tote bag"],
-];
-
-const COLOURS = [
-  ["black", "Black"], ["washed-black", "Washed black"], ["cream", "Cream"],
-  ["bone", "Bone"], ["grey", "Heather grey"], ["olive", "Olive"],
-  ["navy", "Navy"], ["brown", "Brown"],
-];
-
-const SHOTS = [
-  ["flat", "Flat lay", "photographed flat from directly above on a plain concrete surface, soft even daylight"],
-  ["hanger", "On a hanger", "hanging on a plain metal rail against a plain wall, soft daylight"],
-  ["worn", "Worn", "worn by a model shot from the chest up, plain studio background, natural light, face not the subject"],
-  ["detail", "Close detail", "a close macro shot of the print and the fabric texture"],
-];
+/* The garment vocabulary and the house brief live in hub-brand.js so this
+   screen and the Idea Lab cannot drift apart about what FAKESNIFF looks like. */
+import { GARMENTS, COLOURS, SHOTS, buildGarmentPrompt, referenceFromLookbook } from "./hub-brand.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -53,23 +32,11 @@ function injectStyles() {
   document.head.appendChild(link);
 }
 
-/* The model gives back what you ask for, so the asking matters more than
-   anything else here. A person types "skull graphic"; this turns that into a
-   product photograph brief. */
-export function buildPrompt({ idea, garment, colour, shot }) {
-  const g = GARMENTS.find(([v]) => v === garment) || GARMENTS[0];
-  const c = COLOURS.find(([v]) => v === colour) || COLOURS[0];
-  const s = SHOTS.find(([v]) => v === shot) || SHOTS[0];
-  return [
-    `A realistic product photograph of ${g[2]} in ${c[1].toLowerCase()}.`,
-    `The garment carries this graphic: ${idea}.`,
-    `It is ${s[2]}.`,
-    "Shot like a streetwear brand's own product photography: honest, unstyled,",
-    "no props, no text overlay, no watermark, no logo other than the graphic",
-    "described. The fabric weight and the print should look real rather than",
-    "rendered — visible weave, natural creases, real shadows.",
-  ].join(" ");
+/* Kept as a named export so the prompt can be tested without a browser. */
+export function buildPrompt(opts) {
+  return buildGarmentPrompt(opts);
 }
+
 
 export function mount(root, ctx) {
   injectStyles();
@@ -77,7 +44,23 @@ export function mount(root, ctx) {
   const canEdit = cfg.mode === "authed" && cfg.member.role !== "viewer";
 
   let busy = false;
-  let last = null;   // { dataUrl, prompt }
+  let last = null;      // { dataUrl, prompt }
+  let reference = "";   // a real material description from our own Lookbook
+
+  /* Anchor generation to material the brand actually owns. If the Lookbook has
+     nothing described yet this stays empty, which is the right answer — an
+     invented reference would be worse than none. */
+  void (async () => {
+    if (cfg.mode !== "authed") return;
+    try {
+      const token = await cfg.getAccessToken();
+      const rows = await fetch(
+        `${cfg.restUrl}/lookbook_items?select=ai_analysis&ai_analysed_at=not.is.null&archived_at=is.null&order=created_at.desc&limit=6`,
+        { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } },
+      ).then((r) => (r.ok ? r.json() : []));
+      reference = referenceFromLookbook(rows || []);
+    } catch { /* generation works fine without it */ }
+  })();
 
   root.classList.add("dg", "fs-scope");
   root.innerHTML = shell();
@@ -97,8 +80,9 @@ export function mount(root, ctx) {
     if (!idea) { note("Describe the graphic first — even a few words."); $("#dg-idea").focus(); return; }
     if (cfg.mode !== "authed") { note("Sign in to generate pictures."); return; }
 
-    const prompt = buildPrompt({
-      idea,
+    const prompt = buildGarmentPrompt({
+      graphic: idea,
+      reference,
       garment: $("#dg-garment").value,
       colour: $("#dg-colour").value,
       shot: $("#dg-shot").value,
