@@ -30,7 +30,11 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const WORKSPACE_ID = "6b9f4ba4-e480-4c08-b67e-4d389db3f9d1";
 
 const GEMINI_ROOT = "https://generativelanguage.googleapis.com/v1beta";
-const TEXT_MODELS = ["gemini-flash-latest", "gemini-2.0-flash"];
+const TEXT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"];
+/* Claude — 2026-08-13: vision has its own list. gemini-2.0-flash was retired
+   under us and took photo description down with it while chat kept working,
+   because chat happened to succeed on the first candidate. */
+const VISION_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
 const IMAGE_MODEL = "gemini-2.5-flash-image";
 
 const CORS = {
@@ -138,7 +142,7 @@ async function gatherContext(token: string, member: any) {
 }
 
 async function askGemini(messages: any[], systemText: string) {
-  let lastError = "";
+  const failures: string[] = [];
   for (const model of TEXT_MODELS) {
     try {
       const r = await fetch(`${GEMINI_ROOT}/models/${model}:generateContent?key=${GEMINI_KEY}`, {
@@ -150,17 +154,17 @@ async function askGemini(messages: any[], systemText: string) {
           generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
         }),
       });
-      if (!r.ok) { lastError = `${model}: ${(await r.text()).slice(0, 160)}`; continue; }
+      if (!r.ok) { failures.push(`${model}: ${(await r.text()).slice(0, 160)}`); continue; }
       const data = await r.json();
       const text = (data?.candidates?.[0]?.content?.parts ?? [])
         .map((p: any) => p.text ?? "").join("").trim();
       if (text) return { text, model };
-      lastError = `${model}: empty reply`;
+      failures.push(`${model}: empty reply`);
     } catch (e) {
-      lastError = `${model}: ${String(e).slice(0, 120)}`;
+      failures.push(`${model}: ${String(e).slice(0, 160)}`);
     }
   }
-  throw new Error(lastError || "no model answered");
+  throw new Error(failures.join(" | ") || "no model answered");
 }
 
 async function makeImage(prompt: string) {
@@ -265,8 +269,8 @@ async function describePhoto(token: string, storagePath: string, note: string) {
 
 The person who saved it wrote: "${note}" — treat that as a hint about what mattered to them, not as fact.`;
 
-  let lastError = "";
-  for (const model of TEXT_MODELS) {
+  const failures: string[] = [];
+  for (const model of VISION_MODELS) {
     try {
       const r = await fetch(`${GEMINI_ROOT}/models/${model}:generateContent?key=${GEMINI_KEY}`, {
         method: "POST",
@@ -276,10 +280,10 @@ The person who saved it wrote: "${note}" — treat that as a hint about what mat
           generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
         }),
       });
-      if (!r.ok) { lastError = `${model}: ${(await r.text()).slice(0, 140)}`; continue; }
+      if (!r.ok) { failures.push(`${model}: ${(await r.text()).slice(0, 200)}`); continue; }
       const data = await r.json();
       const text = (data?.candidates?.[0]?.content?.parts ?? []).map((x: any) => x.text ?? "").join("").trim();
-      if (!text) { lastError = `${model}: empty`; continue; }
+      if (!text) { failures.push(`${model}: empty reply`); continue; }
       const parsed = JSON.parse(text);
       const tags = (Array.isArray(parsed.tags) ? parsed.tags : [])
         .map((t: any) => String(t).trim().toLowerCase().slice(0, 40)).filter(Boolean).slice(0, 6);
@@ -290,10 +294,10 @@ The person who saved it wrote: "${note}" — treat that as a hint about what mat
         category: LOOKBOOK_CATEGORIES.has(category) ? category : "",
       };
     } catch (e) {
-      lastError = `${model}: ${String(e).slice(0, 120)}`;
+      failures.push(`${model}: ${String(e).slice(0, 160)}`);
     }
   }
-  throw new Error(lastError || "no model answered");
+  throw new Error(failures.join(" | ") || "no model answered");
 }
 
 
