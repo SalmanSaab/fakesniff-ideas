@@ -35,7 +35,11 @@ const TEXT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-li
    under us and took photo description down with it while chat kept working,
    because chat happened to succeed on the first candidate. */
 const VISION_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const IMAGE_MODEL = "gemini-2.5-flash-image";
+const IMAGE_MODELS = [
+  "gemini-2.5-flash-image",
+  "gemini-2.0-flash-preview-image-generation",
+  "imagen-3.0-generate-002",
+];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -168,23 +172,42 @@ async function askGemini(messages: any[], systemText: string) {
 }
 
 async function makeImage(prompt: string) {
-  const r = await fetch(`${GEMINI_ROOT}/models/${IMAGE_MODEL}:generateContent?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["IMAGE"] },
-    }),
-  });
-  if (!r.ok) throw new Error((await r.text()).slice(0, 200));
-  const data = await r.json();
-  for (const part of data?.candidates?.[0]?.content?.parts ?? []) {
-    const inline = part.inlineData ?? part.inline_data;
-    if (inline?.data) {
-      return { dataUrl: `data:${inline.mimeType ?? inline.mime_type ?? "image/png"};base64,${inline.data}` };
+  /* Claude — 2026-08-13: model names and the shape of the image request have
+     both moved more than once. Try the candidates in order and, crucially,
+     report what every one of them said — the previous version threw away the
+     reason and left "try describing it differently" as the only clue, which
+     was wrong as often as it was right. */
+  const failures: string[] = [];
+  for (const model of IMAGE_MODELS) {
+    for (const modalities of [["IMAGE"], ["TEXT", "IMAGE"]]) {
+      try {
+        const r = await fetch(`${GEMINI_ROOT}/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: modalities },
+          }),
+        });
+        if (!r.ok) {
+          failures.push(`${model} [${modalities.join("+")}]: ${(await r.text()).slice(0, 180)}`);
+          continue;
+        }
+        const data = await r.json();
+        for (const part of data?.candidates?.[0]?.content?.parts ?? []) {
+          const inline = part.inlineData ?? part.inline_data;
+          if (inline?.data) {
+            return { dataUrl: `data:${inline.mimeType ?? inline.mime_type ?? "image/png"};base64,${inline.data}` };
+          }
+        }
+        const blocked = data?.promptFeedback?.blockReason;
+        failures.push(`${model} [${modalities.join("+")}]: ${blocked ? "refused: " + blocked : "no image in the reply"}`);
+      } catch (e) {
+        failures.push(`${model} [${modalities.join("+")}]: ${String(e).slice(0, 140)}`);
+      }
     }
   }
-  throw new Error("the model returned no image");
+  throw new Error(failures.join(" | ").slice(0, 700));
 }
 
 /* Codex — 2026-08-13: only an exact standalone final line can be an action.
@@ -423,8 +446,19 @@ Deno.serve(async (req) => {
     try {
       const { dataUrl } = await makeImage(prompt);
       return json({ image: dataUrl });
-    } catch {
-      return json({ error: "That picture could not be generated. Try describing it differently." }, 502);
+    } catch (e) {
+      const detail = String(e instanceof Error ? e.message : e);
+      /* Claude — 2026-08-13: a quota refusal is not a prompt problem, and
+         telling someone to "describe it differently" when the account simply
+         has no image quota sends them in circles rewording a perfectly good
+         sentence. Name the real reason. */
+      const quota = /429|exceeded your current quota|billing/i.test(detail);
+      return json({
+        error: quota
+          ? "Picture generation is not switched on for this account yet. Reading and describing photos still works — this needs billing enabled on the Google AI key."
+          : "That picture could not be generated.",
+        detail: detail.slice(0, 700),
+      }, quota ? 402 : 502);
     }
   }
 

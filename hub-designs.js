@@ -120,6 +120,7 @@ export function mount(root, ctx) {
         setState("idle");
         return;
       }
+
       last = { dataUrl: data.image, prompt, idea };
       $("#dg-out").innerHTML =
         `<img class="dg-img" src="${esc(data.image)}" alt="${esc(idea)} on a ${esc($("#dg-garment").value)}">`;
