@@ -70,6 +70,19 @@ export function mount(root, ctx) {
   $("#dg-again").addEventListener("click", () => generate());
   $("#dg-save").addEventListener("click", saveToLookbook);
   $("#dg-download").addEventListener("click", download);
+  $("#dg-pick").addEventListener("click", toggleIdeas);
+
+  /* If someone pressed "Open in Designs" on an idea, it is waiting for us. */
+  try {
+    const seed = JSON.parse(sessionStorage.getItem("fakesniff-design-seed") || "null");
+    if (seed?.line) {
+      $("#dg-idea").value = seed.concept
+        ? `the words "${seed.line}" set as the print, in the spirit of: ${seed.concept}`
+        : `the words "${seed.line}" set as the print`;
+      sessionStorage.removeItem("fakesniff-design-seed");
+      note("Taken from the Idea Lab. Edit it however you like before generating.");
+    }
+  } catch { /* nothing waiting */ }
 
   return () => { root.innerHTML = ""; root.classList.remove("dg", "fs-scope"); };
 
@@ -114,6 +127,41 @@ export function mount(root, ctx) {
       setState("idle");
     } finally {
       busy = false;
+    }
+  }
+
+  let ideasLoaded = false;
+  async function toggleIdeas() {
+    const box = $("#dg-ideas");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    if (ideasLoaded) return;
+    box.textContent = "Fetching the board…";
+    try {
+      const token = await cfg.getAccessToken();
+      const rows = await fetch(
+        `${cfg.restUrl}/ideas?select=id,line,concept,status&order=id.desc&limit=60`,
+        { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } },
+      ).then((r) => (r.ok ? r.json() : []));
+      if (!rows.length) { box.textContent = "The Idea Lab is empty."; return; }
+      ideasLoaded = true;
+      box.replaceChildren(...rows.map((r) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "dg-ideapick";
+        b.innerHTML = `<span class="dg-ideal">${esc(r.line || "untitled")}</span>` +
+          (r.concept ? `<span class="dg-ideac">${esc(r.concept)}</span>` : "");
+        b.addEventListener("click", () => {
+          $("#dg-idea").value = r.concept
+            ? `the words "${r.line}" set as the print, in the spirit of: ${r.concept}`
+            : `the words "${r.line}" set as the print`;
+          box.hidden = true;
+          $("#dg-idea").focus();
+        });
+        return b;
+      }));
+    } catch (e) {
+      box.textContent = `Could not read the board: ${String(e?.message || e).slice(0, 120)}`;
     }
   }
 
@@ -191,10 +239,14 @@ export function mount(root, ctx) {
     </div>
 
     <form id="dg-form" class="dg-form">
-      <label class="dg-lbl" for="dg-idea">What is the graphic?</label>
+      <div class="dg-lblrow">
+        <label class="dg-lbl" for="dg-idea">What is the graphic?</label>
+        <button id="dg-pick" class="dg-pick" type="button">Take one from the Idea Lab</button>
+      </div>
       <textarea id="dg-idea" class="dg-input dg-area"
         placeholder="A distorted CCTV timestamp across the chest, cracked white ink"></textarea>
       <p class="dg-hint">Describe it the way you would to a printer. Detail helps.</p>
+      <div id="dg-ideas" class="dg-ideas" hidden></div>
 
       <div class="dg-row">
         <div>

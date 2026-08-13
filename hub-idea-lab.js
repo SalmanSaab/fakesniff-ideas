@@ -181,10 +181,29 @@ export function mount(root, ctx) {
     catch { /* activity is best-effort */ }
   }
   function showErr(m) {
+    const text = String(m || "something went wrong");
+    /* Claude — 2026-08-13: this only ever wrote into the page behind the sheet.
+       When a save failed the person saw the sheet sit there doing nothing, shut
+       it, and found the message underneath — if they looked. So it now speaks
+       inside whatever is actually in front of them. */
+    const sheet = q("#ilab-sheet");
+    const overlay = q("#ilab-detail");
+    if (sheet && overlay && overlay.classList.contains("open")) {
+      let box = sheet.querySelector(".ilab-sheeterr");
+      if (!box) {
+        box = document.createElement("p");
+        box.className = "ilab-errbox ilab-sheeterr";
+        box.setAttribute("role", "alert");
+        sheet.appendChild(box);
+      }
+      box.textContent = text;
+      box.scrollIntoView({ block: "nearest" });
+      return;
+    }
     const host = q(".ilab-err");
     const d = document.createElement("div");
     d.className = "ilab-errbox";
-    d.textContent = String(m || "something went wrong");
+    d.textContent = text;
     host.replaceChildren(d);
   }
 
@@ -386,6 +405,7 @@ export function mount(root, ctx) {
            the thing is worth making. This makes the real one. -->
       <div class="ilab-realshot">
         <button id="ilab-makeshot" class="ilab-makeshot" type="button">See it made</button>
+        <button id="ilab-todesign" class="ilab-todesign" type="button">Open in Designs</button>
         <span class="ilab-shothint">a real photograph, using our own materials</span>
         <div id="ilab-shotout" class="ilab-shotout"></div>
       </div>
@@ -410,6 +430,17 @@ export function mount(root, ctx) {
     drawShirt(q("#ilab-sv-c"), i.line, sub, "cream");
     const shotBtn = q("#ilab-makeshot");
     if (shotBtn) shotBtn.onclick = () => makeRealShot(i);
+    const toDesign = q("#ilab-todesign");
+    if (toDesign) toDesign.onclick = () => {
+      /* Hand the idea over rather than making them retype it. sessionStorage
+         because it is a one-hop handoff, not something worth storing. */
+      try {
+        sessionStorage.setItem("fakesniff-design-seed", JSON.stringify({
+          line: i.line || "", concept: i.concept || "",
+        }));
+      } catch { /* the picker in Designs still works without this */ }
+      location.hash = "#designs";
+    };
     sheet.querySelector(".ilab-close").onclick = closeDetail;
     if (canEdit) {
       sheet.querySelectorAll("#ilab-setstatus button").forEach((b) => (b.onclick = async () => {
