@@ -19,6 +19,7 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON="$(command -v python || command -v python3)"
 TMP="${TEMP:-/tmp}"
 PROD="$TMP/hubprod"
 STAGE="$TMP/hubstage"
@@ -50,6 +51,13 @@ copy_into() {
       [ -z "$skip" ] && cp "$f" "$dest/"
     done
   fi
+
+  # Claude — 2026-08-13: stamp every local script and stylesheet with the
+  # deploy time. Without this the browser keeps serving the previous copy from
+  # cache and a deploy appears to do nothing — we lost a good part of an
+  # evening to "it is live on the server but the page has not changed", and
+  # telling someone to hard-refresh is a workaround, not a fix.
+  "$PYTHON" "$SRC/stamp_assets.py" "$dest/hub.html" || echo "  $name: WARNING could not stamp assets"
 
   # The root URL must be the same shell as hub.html, or a stale copy of it
   # gets served the current JavaScript and the page hangs. That happened.
