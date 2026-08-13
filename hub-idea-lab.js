@@ -124,9 +124,17 @@ export function mount(root, ctx) {
       const authed = cfg.mode === "authed";
       // After migration 001 the legacy `activity` table is no longer written by
       // clients: the database generates audit rows into `activity_events`.
+      /* Claude — 2026-08-13, after Codex's privacy review: this asked for
+         select=*, which handed the browser every audit row in full. event_data
+         holds before/after snapshots of the changed record, so the feed was
+         receiving far more than the three things it displays. Only the two
+         legacy fields are projected out of the blob now; the snapshots stay in
+         the database. */
       const feedPath = authed
-        ? `activity_events?select=*&order=occurred_at.desc&limit=60${wsFilter()}`
-        : `activity?select=*&order=at.desc&limit=60${wsFilter()}`;
+        ? "activity_events?select=actor_id,action,entity_type,occurred_at"
+          + ",legacy_who:event_data->>who,legacy_what:event_data->>what"
+          + `&order=occurred_at.desc&limit=60${wsFilter()}`
+        : `activity?select=who,what,at&order=at.desc&limit=60${wsFilter()}`;
       const [ideas, triggers, feed, members] = await Promise.all([
         api(`ideas?select=*&order=id.desc${wsFilter()}`),
         api(`triggers?select=*&order=id.desc&limit=400${wsFilter()}`),
@@ -154,9 +162,10 @@ export function mount(root, ctx) {
     if (!authed) return rows;
     const names = new Map(members.map((m) => [m.user_id, m.display_name]));
     return rows.map((r) => {
-      const d = r.event_data || {};
       // legacy rows copied by migration 001 already carry who/what
-      if (d.who || d.what) return { who: d.who || "someone", what: d.what || "", at: r.occurred_at };
+      if (r.legacy_who || r.legacy_what) {
+        return { who: r.legacy_who || "someone", what: r.legacy_what || "", at: r.occurred_at };
+      }
       const verb = { insert: "added", update: "updated", delete: "removed" }[r.action] || r.action;
       const thing = String(r.entity_type || "record").replace(/s$/, "");
       return { who: names.get(r.actor_id) || "someone", what: `${verb} a ${thing}`, at: r.occurred_at };
