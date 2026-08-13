@@ -334,14 +334,50 @@ async function fetchLinkedImage(raw: string) {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("only http and https links");
   if (isPrivateHost(url.hostname)) throw new Error("that address is not reachable");
 
-  const r = await fetch(url.href, {
-    redirect: "follow",
-    headers: { "User-Agent": "FAKESNIFF-Hub/1.0", Accept: "image/*" },
-  });
-  if (!r.ok) throw new Error("that link did not give us a picture");
+  /* Claude — 2026-08-13: a browser-shaped User-Agent, because a fair number of
+     sites refuse anything that looks automated and Marco pasting a normal
+     product link should not hit that wall. */
+  const UA = "Mozilla/5.0 (compatible; FAKESNIFF-Hub/1.0; +https://fakesniff.nl)";
 
-  const type = (r.headers.get("Content-Type") ?? "").split(";")[0].trim();
-  if (!type.startsWith("image/")) throw new Error("that link is not an image");
+  let r = await fetch(url.href, {
+    redirect: "follow",
+    headers: { "User-Agent": UA, Accept: "image/*,text/html;q=0.9" },
+  });
+  if (!r.ok) throw new Error(`that link did not open (the site said ${r.status})`);
+
+  let type = (r.headers.get("Content-Type") ?? "").split(";")[0].trim();
+
+  /* People paste the page they are looking at, not the image file on it.
+     Expecting anyone to right-click and copy an image address is not how this
+     gets used, so when we are handed a page we find its main picture the same
+     way every link preview does. */
+  if (type.startsWith("text/html")) {
+    const html = (await r.text()).slice(0, 400_000);
+    const pick = (re: RegExp) => { const m = html.match(re); return m ? m[1] : ""; };
+    const candidate =
+      pick(/<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i)
+      || pick(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+      || pick(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+      || pick(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)
+      || pick(/<img[^>]+src=["']([^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
+
+    if (!candidate) throw new Error("we could not find a picture on that page");
+
+    let imageUrl: URL;
+    try { imageUrl = new URL(candidate, url.href); } catch { throw new Error("that page's picture link is broken"); }
+    if (imageUrl.protocol !== "http:" && imageUrl.protocol !== "https:") throw new Error("that page's picture link is not usable");
+    if (isPrivateHost(imageUrl.hostname)) throw new Error("that address is not reachable");
+
+    r = await fetch(imageUrl.href, {
+      redirect: "follow",
+      headers: { "User-Agent": UA, Accept: "image/*", Referer: url.origin },
+    });
+    if (!r.ok) throw new Error("the picture on that page could not be downloaded");
+    type = (r.headers.get("Content-Type") ?? "").split(";")[0].trim();
+    url = imageUrl;
+  }
+
+  if (!type.startsWith("image/")) throw new Error("that link does not lead to a picture");
 
   const declared = Number(r.headers.get("Content-Length") ?? "0");
   if (declared > MAX_LINK_BYTES) throw new Error("that picture is too large");
