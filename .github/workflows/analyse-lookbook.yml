@@ -1,0 +1,33 @@
+# Claude — 2026-08-12: describe Lookbook photos automatically.
+# The API key stays server-side; a key in browser code is public to anyone
+# who opens the page.
+name: describe lookbook photos
+
+on:
+  schedule:
+    - cron: "20 * * * *"     # hourly, so a photo taken in Turkey is described soon after
+  workflow_dispatch:          # and a button to run it now
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fakesniff-lookbook-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: describe new photos
+        run: python analyse_lookbook.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_WORKSPACE_ID: ${{ secrets.SUPABASE_WORKSPACE_ID }}
