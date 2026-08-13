@@ -70,6 +70,20 @@ select id, public from storage.buckets where id = 'lookbook';
 Expect 0 items and a `lookbook` bucket with **public = false**. If that bucket
 says true, stop — the photos would be readable by anyone.
 
+## Step 3b — migration 005, decisions
+
+Paste `migrations/20260813_005_decisions.sql`.
+
+This is the Turkey one: what was agreed on fabric, price, MOQ, delivery and
+samples, so it is not sitting in someone's memory when you are unreachable.
+
+```sql
+select count(*) from public.decisions;
+```
+
+0 rows, no error. The screen for it may land after you fly — the table being
+there now means it does not need a second trip to this dashboard.
+
 ## Step 4 — close the door before anyone is invited
 
 Dashboard → **Authentication → Providers → Email**, and **turn off public
