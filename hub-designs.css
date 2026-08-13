@@ -1,0 +1,89 @@
+/* FAKESNIFF Hub — Designs. Owner: Claude.
+   External file so it satisfies the hub CSP (style-src 'self').
+   Colours come from hub-tokens.css. Never write a literal here. */
+
+.dg { color: var(--fs-ink); }
+.dg * { box-sizing: border-box; }
+
+.dg-bar { margin-bottom: var(--fs-5); }
+.dg-mark { font-family: var(--fs-serif); font-style: italic; font-size: var(--fs-size-lg); line-height: 1; }
+.dg-mark small {
+  font-style: normal; font-family: var(--fs-sans); font-size: var(--fs-size-xs);
+  letter-spacing: var(--fs-track-label); text-transform: uppercase;
+  color: var(--fs-ink-3); display: block; margin-top: var(--fs-1);
+}
+
+.dg-form { display: grid; gap: var(--fs-1); max-width: 720px; }
+.dg-lbl {
+  font-size: var(--fs-size-xs); text-transform: uppercase;
+  letter-spacing: var(--fs-track-label); color: var(--fs-ink-3); margin-top: var(--fs-3);
+}
+.dg-input {
+  background: var(--fs-surface-2); border: 1px solid var(--fs-line); color: var(--fs-ink);
+  padding: var(--fs-3); font-size: 16px;   /* 16px stops iOS zooming on focus */
+  border-radius: var(--fs-radius); font-family: inherit; width: 100%;
+}
+.dg-input:focus { outline: none; border-color: var(--fs-accent); }
+.dg-area { min-height: 96px; resize: vertical; line-height: var(--fs-leading-body); }
+.dg-hint { color: var(--fs-ink-3); font-size: var(--fs-size-sm); margin: var(--fs-1) 0 0; }
+
+.dg-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--fs-3); }
+
+.dg-go {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: var(--fs-3) var(--fs-5); font-size: var(--fs-size-md); font-weight: 700;
+  border-radius: var(--fs-radius); cursor: pointer; min-height: var(--fs-touch);
+  margin-top: var(--fs-5);
+}
+.dg-go[disabled] { opacity: .6; cursor: progress; }
+.dg-noteline {
+  color: var(--fs-warn); font-size: var(--fs-size-sm);
+  margin: var(--fs-3) 0 0; line-height: var(--fs-leading-body);
+}
+
+.dg-working {
+  display: flex; align-items: center; gap: var(--fs-3);
+  color: var(--fs-ink-2); margin-top: var(--fs-5); font-size: var(--fs-size-base);
+}
+.dg-working p { margin: 0; }
+.dg-pulse {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--fs-accent);
+  animation: dg-beat 1.1s ease-in-out infinite; flex: none;
+}
+@keyframes dg-beat { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+
+.dg-result { margin-top: var(--fs-5); max-width: 720px; }
+.dg-out { background: var(--fs-surface); border: 1px solid var(--fs-line); border-radius: var(--fs-radius-lg); overflow: hidden; }
+.dg-img { display: block; width: 100%; height: auto; }
+
+.dg-actions { display: flex; gap: var(--fs-2); flex-wrap: wrap; margin-top: var(--fs-3); }
+.dg-quiet {
+  background: transparent; border: 1px solid var(--fs-line); color: var(--fs-ink-2);
+  padding: var(--fs-3) var(--fs-4); border-radius: var(--fs-radius);
+  font-family: inherit; font-size: var(--fs-size-base); cursor: pointer; min-height: var(--fs-touch);
+}
+.dg-quiet:hover { border-color: var(--fs-ink-3); color: var(--fs-ink); }
+.dg-keep {
+  background: var(--fs-accent); color: var(--fs-accent-ink); border: none;
+  padding: var(--fs-3) var(--fs-4); border-radius: var(--fs-radius);
+  font-family: inherit; font-size: var(--fs-size-base); font-weight: 700;
+  cursor: pointer; min-height: var(--fs-touch); margin-left: auto;
+}
+.dg-keep[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Said plainly, because a generated picture looking this convincing is exactly
+   how someone ends up approving a sample that does not exist. */
+.dg-caveat {
+  color: var(--fs-ink-3); font-size: var(--fs-size-sm);
+  line-height: var(--fs-leading-body); margin: var(--fs-4) 0 0;
+  border-left: 2px solid var(--fs-warn); padding-left: var(--fs-3);
+}
+
+.dg :focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .dg-row { grid-template-columns: 1fr; }
+  .dg-actions { flex-direction: column; }
+  .dg-keep { margin-left: 0; }
+  .dg-quiet, .dg-keep { width: 100%; }
+}

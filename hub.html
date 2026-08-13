@@ -24,6 +24,9 @@
   <!-- Claude — 2026-08-12: Lookbook (Emiel's visual reference container). -->
   <script type="module" src="hub-lookbook.js"></script>
   <script type="module" src="hub-decisions.js"></script>
+  <!-- Claude — 2026-08-13: Designs. Not a second Lookbook: this is where a
+       graphic gets tried on a garment before anyone cuts fabric. -->
+  <script type="module" src="hub-designs.js"></script>
   <!-- Claude — 2026-08-13: the assistant. Talks only to the Edge Function;
        the Gemini key never reaches this page. -->
   <script type="module" src="hub-assistant.js"></script>
@@ -353,7 +356,7 @@
       <!-- Codex — 2026-08-11: intentionally empty integration root. The separately owned Idea Lab module mounts here through window.Hub. -->
       <section id="idea-lab" class="page-section" aria-label="Idea Lab"></section>
       <section id="lookbook" class="page-section" aria-label="Lookbook"></section>
-      <section id="designs" class="page-section placeholder-section" aria-labelledby="designs-title"><p class="kicker">04 / Product development</p><h2 id="designs-title">Designs</h2><div class="module-placeholder"><span class="preview-label">Next module</span><h3>Design records and private files come next.</h3><p>No internal design names or assets are embedded in this publishable page.</p></div></section>
+      <section id="designs" class="page-section" aria-labelledby="designs-title"><p class="kicker">04 / Product development</p><h2 id="designs-title">Designs</h2><div class="module-placeholder"><span class="preview-label">Loading</span><h3>Try it on the garment.</h3><p>Sign in to generate. No internal design names or assets are embedded in this publishable page.</p></div></section>
       <!-- Claude — 2026-08-13: no longer a placeholder. The module mounts here
            once it registers; the copy below is what a signed-out or still-loading
            visitor sees, and deliberately contains no private decision text. -->

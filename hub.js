@@ -31,7 +31,7 @@ const FLAG_LABELS = {
   missing_assets: "Missing assets"
 };
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
-const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions"]);
+const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions", "designs"]);
 const PRODUCTION_SUPABASE_HOST = "kayxejofqyxoqlberrgw.supabase.co";
 const registeredSections = new Map();
 
