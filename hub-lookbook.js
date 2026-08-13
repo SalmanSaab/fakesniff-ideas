@@ -331,26 +331,41 @@ export function mount(root, ctx) {
       saving = true; btn.disabled = true; btn.textContent = "Saving…";
       sheet.setAttribute("aria-busy", "true");
       try {
-        // Create the row first so the image path can be scoped to its id,
-        // which is what the storage policy checks.
-        const [row] = await api("lookbook_items", {
+        /* Claude — 2026-08-13: the row used to be created first and the photo
+           attached afterwards, which meant storage_path was null at insert.
+           The lookbook_has_content constraint requires a photo, a link or a
+           note, so adding a photo with neither of the other two was rejected
+           outright — Salman had to type something in the optional box to save
+           a picture. Generating the id here lets the image upload first and
+           the row arrive complete, in one insert. */
+        const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+
+        let uploadedPath = "";
+        let sourceUrl = url;
+
+        /* A pasted link should become a real picture, not just a link. The
+           browser cannot fetch most other sites' images, so the function does
+           it and hands the bytes back. If that fails we still save the link. */
+        let fetched = null;
+        if (!file && url) fetched = await fetchLinkImage(url);
+
+        const incoming = file || fetched?.file;
+        if (incoming) {
+          uploadedPath = `${cfg.workspaceId}/lookbook/${id}/${Date.now()}-${safeName(incoming.name)}`;
+          await uploadImage(uploadedPath, incoming);
+        }
+
+        await api("lookbook_items", {
           method: "POST",
-          headers: { Prefer: "return=representation" },
+          headers: { Prefer: "return=minimal" },
           body: JSON.stringify([stamp({
-            note, source_url: url,
+            id, note, source_url: sourceUrl,
+            storage_path: uploadedPath || null,
             category: f.get("category") || "unsorted",
             added_by: cfg.member.name,
           })]),
         });
-        let uploadedPath = "";
-        if (file) {
-          const path = `${cfg.workspaceId}/lookbook/${row.id}/${Date.now()}-${safeName(file.name)}`;
-          await uploadImage(path, file);
-          await api(`lookbook_items?id=eq.${row.id}${wsFilter()}`, {
-            method: "PATCH", body: JSON.stringify({ storage_path: path }),
-          });
-          uploadedPath = path;
-        }
+        const row = { id };
         closeSheet(); await load();
         /* Describe it now rather than waiting for the hourly job. Deliberately
            after the sheet closes and the list reloads: the photo is saved and
@@ -363,6 +378,28 @@ export function mount(root, ctx) {
         sheet.removeAttribute("aria-busy");
       }
     };
+  }
+
+  /* Ask the function to download an image the person pasted a link to. Kept
+     server-side because the browser is blocked from reading most other sites'
+     images, and because a link is worth far more as a picture you can see. */
+  async function fetchLinkImage(url) {
+    try {
+      const token = await cfg.getAccessToken();
+      const res = await fetch(`${cfg.restUrl.replace(/\/rest\/v1$/, "")}/functions/v1/assistant`, {
+        method: "POST",
+        headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "fetch-image", url }),
+      });
+      if (!res.ok) { console.warn("lookbook: link fetch failed", res.status); return null; }
+      const out = await res.json();
+      if (!out?.dataUrl) return null;
+      const blob = await (await fetch(out.dataUrl)).blob();
+      return { file: new File([blob], out.name || "linked.jpg", { type: blob.type }) };
+    } catch (e) {
+      console.warn("lookbook: link fetch threw", String(e).slice(0, 160));
+      return null;
+    }
   }
 
   /* Ask the assistant function to describe a photo, then write the result back

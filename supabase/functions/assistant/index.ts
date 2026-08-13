@@ -296,6 +296,63 @@ The person who saved it wrote: "${note}" — treat that as a hint about what mat
   throw new Error(lastError || "no model answered");
 }
 
+
+/* Downloading a picture someone pasted a link to.
+ *
+ * The browser cannot fetch most other sites' images, so this does it. That
+ * means the function will retrieve a URL a person supplies, which is worth
+ * bounding carefully:
+ *   - http/https only, so no file:// or other schemes
+ *   - refuses private and loopback addresses, so it cannot be pointed at
+ *     anything inside Supabase's network
+ *   - image content-types only
+ *   - 10MB ceiling
+ *   - no redirects followed blindly past the first hop
+ */
+const MAX_LINK_BYTES = 10 * 1024 * 1024;
+
+function isPrivateHost(hostname: string) {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal")) return true;
+  if (/^\[?::1\]?$/.test(h)) return true;
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!v4) return false;
+  const [a, b] = [Number(v4[1]), Number(v4[2])];
+  return a === 10 || a === 127 || a === 0
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 169 && b === 254);
+}
+
+async function fetchLinkedImage(raw: string) {
+  let url: URL;
+  try { url = new URL(raw); } catch { throw new Error("that is not a web address"); }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("only http and https links");
+  if (isPrivateHost(url.hostname)) throw new Error("that address is not reachable");
+
+  const r = await fetch(url.href, {
+    redirect: "follow",
+    headers: { "User-Agent": "FAKESNIFF-Hub/1.0", Accept: "image/*" },
+  });
+  if (!r.ok) throw new Error("that link did not give us a picture");
+
+  const type = (r.headers.get("Content-Type") ?? "").split(";")[0].trim();
+  if (!type.startsWith("image/")) throw new Error("that link is not an image");
+
+  const declared = Number(r.headers.get("Content-Length") ?? "0");
+  if (declared > MAX_LINK_BYTES) throw new Error("that picture is too large");
+
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length > MAX_LINK_BYTES) throw new Error("that picture is too large");
+
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  const name = (url.pathname.split("/").pop() || "linked").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-60);
+  return { dataUrl: `data:${type};base64,${btoa(binary)}`, name };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -328,6 +385,16 @@ Deno.serve(async (req) => {
       return json({ image: dataUrl });
     } catch {
       return json({ error: "That picture could not be generated. Try describing it differently." }, 502);
+    }
+  }
+
+  /* Turning a pasted link into a real picture. */
+  if (body?.mode === "fetch-image") {
+    try {
+      const out = await fetchLinkedImage(String(body.url ?? ""));
+      return json(out);
+    } catch (e) {
+      return json({ error: String(e instanceof Error ? e.message : e).slice(0, 160) }, 400);
     }
   }
 
