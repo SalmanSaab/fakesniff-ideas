@@ -152,16 +152,17 @@
 
       <section id="home" class="page-section hero-section" aria-labelledby="home-title">
         <div class="hero-copy">
-          <p id="home-member-kicker" class="kicker">Workspace overview</p>
-          <h1 id="home-title">Make the work<br><em>visible.</em></h1>
-          <p class="hero-note">One place for what is moving, what is blocked, and what needs a decision.</p>
+          <p id="home-member-kicker" class="kicker" data-t="home.workspace_overview">Workspace overview</p>
+          <!-- Codex — 2026-08-30: translate the leaf text so i18n never removes the intended line break or emphasis. -->
+          <h1 id="home-title"><span data-t="home.hero_lead">Make the work</span><br><em data-t="home.hero_emphasis">visible.</em></h1>
+          <p class="hero-note" data-t="home.hero_note">One place for what is moving, what is blocked, and what needs a decision.</p>
         </div>
-        <div class="week-signal home-focus" role="group" aria-label="Your next move">
+        <div class="week-signal home-focus" role="group" aria-label="Your next move" data-t-aria="home.next_move_aria">
           <!-- Codex — 2026-08-13: truthful first-use copy prevents an empty workspace from looking stuck while authenticated data is resolved. -->
-          <span id="home-focus-date" class="signal-label">Today</span>
-          <span id="home-focus-value" class="signal-value">Nothing is planned yet.</span>
-          <span id="home-focus-detail" class="signal-detail" role="status" aria-live="polite" aria-atomic="true">Open Work to create the first shared item.</span>
-          <button id="home-focus-action" class="signal-action" type="button" hidden>Open item</button>
+          <span id="home-focus-date" class="signal-label" data-t="home.today">Today</span>
+          <span id="home-focus-value" class="signal-value" data-t="home.nothing_planned">Nothing is planned yet.</span>
+          <span id="home-focus-detail" class="signal-detail" role="status" aria-live="polite" aria-atomic="true" data-t="home.create_first_hint">Open Work to create the first shared item.</span>
+          <button id="home-focus-action" class="signal-action" type="button" hidden data-t="home.open_item">Open item</button>
         </div>
 
         <!-- Codex — 2026-08-13: a private, server-receipted check-in that
@@ -169,40 +170,40 @@
         <article class="panel home-changes-panel" aria-labelledby="home-changes-title">
           <div class="panel-heading home-changes-heading">
             <div>
-              <p class="eyebrow">Automatic check-in</p>
-              <h2 id="home-changes-title">Since your last look</h2>
+              <p class="eyebrow" data-t="home.checkin_eyebrow">Automatic check-in</p>
+              <h2 id="home-changes-title" data-t="home.since_last_look">Since your last look</h2>
             </div>
             <div class="home-changes-actions">
-              <span id="home-changes-status" class="micro-status" role="status" aria-live="polite">Checking…</span>
-              <button id="home-changes-retry" class="micro-link home-changes-retry" type="button" hidden>Try again</button>
+              <span id="home-changes-status" class="micro-status" role="status" aria-live="polite" data-t="home.checking">Checking…</span>
+              <button id="home-changes-retry" class="micro-link home-changes-retry" type="button" hidden data-t="home.retry">Try again</button>
             </div>
           </div>
           <div id="home-changes-list" class="home-changes-list" aria-live="polite" aria-busy="true">
-            <p class="module-empty-copy">Checking recent changes…</p>
+            <p class="module-empty-copy" data-t="home.checking_recent">Checking recent changes…</p>
           </div>
           <p id="home-changes-note" class="home-changes-note" hidden></p>
         </article>
 
-        <div class="stat-grid" aria-label="Workspace snapshot">
+        <div class="stat-grid" aria-label="Workspace snapshot" data-t-aria="home.snapshot_aria">
           <article class="stat-card">
             <span id="home-active-work-count" class="stat-number">00</span>
-            <span class="stat-label">Active work</span>
-            <span id="home-active-work-note" class="stat-note">No active owners</span>
+            <span class="stat-label" data-t="home.active_work">Active work</span>
+            <span id="home-active-work-note" class="stat-note" data-t="home.no_active_owners">No active owners</span>
           </article>
           <article class="stat-card">
             <span id="home-week-count" class="stat-number">00</span>
-            <span class="stat-label">This week</span>
-            <span class="stat-note">Maximum three</span>
+            <span class="stat-label" data-t="home.this_week">This week</span>
+            <span class="stat-note" data-t="home.maximum_three">Maximum three</span>
           </article>
           <article class="stat-card stat-card-alert">
             <span id="home-review-count" class="stat-number">00</span>
-            <span class="stat-label">Need review</span>
-            <span class="stat-note">Approver-controlled</span>
+            <span class="stat-label" data-t="home.need_review">Need review</span>
+            <span class="stat-note" data-t="home.approver_controlled">Approver-controlled</span>
           </article>
           <article class="stat-card">
             <span id="home-waiting-count" class="stat-number">00</span>
-            <span class="stat-label">Blocked</span>
-            <span class="stat-note">Waiting needs a reason</span>
+            <span class="stat-label" data-t="home.blocked">Blocked</span>
+            <span class="stat-note" data-t="home.waiting_reason_rule">Waiting needs a reason</span>
           </article>
         </div>
 
@@ -210,10 +211,10 @@
           <article class="panel priorities-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Current focus</p>
-                <h2>This week</h2>
+                <p class="eyebrow" data-t="home.current_focus">Current focus</p>
+                <h2 data-t="home.this_week">This week</h2>
               </div>
-              <a class="micro-link" href="#work">Open board</a>
+              <a class="micro-link" href="#work" data-t="home.open_board">Open board</a>
             </div>
             <div id="home-week-list" class="home-work-list"></div>
           </article>
@@ -221,8 +222,8 @@
           <article class="panel attention-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Attention</p>
-                <h2>Review and blockers</h2>
+                <p class="eyebrow" data-t="home.attention">Attention</p>
+                <h2 data-t="home.review_and_blockers">Review and blockers</h2>
               </div>
               <span class="alert-dot" aria-hidden="true"></span>
             </div>
@@ -232,16 +233,16 @@
           <article class="panel rhythm-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Team rhythm</p>
-                <h2>One short loop</h2>
+                <p class="eyebrow" data-t="home.team_rhythm">Team rhythm</p>
+                <h2 data-t="home.one_short_loop">One short loop</h2>
               </div>
             </div>
-            <div class="rhythm-steps" aria-label="Weekly operating rhythm">
-              <div class="rhythm-step"><span>Start</span><strong>Choose</strong><small>up to 3</small></div>
+            <div class="rhythm-steps" aria-label="Weekly operating rhythm" data-t-aria="home.rhythm_aria">
+              <div class="rhythm-step"><span data-t="home.rhythm_start">Start</span><strong data-t="home.rhythm_choose">Choose</strong><small data-t="home.rhythm_up_to_three">up to 3</small></div>
               <div class="rhythm-line" aria-hidden="true"></div>
-              <div class="rhythm-step"><span>Move</span><strong>Do</strong><small>one each</small></div>
+              <div class="rhythm-step"><span data-t="home.rhythm_move">Move</span><strong data-t="home.rhythm_do">Do</strong><small data-t="home.rhythm_one_each">one each</small></div>
               <div class="rhythm-line" aria-hidden="true"></div>
-              <div class="rhythm-step"><span>Finish</span><strong>Close</strong><small>record it</small></div>
+              <div class="rhythm-step"><span data-t="home.rhythm_finish">Finish</span><strong data-t="home.rhythm_close">Close</strong><small data-t="home.rhythm_record">record it</small></div>
             </div>
           </article>
         </div>
@@ -250,105 +251,105 @@
       <section id="work" class="page-section" aria-labelledby="work-title" tabindex="-1">
         <div class="section-heading">
           <div>
-            <p class="kicker">02 / Shared work</p>
-            <h2 id="work-title">Work</h2>
-            <p>Every active item gets one owner, a next move, a finish condition and a due date.</p>
+            <p class="kicker" data-t="work.shared_kicker">02 / Shared work</p>
+            <h2 id="work-title" data-t="work.heading">Work</h2>
+            <p data-t="work.intro">Every active item gets one owner, a next move, a finish condition and a due date.</p>
           </div>
-          <button id="new-work-button" class="primary-button" type="button">New work <span aria-hidden="true">＋</span></button>
+          <button id="new-work-button" class="primary-button" type="button"><span data-t="work.new_work">New work</span> <span aria-hidden="true">＋</span></button>
         </div>
 
         <!-- Codex — 2026-08-12: filters stay open on larger screens and collapse
              into one obvious row on phones so today's cards appear sooner. -->
         <details id="work-tools" class="work-tools" open>
-          <summary>Search and filter work</summary>
-          <div class="work-toolbar" aria-label="Work board controls">
+          <summary data-t="work.tools_summary">Search and filter work</summary>
+          <div class="work-toolbar" aria-label="Work board controls" data-t-aria="work.toolbar_aria">
             <div class="work-control work-search">
-              <label for="work-search">Search work</label>
-              <input id="work-search" type="search" placeholder="Title, next step, flag…" autocomplete="off">
+              <label for="work-search" data-t="work.search_label">Search work</label>
+              <input id="work-search" type="search" placeholder="Title, next step, flag…" data-t-placeholder="work.search_placeholder" autocomplete="off">
             </div>
             <div class="work-control">
-              <label for="work-owner-filter">Owner</label>
+              <label for="work-owner-filter" data-t="work.owner">Owner</label>
               <select id="work-owner-filter">
-                <option value="all">All owners</option>
-                <option value="unassigned">Owner needed</option>
+                <option value="all" data-t="work.all_owners">All owners</option>
+                <option value="unassigned" data-t="work.owner_needed">Owner needed</option>
               </select>
             </div>
-            <p id="work-data-note" class="preview-reset-note"><strong>Private data.</strong> Loaded for verified members only.</p>
+            <p id="work-data-note" class="preview-reset-note"><strong data-t="work.private_data">Private data.</strong> <span data-t="work.verified_only">Loaded for verified members only.</span></p>
           </div>
         </details>
 
         <p id="work-board-status" class="sr-only" role="status" aria-live="polite"></p>
-        <div id="work-loading" class="board-loading" role="status" hidden>Loading work…</div>
+        <div id="work-loading" class="board-loading" role="status" hidden data-t="work.loading">Loading work…</div>
         <!-- Codex — 2026-08-11: phones show one clearly selected stage instead of a hidden six-column strip. -->
         <div class="work-stage-picker">
-          <label for="work-stage-filter">Show stage</label>
+          <label for="work-stage-filter" data-t="work.show_stage">Show stage</label>
           <select id="work-stage-filter">
-            <option value="backlog">Backlog (0)</option>
-            <option value="this_week" selected>This week (0)</option>
-            <option value="doing">Doing (0)</option>
-            <option value="review">Review / Decision (0)</option>
-            <option value="waiting">Waiting / Blocked (0)</option>
-            <option value="done">Done (0)</option>
+            <option value="backlog" data-t="work.status_backlog">Backlog (0)</option>
+            <option value="this_week" selected data-t="work.status_this_week">This week (0)</option>
+            <option value="doing" data-t="work.status_doing">Doing (0)</option>
+            <option value="review" data-t="work.status_review">Review / Decision (0)</option>
+            <option value="waiting" data-t="work.status_waiting">Waiting / Blocked (0)</option>
+            <option value="done" data-t="work.status_done">Done (0)</option>
           </select>
         </div>
-        <div class="board" aria-label="FAKESNIFF work board">
-          <section class="board-column" data-work-status="backlog" aria-labelledby="backlog-title"><header><h3 id="backlog-title">Backlog</h3><span id="backlog-count">0</span></header><div id="backlog-items" class="board-items"></div></section>
-          <section class="board-column board-column-focus is-mobile-current" data-work-status="this_week" aria-labelledby="week-title"><header><h3 id="week-title">This week</h3><span id="this_week-count">0</span></header><div id="this_week-items" class="board-items"></div></section>
-          <section class="board-column" data-work-status="doing" aria-labelledby="doing-title"><header><h3 id="doing-title">Doing</h3><span id="doing-count">0</span></header><div id="doing-items" class="board-items"></div></section>
-          <section class="board-column" data-work-status="review" aria-labelledby="review-title"><header><h3 id="review-title">Review / Decision</h3><span id="review-count">0</span></header><div id="review-items" class="board-items"></div></section>
-          <section class="board-column" data-work-status="waiting" aria-labelledby="waiting-title"><header><h3 id="waiting-title">Waiting / Blocked</h3><span id="waiting-count">0</span></header><div id="waiting-items" class="board-items"></div></section>
-          <section class="board-column" data-work-status="done" aria-labelledby="done-title"><header><h3 id="done-title">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
+        <div class="board" aria-label="FAKESNIFF work board" data-t-aria="work.board_aria">
+          <section class="board-column" data-work-status="backlog" aria-labelledby="backlog-title"><header><h3 id="backlog-title" data-t="work.status_backlog">Backlog</h3><span id="backlog-count">0</span></header><div id="backlog-items" class="board-items"></div></section>
+          <section class="board-column board-column-focus is-mobile-current" data-work-status="this_week" aria-labelledby="week-title"><header><h3 id="week-title" data-t="work.status_this_week">This week</h3><span id="this_week-count">0</span></header><div id="this_week-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="doing" aria-labelledby="doing-title"><header><h3 id="doing-title" data-t="work.status_doing">Doing</h3><span id="doing-count">0</span></header><div id="doing-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="review" aria-labelledby="review-title"><header><h3 id="review-title" data-t="work.status_review">Review / Decision</h3><span id="review-count">0</span></header><div id="review-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="waiting" aria-labelledby="waiting-title"><header><h3 id="waiting-title" data-t="work.status_waiting">Waiting / Blocked</h3><span id="waiting-count">0</span></header><div id="waiting-items" class="board-items"></div></section>
+          <section class="board-column" data-work-status="done" aria-labelledby="done-title"><header><h3 id="done-title" data-t="work.status_done">Done</h3><span id="done-count">0</span></header><div id="done-items" class="board-items"></div></section>
         </div>
 
         <aside class="integration-notice integration-notice-confirmed" aria-labelledby="work-system-title">
           <div class="notice-icon" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <p class="eyebrow">Source of truth</p>
-            <h3 id="work-system-title">Work lives in this Hub</h3>
-            <p id="work-mode-copy">Signed-in changes are written to the private workspace.</p>
+            <p class="eyebrow" data-t="work.source_truth">Source of truth</p>
+            <h3 id="work-system-title" data-t="work.lives_here">Work lives in this Hub</h3>
+            <p id="work-mode-copy" data-t="work.private_mode">Signed-in changes are written to the private workspace.</p>
           </div>
-          <span id="member-role-pill" class="status-pill status-live">Member</span>
+          <span id="member-role-pill" class="status-pill status-live" data-t="work.member">Member</span>
         </aside>
 
         <dialog id="work-dialog" class="work-dialog" aria-labelledby="work-dialog-title">
           <form id="work-form" class="work-form" novalidate>
             <div class="dialog-heading">
-              <div><p class="eyebrow">Shared work</p><h3 id="work-dialog-title">New work item</h3></div>
-              <button id="close-work-dialog" class="dialog-close" type="button" aria-label="Close work editor">×</button>
+              <div><p class="eyebrow" data-t="work.shared_work">Shared work</p><h3 id="work-dialog-title" data-t="work.new_item">New work item</h3></div>
+              <button id="close-work-dialog" class="dialog-close" type="button" aria-label="Close work editor" data-t-aria="work.close_editor_aria">×</button>
             </div>
             <input id="work-id" name="work-id" type="hidden">
             <input id="work-updated-at" name="work-updated-at" type="hidden">
             <div class="form-grid">
-              <div class="form-field form-field-wide"><label for="work-title-input">Title <span aria-hidden="true">*</span></label><input id="work-title-input" name="title" type="text" maxlength="240" required></div>
-              <div class="form-field"><label for="work-status">Status</label><select id="work-status" name="status"><option value="backlog">Backlog</option><option value="this_week">This week</option><option value="doing">Doing</option><option value="review">Review / Decision</option><option value="waiting">Waiting / Blocked</option><option value="done">Done</option></select></div>
-              <div class="form-field"><label for="work-owner">Owner <span class="owner-required">Required now</span></label><select id="work-owner" name="owner"><option value="">Owner needed</option></select></div>
+              <div class="form-field form-field-wide"><label for="work-title-input"><span data-t="work.title">Title</span> <span aria-hidden="true">*</span></label><input id="work-title-input" name="title" type="text" maxlength="240" required></div>
+              <div class="form-field"><label for="work-status" data-t="work.status">Status</label><select id="work-status" name="status"><option value="backlog" data-t="work.status_backlog">Backlog</option><option value="this_week" data-t="work.status_this_week">This week</option><option value="doing" data-t="work.status_doing">Doing</option><option value="review" data-t="work.status_review">Review / Decision</option><option value="waiting" data-t="work.status_waiting">Waiting / Blocked</option><option value="done" data-t="work.status_done">Done</option></select></div>
+              <div class="form-field"><label for="work-owner"><span data-t="work.owner">Owner</span> <span class="owner-required" data-t="work.required_now">Required now</span></label><select id="work-owner" name="owner"><option value="" data-t="work.owner_needed">Owner needed</option></select></div>
               <!-- Codex — 2026-08-12: status-specific guidance explains the workflow before a save can be rejected. -->
               <p id="work-status-guidance" class="form-guidance form-field-wide" role="status" aria-live="polite">Backlog is simple: only the title is required.</p>
-              <div id="work-approver-field" class="form-field form-field-wide" hidden><label for="work-approver">Who approves this? <span class="review-required">Required now</span></label><select id="work-approver" name="approver"><option value="">Choose another person</option></select><small class="form-hint">Approval stays attached so the decision cannot be bypassed.</small></div>
-              <div class="form-field"><label for="work-date">Due date <span class="active-required">Required now</span></label><input id="work-date" name="date" type="date"></div>
-              <div class="form-field form-field-wide"><label for="work-next-action">Next step <span class="active-required">Required now</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000" placeholder="What happens next?"></textarea></div>
-              <div class="form-field form-field-wide"><label for="work-completion">Done when <span class="completion-required">Required now</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000" placeholder="What result means this is finished?"></textarea></div>
-              <div id="work-blocker-field" class="form-field form-field-wide" hidden><label for="work-blocker">What are we waiting for? <span class="waiting-required">Required now</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea><small class="form-hint">Name the person, answer, file, or event needed to continue.</small></div>
+              <div id="work-approver-field" class="form-field form-field-wide" hidden><label for="work-approver"><span data-t="work.who_approves">Who approves this?</span> <span class="review-required" data-t="work.required_now">Required now</span></label><select id="work-approver" name="approver"><option value="" data-t="work.choose_another_person">Choose another person</option></select><small class="form-hint" data-t="work.approval_hint">Approval stays attached so the decision cannot be bypassed.</small></div>
+              <div class="form-field"><label for="work-date"><span data-t="work.due_date">Due date</span> <span class="active-required" data-t="work.required_now">Required now</span></label><input id="work-date" name="date" type="date"></div>
+              <div class="form-field form-field-wide"><label for="work-next-action"><span data-t="work.next_step">Next step</span> <span class="active-required" data-t="work.required_now">Required now</span></label><textarea id="work-next-action" name="nextAction" rows="2" maxlength="1000" placeholder="What happens next?" data-t-placeholder="work.next_placeholder"></textarea></div>
+              <div class="form-field form-field-wide"><label for="work-completion"><span data-t="work.done_when">Done when</span> <span class="completion-required" data-t="work.required_now">Required now</span></label><textarea id="work-completion" name="completion" rows="2" maxlength="1000" placeholder="What result means this is finished?" data-t-placeholder="work.done_placeholder"></textarea></div>
+              <div id="work-blocker-field" class="form-field form-field-wide" hidden><label for="work-blocker"><span data-t="work.waiting_for">What are we waiting for?</span> <span class="waiting-required" data-t="work.required_now">Required now</span></label><textarea id="work-blocker" name="blocker" rows="2" maxlength="1000"></textarea><small class="form-hint" data-t="work.waiting_hint">Name the person, answer, file, or event needed to continue.</small></div>
 
               <!-- Codex — 2026-08-11: secondary fields stay available without overwhelming the everyday task path. -->
               <details id="work-more-details" class="work-more-details form-field-wide">
-                <summary>More details <span>optional</span></summary>
+                <summary><span data-t="work.more_details">More details</span> <span data-t="work.optional">optional</span></summary>
                 <div class="form-grid form-grid-nested">
-                  <div class="form-field"><label for="work-workstream">Area (optional)</label><select id="work-workstream" name="workstream"><option value="">No area</option></select></div>
-                  <div class="form-field"><label for="work-priority">Priority</label><select id="work-priority" name="priority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
-                  <fieldset class="form-field form-field-wide flags-field"><legend>Needs attention from</legend><div class="flag-options"><div class="flag-option"><input id="flag-legal" name="flags" type="checkbox" value="legal"><label for="flag-legal">Legal</label></div><div class="flag-option"><input id="flag-budget" name="flags" type="checkbox" value="budget"><label for="flag-budget">Budget</label></div><div class="flag-option"><input id="flag-supplier" name="flags" type="checkbox" value="supplier"><label for="flag-supplier">Supplier</label></div><div class="flag-option"><input id="flag-account-access" name="flags" type="checkbox" value="account_access"><label for="flag-account-access">Account access</label></div><div class="flag-option"><input id="flag-missing-assets" name="flags" type="checkbox" value="missing_assets"><label for="flag-missing-assets">Missing assets</label></div></div></fieldset>
-                  <div class="form-field form-field-wide"><label for="work-source-url">Source link (optional)</label><input id="work-source-url" name="sourceUrl" type="url" inputmode="url" placeholder="https://…"></div>
-                  <div class="form-field form-field-wide"><label for="work-latest-file-url">Latest file link (optional)</label><input id="work-latest-file-url" name="latestFileUrl" type="url" inputmode="url" placeholder="https://…"></div>
+                  <div class="form-field"><label for="work-workstream" data-t="work.area_optional">Area (optional)</label><select id="work-workstream" name="workstream"><option value="" data-t="work.no_area">No area</option></select></div>
+                  <div class="form-field"><label for="work-priority" data-t="work.priority">Priority</label><select id="work-priority" name="priority"><option value="low" data-t="work.priority_low">Low</option><option value="normal" data-t="work.priority_normal">Normal</option><option value="high" data-t="work.priority_high">High</option><option value="urgent" data-t="work.priority_urgent">Urgent</option></select></div>
+                  <fieldset class="form-field form-field-wide flags-field"><legend data-t="work.needs_attention">Needs attention from</legend><div class="flag-options"><div class="flag-option"><input id="flag-legal" name="flags" type="checkbox" value="legal"><label for="flag-legal" data-t="work.flag_legal">Legal</label></div><div class="flag-option"><input id="flag-budget" name="flags" type="checkbox" value="budget"><label for="flag-budget" data-t="work.flag_budget">Budget</label></div><div class="flag-option"><input id="flag-supplier" name="flags" type="checkbox" value="supplier"><label for="flag-supplier" data-t="work.flag_supplier">Supplier</label></div><div class="flag-option"><input id="flag-account-access" name="flags" type="checkbox" value="account_access"><label for="flag-account-access" data-t="work.flag_account_access">Account access</label></div><div class="flag-option"><input id="flag-missing-assets" name="flags" type="checkbox" value="missing_assets"><label for="flag-missing-assets" data-t="work.flag_missing_assets">Missing assets</label></div></div></fieldset>
+                  <div class="form-field form-field-wide"><label for="work-source-url" data-t="work.source_link_optional">Source link (optional)</label><input id="work-source-url" name="sourceUrl" type="url" inputmode="url" placeholder="https://…"></div>
+                  <div class="form-field form-field-wide"><label for="work-latest-file-url" data-t="work.file_link_optional">Latest file link (optional)</label><input id="work-latest-file-url" name="latestFileUrl" type="url" inputmode="url" placeholder="https://…"></div>
                 </div>
               </details>
             </div>
             <p id="work-form-error" class="form-error" role="alert" tabindex="-1" hidden></p>
             <p id="work-dialog-status" class="form-guidance work-dialog-status" role="status" aria-live="polite" tabindex="-1" hidden></p>
             <section id="work-conflict-review" class="conflict-review" aria-labelledby="work-conflict-title" hidden>
-              <div><p class="eyebrow">Concurrent edit</p><h4 id="work-conflict-title">Choose which version to keep</h4></div>
+              <div><p class="eyebrow" data-t="work.concurrent_edit">Concurrent edit</p><h4 id="work-conflict-title" data-t="work.choose_version">Choose which version to keep</h4></div>
               <div id="work-conflict-fields" class="conflict-fields"></div>
             </section>
-            <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden>Archive item</button><button id="reload-latest-work-button" class="text-button" type="button" hidden>Reload latest version</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button">Cancel</button><button id="save-work-button" class="primary-button" type="submit">Save work</button></div>
+            <div class="dialog-actions"><button id="archive-work-button" class="danger-button" type="button" hidden data-t="work.archive_item">Archive item</button><button id="reload-latest-work-button" class="text-button" type="button" hidden data-t="work.reload_latest">Reload latest version</button><span class="dialog-action-spacer"></span><button id="cancel-work-button" class="text-button" type="button" data-t="work.cancel">Cancel</button><button id="save-work-button" class="primary-button" type="submit" data-t="work.save_work">Save work</button></div>
           </form>
         </dialog>
       </section>
