@@ -12,15 +12,7 @@ addTranslations("nl", nl);
 export const WORK_STATUSES = ["backlog", "this_week", "doing", "review", "waiting", "done"];
 export const ACTIVE_WORK_STATUSES = new Set(["this_week", "doing", "review", "waiting"]);
 
-export const WORK_STATUS_LABELS = Object.freeze({
-  backlog: "Backlog",
-  this_week: "This week",
-  doing: "Doing",
-  review: "Review / Decision",
-  waiting: "Waiting / Blocked",
-  done: "Done"
-});
-
+/* Codex — 2026-08-30: database status codes never double as display copy. */
 const WORK_STATUS_KEYS = Object.freeze({
   backlog: "work.status_backlog",
   this_week: "work.status_this_week",
@@ -31,7 +23,7 @@ const WORK_STATUS_KEYS = Object.freeze({
 });
 
 export function workStatusLabel(status) {
-  return t(WORK_STATUS_KEYS[status] || "work.stage_fallback");
+  return t(WORK_STATUS_KEYS[status] || "work.status_unknown");
 }
 
 function translatedIssue(key, fieldId = "", vars = undefined) {

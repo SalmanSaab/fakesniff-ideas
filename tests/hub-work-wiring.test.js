@@ -50,7 +50,9 @@ test("conflict reload retains both same-field values for an explicit choice", ()
   assert.match(source, /draftValues: conflict\.draftValues/);
   assert.match(source, /latestValues/);
   assert.match(hubSource, /resolveConflictChoice\(button\.dataset\.conflictKey/);
-  assert.match(hubSource, /protectedConflictNote\(\{ protectedFields \}\)/);
+  /* Codex — 2026-08-30: authority guidance is now a complete translated
+     sentence variant instead of an English-fragment suffix. */
+  assert.match(hubSource, /protectedConflictFields\(\{ protectedFields \}\)/);
   assert.match(hubSource, /keepLatest\.setAttribute\("aria-describedby", latestId\)/);
   assert.match(hubSource, /useMine\.setAttribute\("aria-describedby", mineId\)/);
 });

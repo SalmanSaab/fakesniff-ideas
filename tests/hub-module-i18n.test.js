@@ -10,7 +10,15 @@ import { fileURLToPath } from "node:url";
 import en from "../lang/en.js";
 
 const webRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TRANSLATED = ["hub-decisions.js", "hub-lookbook.js"];
+/* Codex — 2026-08-30: Work's policy and repository now share this guard. Home
+   and Work copy inside hub.js has a section-aware guard in its own test; the
+   same file still contains Claude-owned shell/auth copy that is not translated. */
+const TRANSLATED = [
+  "hub-decisions.js",
+  "hub-lookbook.js",
+  "hub-work-policy.js",
+  "hub-work-repository.js"
+];
 
 const read = (f) => fs.readFileSync(path.join(webRoot, f), "utf8");
 const keysUsedIn = (src) =>
