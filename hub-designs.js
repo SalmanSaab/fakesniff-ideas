@@ -17,6 +17,7 @@
 /* The garment vocabulary and the house brief live in hub-brand.js so this
    screen and the Idea Lab cannot drift apart about what FAKESNIFF looks like. */
 import { GARMENTS, COLOURS, SHOTS, buildGarmentPrompt, referenceFromLookbook } from "./hub-brand.js";
+import { t, onLanguageChange } from "./hub-i18n.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -66,11 +67,29 @@ export function mount(root, ctx) {
   root.innerHTML = shell();
 
   const $ = (s) => root.querySelector(s);
-  $("#dg-form").addEventListener("submit", generate);
-  $("#dg-again").addEventListener("click", () => generate());
-  $("#dg-save").addEventListener("click", saveToLookbook);
-  $("#dg-download").addEventListener("click", download);
-  $("#dg-pick").addEventListener("click", toggleIdeas);
+
+  /* Claude — 2026-08-30: pulled out so a language change can rebuild the markup
+     and re-attach. Leaving listeners bound to elements that no longer exist
+     gives you a screen in the right language with dead buttons, which is worse
+     than not translating it. */
+  function wireDesigns() {
+    $("#dg-form").addEventListener("submit", generate);
+    $("#dg-again").addEventListener("click", () => generate());
+    $("#dg-save").addEventListener("click", saveToLookbook);
+    $("#dg-download").addEventListener("click", download);
+    $("#dg-pick").addEventListener("click", toggleIdeas);
+  }
+  wireDesigns();
+
+  /* Claude — 2026-08-30: rebuild on a language change, but keep what they were
+     halfway through typing. Losing a graphic description because you switched
+     language would be a reason never to switch again. */
+  const stopLang = onLanguageChange(() => {
+    const draft = $("#dg-idea").value;
+    root.innerHTML = shell();
+    $("#dg-idea").value = draft;
+    wireDesigns();
+  });
 
   /* If someone pressed "Open in Designs" on an idea, it is waiting for us.
    *
@@ -88,7 +107,7 @@ export function mount(root, ctx) {
         ? `the words "${seed.line}" set as the print, in the spirit of: ${seed.concept}`
         : `the words "${seed.line}" set as the print`;
       sessionStorage.removeItem("fakesniff-design-seed");
-      note("Taken from the Idea Lab. Edit it however you like before generating.");
+      note(t("designs.taken_from_ideas"));
       $("#dg-idea").focus();
     } catch { /* nothing waiting */ }
   }
@@ -108,8 +127,8 @@ export function mount(root, ctx) {
     event?.preventDefault?.();
     if (busy) return;
     const idea = $("#dg-idea").value.trim();
-    if (!idea) { note("Describe the graphic first — even a few words."); $("#dg-idea").focus(); return; }
-    if (cfg.mode !== "authed") { note("Sign in to generate pictures."); return; }
+    if (!idea) { note(t("designs.need_graphic")); $("#dg-idea").focus(); return; }
+    if (cfg.mode !== "authed") { note(t("designs.sign_in")); return; }
 
     const prompt = buildGarmentPrompt({
       graphic: idea,
@@ -131,7 +150,7 @@ export function mount(root, ctx) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.image) {
-        note(data.error || "That picture could not be made. Try describing it differently.");
+        note(data.error || t("designs.failed"));
         setState("idle");
         return;
       }
@@ -157,9 +176,9 @@ export function mount(root, ctx) {
     const box = $("#dg-ideas");
     if (!box.hidden) { box.hidden = true; return; }
     box.hidden = false;
-    box.textContent = "Reading the board…";
+    box.textContent = t("designs.reading_board");
 
-    if (cfg.mode !== "authed") { box.textContent = "Sign in to read the Idea Lab."; return; }
+    if (cfg.mode !== "authed") { box.textContent = t("designs.sign_in_board"); return; }
     try {
       const token = await cfg.getAccessToken();
       const res = await fetch(
@@ -167,19 +186,19 @@ export function mount(root, ctx) {
         { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) {
-        box.textContent = `Could not read the board (${res.status}).`;
+        box.textContent = t("designs.board_failed", { n: res.status });
         return;
       }
       const rows = await res.json();
-      if (!Array.isArray(rows) || !rows.length) { box.textContent = "The Idea Lab is empty."; return; }
+      if (!Array.isArray(rows) || !rows.length) { box.textContent = t("designs.board_empty"); return; }
 
       /* 27 ideas today and it only grows. Scrolling a list to find one you
          already have in mind is the thing that makes people stop using it. */
       const search = document.createElement("input");
       search.type = "search";
       search.className = "dg-ideasearch";
-      search.placeholder = "Search the board";
-      search.setAttribute("aria-label", "Search ideas");
+      search.placeholder = t("designs.board_search");
+      search.setAttribute("aria-label", t("designs.board_search"));
 
       const buttons = rows.map((r) => {
         const b = document.createElement("button");
@@ -187,7 +206,7 @@ export function mount(root, ctx) {
         b.className = "dg-ideapick";
         const line = document.createElement("span");
         line.className = "dg-ideal";
-        line.textContent = r.line || "untitled";
+        line.textContent = r.line || t("designs.untitled_idea");
         b.appendChild(line);
         if (r.concept) {
           const c = document.createElement("span");
@@ -224,13 +243,13 @@ export function mount(root, ctx) {
 
       const empty = document.createElement("p");
       empty.className = "dg-ideanone";
-      empty.textContent = "Nothing on the board matches that.";
+      empty.textContent = t("designs.board_no_match");
       empty.hidden = true;
 
       box.replaceChildren(search, list, empty);
       search.focus();
     } catch (e) {
-      box.textContent = `Could not read the board: ${String(e?.message || e).slice(0, 120)}`;
+      box.textContent = t("designs.board_failed", { n: String(e?.message || e).slice(0, 60) });
     }
   }
 
@@ -247,7 +266,7 @@ export function mount(root, ctx) {
   async function saveToLookbook() {
     if (!last || !canEdit) return;
     const btn = $("#dg-save");
-    btn.disabled = true; btn.textContent = "Saving…";
+    btn.disabled = true; btn.textContent = t("common.loading");
     try {
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
       const [meta, b64] = String(last.dataUrl).split(",", 2);
@@ -276,11 +295,11 @@ export function mount(root, ctx) {
         }]),
       });
       if (!row.ok) throw new Error((await row.text()).slice(0, 140));
-      note("Saved to the Lookbook.");
-      btn.textContent = "Saved";
+      note(t("designs.saved_to_lookbook"));
+      btn.textContent = t("designs.saved");
     } catch (e) {
-      note(`Could not save that: ${String(e?.message || e).slice(0, 140)}`);
-      btn.textContent = "Save to Lookbook";
+      note(t("designs.save_failed", { reason: String(e?.message || e).slice(0, 140) }));
+      btn.textContent = t("designs.save_to_lookbook");
       btn.disabled = false;
     }
   }
@@ -288,10 +307,10 @@ export function mount(root, ctx) {
   function setState(s) {
     root.dataset.state = s;
     $("#dg-go").disabled = s === "working";
-    $("#dg-go").textContent = s === "working" ? "Making it…" : "Show me";
+    $("#dg-go").textContent = s === "working" ? t("designs.making") : t("designs.go");
     $("#dg-result").hidden = s !== "done";
     $("#dg-working").hidden = s !== "working";
-    if (s !== "done") { $("#dg-save").disabled = !canEdit; $("#dg-save").textContent = "Save to Lookbook"; }
+    if (s !== "done") { $("#dg-save").disabled = !canEdit; $("#dg-save").textContent = t("designs.save_to_lookbook"); }
   }
 
   function note(msg) {
@@ -301,56 +320,54 @@ export function mount(root, ctx) {
   }
 
   function shell() {
-    const opts = (list) => list.map(([v, label]) => `<option value="${v}">${label}</option>`).join("");
+    const opts = (list) => list.map(([v, label]) => `<option value="${v}">${esc(t(label))}</option>`).join("");
     return `
     <div class="dg-bar">
-      <span class="dg-mark">Designs<small>try it on the garment before anyone cuts fabric</small></span>
+      <span class="dg-mark">${esc(t("designs.heading"))}<small>${esc(t("designs.tagline"))}</small></span>
     </div>
 
     <form id="dg-form" class="dg-form">
       <div class="dg-lblrow">
-        <label class="dg-lbl" for="dg-idea">What is the graphic?</label>
-        <button id="dg-pick" class="dg-pick" type="button">Take one from the Idea Lab</button>
+        <label class="dg-lbl" for="dg-idea">${esc(t("designs.graphic"))}</label>
+        <button id="dg-pick" class="dg-pick" type="button">${esc(t("designs.from_ideas"))}</button>
       </div>
       <textarea id="dg-idea" class="dg-input dg-area"
-        placeholder="A distorted CCTV timestamp across the chest, cracked white ink"></textarea>
-      <p class="dg-hint">Describe it the way you would to a printer. Detail helps.</p>
+        placeholder="${esc(t("designs.graphic_placeholder"))}"></textarea>
+      <p class="dg-hint">${esc(t("designs.graphic_hint"))}</p>
       <div id="dg-ideas" class="dg-ideas" hidden></div>
 
       <div class="dg-row">
         <div>
-          <label class="dg-lbl" for="dg-garment">On what</label>
+          <label class="dg-lbl" for="dg-garment">${esc(t("designs.on_what"))}</label>
           <select id="dg-garment" class="dg-input">${opts(GARMENTS)}</select>
         </div>
         <div>
-          <label class="dg-lbl" for="dg-colour">Colour</label>
+          <label class="dg-lbl" for="dg-colour">${esc(t("designs.colour"))}</label>
           <select id="dg-colour" class="dg-input">${opts(COLOURS)}</select>
         </div>
         <div>
-          <label class="dg-lbl" for="dg-shot">Shot as</label>
+          <label class="dg-lbl" for="dg-shot">${esc(t("designs.shot"))}</label>
           <select id="dg-shot" class="dg-input">${opts(SHOTS)}</select>
         </div>
       </div>
 
-      <button id="dg-go" class="dg-go" type="submit">Show me</button>
+      <button id="dg-go" class="dg-go" type="submit">${esc(t("designs.go"))}</button>
       <p id="dg-note" class="dg-noteline" role="status" hidden></p>
     </form>
 
     <div id="dg-working" class="dg-working" hidden>
       <span class="dg-pulse" aria-hidden="true"></span>
-      <p>Making the picture. This takes a few seconds.</p>
+      <p>${esc(t("designs.working"))}</p>
     </div>
 
     <section id="dg-result" class="dg-result" hidden>
       <div id="dg-out" class="dg-out"></div>
       <div class="dg-actions">
-        <button id="dg-again" class="dg-quiet" type="button">Try again</button>
-        <button id="dg-download" class="dg-quiet" type="button">Download</button>
-        <button id="dg-save" class="dg-keep" type="button">Save to Lookbook</button>
+        <button id="dg-again" class="dg-quiet" type="button">${esc(t("designs.try_again"))}</button>
+        <button id="dg-download" class="dg-quiet" type="button">${esc(t("common.download"))}</button>
+        <button id="dg-save" class="dg-keep" type="button">${esc(t("designs.save_to_lookbook"))}</button>
       </div>
-      <p class="dg-caveat">A sketch, not a sample. Fabric weight, print method and
-        colour will not match production — use it to decide whether the idea is worth
-        making, not to sign anything off.</p>
+      <p class="dg-caveat">${esc(t("designs.caveat"))}</p>
     </section>`;
   }
 }
