@@ -17,6 +17,35 @@
 
 const FN_PATH = "/functions/v1/assistant";
 const AUTH_STORAGE_KEY = "fakesniff-hub-auth";
+const LANG_KEY = "fakesniff-hub-language";
+
+/* Claude — 2026-08-30: Marco owns this company and reads English poorly. The
+   interface is English and translating all of it is a separate build, but the
+   assistant knows every screen — so in his language it becomes the way he
+   reads the rest of the Hub. Stored per browser, not per account, because it
+   is a preference about reading rather than something the workspace owns. */
+const LANGUAGES = [
+  ["en", "English"],
+  ["nl", "Nederlands"],
+  ["tr", "Türkçe"],
+  ["ar", "العربية"],
+];
+const OPENER = {
+  en: "Ask", nl: "Vraag", tr: "Vraag", ar: "اسأل",
+};
+const GREETING = {
+  nl: {
+    home: "Je bent op Home. Ik vertel je wat aandacht nodig heeft, of breng je waar je wilt.",
+    work: "Je bent op Work. Vraag me wat er nu moet gebeuren, of waar iemand op wacht.",
+    "idea-lab": "Je bent in de Idea Lab. Vraag me wat de moeite waard is om te maken.",
+    lookbook: "Je bent in de Lookbook. Ik kan beschrijven wat je hebt opgeslagen, of een foto maken.",
+    decisions: "Je bent op Decisions. Vraag me wat we hebben afgesproken, of leg iets nieuws vast.",
+    fallback: "Vraag me alles over de werkruimte. Ik leg ook uit wat een knop doet.",
+  },
+};
+const language = () => {
+  try { return localStorage.getItem(LANG_KEY) || "en"; } catch { return "en"; }
+};
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -66,7 +95,7 @@ export function createAssistant(config) {
   root.innerHTML = `
     <button id="as-open" class="as-open" type="button" aria-label="Ask the assistant">
       <span aria-hidden="true">✳</span>
-      <span class="as-open-text">Ask</span>
+      <span class="as-open-text">${OPENER[language()] || "Ask"}</span>
     </button>
     <section id="as-panel" class="as-panel" role="dialog" aria-modal="false"
              aria-labelledby="as-title" hidden>
@@ -75,6 +104,10 @@ export function createAssistant(config) {
           <p class="as-eyebrow">FAKESNIFF</p>
           <h2 id="as-title" class="as-title">Ask anything</h2>
         </div>
+        <label class="as-sr" for="as-lang">Language</label>
+        <select id="as-lang" class="as-lang">
+          ${LANGUAGES.map(([v, l]) => `<option value="${v}"${v === language() ? " selected" : ""}>${l}</option>`).join("")}
+        </select>
         <button id="as-close" class="as-close" type="button" aria-label="Close">&times;</button>
       </header>
       <div id="as-log" class="as-log" role="log" aria-live="polite"></div>
@@ -94,6 +127,13 @@ export function createAssistant(config) {
 
   $("#as-open").addEventListener("click", open);
   $("#as-close").addEventListener("click", close);
+  $("#as-lang").addEventListener("change", (e) => {
+    try { localStorage.setItem(LANG_KEY, e.target.value); } catch { /* session only */ }
+    document.querySelector(".as-open-text").textContent = OPENER[e.target.value] || "Ask";
+    lastGreetedSection = "";
+    log.replaceChildren();
+    greet();
+  });
   $("#as-form").addEventListener("submit", onSubmit);
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(e); }
@@ -141,7 +181,9 @@ export function createAssistant(config) {
       lookbook: "You are in the Lookbook. I can describe what you have saved, or make a picture.",
       decisions: "You are on Decisions. Ask me what we agreed, or record something new.",
     }[here] || "Ask me anything about the workspace.";
-    say("assistant", where);
+    const translated = GREETING[language()];
+    const line = translated ? (translated[here] || translated.fallback) : where;
+    say("assistant", line);
   }
 
   function say(role, text, extra = "") {
@@ -174,7 +216,7 @@ export function createAssistant(config) {
       const res = await fetch(`${base}${FN_PATH}`, {
         method: "POST",
         headers: { apikey: config.supabasePublishableKey || "", Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ message, section: currentSection(), history: history.slice(-8) }),
+        body: JSON.stringify({ message, section: currentSection(), language: language(), history: history.slice(-8) }),
       });
       const data = await res.json().catch(() => ({}));
       thinking.remove();

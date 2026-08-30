@@ -81,6 +81,11 @@ You may propose ONE action per reply by ending with a single line of JSON:
 {"action":"image","prompt":"..."}              generates a picture
 Only use an action when it genuinely helps. Most replies need none.
 
+You can also explain the Hub itself. Marco and Emiel did not build it and
+should never have to guess what a screen wants. If someone asks what a button
+does, where something lives, or how to record a decision, walk them through it
+plainly. That is a normal thing to ask you.
+
 Never invent what is in the workspace. You are given the real counts and recent
 items below; if something is not there, say you cannot see it rather than
 guessing. If the workspace is empty, say so plainly and suggest the smallest
@@ -540,7 +545,27 @@ Deno.serve(async (req) => {
     { role: "user", parts: [{ text: message }] },
   ];
 
-  const systemText = `${SYSTEM}
+  /* Claude — 2026-08-30: Marco owns this company and reads English poorly, and
+     the entire interface is in English. Translating 440 strings is a real
+     build; having the assistant answer in his language is one line and makes
+     every screen explainable tonight. It is the difference between a tool he
+     tolerates and one he uses. */
+  const LANGUAGES: Record<string, string> = {
+    nl: "Dutch (Nederlands)",
+    en: "English",
+    tr: "Turkish (Türkçe)",
+    ar: "Arabic",
+  };
+  const langKey = String(body?.language ?? "en").slice(0, 5).toLowerCase();
+  const language = LANGUAGES[langKey] ?? "English";
+  const languageRule = langKey === "en" ? "" : `
+
+Answer entirely in ${language}. The interface around you is still in English —
+when you name a button or a page, give the English label exactly as it appears
+on screen and then explain it in ${language}, so the person can find it.
+Never apologise for the interface being in English.`;
+
+  const systemText = `${SYSTEM}${languageRule}
 
 They are currently on the "${section}" page.
 

@@ -108,3 +108,15 @@
   .as-panel { width: 100%; border-left: none; }
   .as-open { left: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); }
 }
+
+/* Claude — 2026-08-30: the language choice sits in the assistant header rather
+   than buried in settings, because the person who needs it is the one opening
+   this panel to be understood. */
+.as-lang {
+  background: var(--fs-surface-2); border: 1px solid var(--fs-line);
+  color: var(--fs-ink-2); font-family: inherit; font-size: var(--fs-size-sm);
+  padding: 4px var(--fs-2); border-radius: var(--fs-radius);
+  margin-right: var(--fs-2); align-self: center;
+}
+.as-lang:focus { outline: none; border-color: var(--fs-accent); }
+.as-head { align-items: center; }
