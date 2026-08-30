@@ -78,6 +78,7 @@ const state = {
   formBaseline: null,
   formBaselineValues: null,
   formIssue: null,
+  dialogIssue: null,
   conflictDraft: null,
   conflictReview: null,
   noticeTimer: null,
@@ -695,7 +696,7 @@ function renderBoard() {
 
   setMobileWorkStatus(state.mobileWorkStatus);
   boardStatus.textContent = t(pluralKey("work.board_items", visible.length), { n: localNumber(visible.length) });
-  renderSummary();
+  return renderSummary();
 }
 
 function homeListItem(task, detail) {
@@ -1095,7 +1096,7 @@ function renderSummary() {
       : t("work.review_by", { name: memberName(task.approver_id, t("work.approver_needed")) }),
     t("home.attention_clear")
   );
-  renderHomeActivity();
+  return renderHomeActivity();
 }
 
 function appendOption(select, value, label) {
@@ -1310,12 +1311,26 @@ function clearFormError() {
 function clearDialogStatus() {
   dialogStatus.hidden = true;
   dialogStatus.textContent = "";
+  state.dialogIssue = null;
 }
 
-function showDialogStatus(message, { focus = false } = {}) {
+function showDialogStatus(message, { focus = false, translate = null } = {}) {
+  state.dialogIssue = typeof translate === "function" ? translate : null;
   dialogStatus.textContent = message;
   dialogStatus.hidden = false;
   if (focus) window.requestAnimationFrame(() => dialogStatus.focus());
+}
+
+function showTranslatedDialogStatus(key, varsOrFactory = undefined, { focus = false } = {}) {
+  const translate = () => {
+    const vars = typeof varsOrFactory === "function" ? varsOrFactory() : varsOrFactory;
+    return t(key, vars);
+  };
+  showDialogStatus(translate(), { focus, translate });
+}
+
+function retranslateDialogStatus() {
+  if (!dialogStatus.hidden && state.dialogIssue) dialogStatus.textContent = state.dialogIssue();
 }
 
 const CONFLICT_FIELD_KEYS = Object.freeze({
@@ -1343,6 +1358,7 @@ function conflictValueLabel(key, value) {
   if (key === "workstreamId") return value ? workstreamName(value) : t("work.no_area");
   if (key === "status") return value ? statusLabel(value) : t("work.empty");
   if (key === "priority") return value ? priorityLabel(value) : t("work.empty");
+  if (key === "dueOn") return value ? formatDate(value) : t("work.empty");
   if (key === "flags") return value?.length ? value.map((flag) => flagLabel(flag) || flag).join(", ") : t("work.none");
   return String(value || t("work.empty"));
 }
@@ -1421,16 +1437,18 @@ function resolveConflictChoice(key, choice) {
     const conflictKey = new Intl.PluralRules(hubLocale()).select(review.unresolvedKeys.length) === "one"
       ? "work.conflict_one_left"
       : "work.conflict_other_left";
-    showDialogStatus(t(conflictKey, {
+    showTranslatedDialogStatus(conflictKey, () => ({
       n: localNumber(review.unresolvedKeys.length),
       note: protectedConflictNote(review)
     }));
     conflictFields.querySelector("button")?.focus();
     return;
   }
-  const authorityNote = protectedConflictNote(review);
+  const protectedFields = [...(review.protectedFields || [])];
   state.conflictReview = null;
-  showDialogStatus(t("work.conflict_resolved", { note: authorityNote }));
+  showTranslatedDialogStatus("work.conflict_resolved", () => ({
+    note: protectedConflictNote({ protectedFields })
+  }));
   const firstAffectedControl = get({
     title: "work-title-input", workstreamId: "work-workstream", status: "work-status",
     ownerId: "work-owner", approverId: "work-approver", priority: "work-priority",
@@ -1485,7 +1503,9 @@ function showTranslatedFormError(key, vars = undefined, fieldId = "") {
 
 function retranslateFormError() {
   if (!state.formIssue || formError.hidden) return;
-  const message = t(state.formIssue.key, state.formIssue.vars || undefined);
+  const vars = state.formIssue.vars ? { ...state.formIssue.vars } : undefined;
+  if (vars?.stageCode) vars.stage = statusLabel(vars.stageCode);
+  const message = t(state.formIssue.key, vars);
   formError.textContent = message;
   const control = state.formIssue.fieldId ? get(state.formIssue.fieldId) : null;
   const errorId = control?.dataset?.fieldErrorId;
@@ -1640,22 +1660,35 @@ function openTask(id) {
   get("close-work-dialog").focus();
 }
 
-function valuesFromForm() {
+function rawValuesFromForm() {
   return {
-    title: get("work-title-input").value.trim(),
+    title: get("work-title-input").value,
     workstreamId: get("work-workstream").value,
     status: statusInput.value,
     ownerId: ownerInput.value,
     approverId: approverInput.value,
     priority: get("work-priority").value,
     dueOn: get("work-date").value,
-    nextAction: get("work-next-action").value.trim(),
-    completion: get("work-completion").value.trim(),
-    blocker: get("work-blocker").value.trim(),
+    nextAction: get("work-next-action").value,
+    completion: get("work-completion").value,
+    blocker: get("work-blocker").value,
     flags: Array.from(form.querySelectorAll('input[name="flags"]:checked'), (checkbox) => checkbox.value),
-    sourceUrl: get("work-source-url").value.trim(),
-    latestFileUrl: get("work-latest-file-url").value.trim(),
+    sourceUrl: get("work-source-url").value,
+    latestFileUrl: get("work-latest-file-url").value,
     position: 0
+  };
+}
+
+function valuesFromForm() {
+  const values = rawValuesFromForm();
+  return {
+    ...values,
+    title: values.title.trim(),
+    nextAction: values.nextAction.trim(),
+    completion: values.completion.trim(),
+    blocker: values.blocker.trim(),
+    sourceUrl: values.sourceUrl.trim(),
+    latestFileUrl: values.latestFileUrl.trim()
   };
 }
 
@@ -1843,19 +1876,23 @@ async function reloadLatestConflict() {
     renderConflictReview();
     renderBoard();
     if (unresolvedKeys.length) {
-      const labels = unresolvedKeys.map(conflictFieldLabel).filter(Boolean).join(", ");
-      showDialogStatus(t("work.latest_choose", {
-        fields: labels || t("work.conflicting_values"),
-        note: protectedConflictNote(state.conflictReview)
-      }), { focus: true });
+      showTranslatedDialogStatus("work.latest_choose", () => {
+        const labels = unresolvedKeys.map(conflictFieldLabel).filter(Boolean).join(", ");
+        return {
+          fields: labels || t("work.conflicting_values"),
+          note: protectedConflictNote({ protectedFields })
+        };
+      }, { focus: true });
     } else if (protectedFields.length) {
-      const labels = protectedFields
-        .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
-        .filter(Boolean)
-        .join(", ");
-      showDialogStatus(t("work.latest_authority", { fields: labels || t("work.approval_workflow") }), { focus: true });
+      showTranslatedDialogStatus("work.latest_authority", () => {
+        const labels = protectedFields
+          .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
+          .filter(Boolean)
+          .join(", ");
+        return { fields: labels || t("work.approval_workflow") };
+      }, { focus: true });
     } else {
-      showDialogStatus(t("work.latest_ready"), { focus: true });
+      showTranslatedDialogStatus("work.latest_ready", undefined, { focus: true });
     }
     boardStatus.textContent = t("work.latest_board_status");
   } catch {
@@ -2248,14 +2285,18 @@ function handleDialogClose() {
 function renderOwnedLanguageChange() {
   if (!state.membership) return;
 
-  const draft = dialog.open ? valuesFromForm() : null;
+  const draft = dialog.open ? rawValuesFromForm() : null;
   const detailsOpen = get("work-more-details").open;
   populateReferenceControls();
   if (draft) {
     addMissingReferenceOption(get("work-workstream"), draft.workstreamId, t("work.no_longer_active"));
     addMissingReferenceOption(ownerInput, draft.ownerId, t("work.no_longer_active"));
     addMissingReferenceOption(approverInput, draft.approverId, t("work.no_longer_active"));
-    applyValuesToForm(draft);
+    /* Only these three selects had their options rebuilt. Leaving every text
+       control untouched preserves whitespace, selection and the typing caret. */
+    get("work-workstream").value = draft.workstreamId;
+    ownerInput.value = draft.ownerId;
+    approverInput.value = draft.approverId;
     get("work-more-details").open = detailsOpen;
   }
 
@@ -2268,7 +2309,17 @@ function renderOwnedLanguageChange() {
     document.createTextNode(` ${t("work.verified_only")}`)
   );
 
-  renderBoard();
+  disconnectHomeActivityObserver();
+  const activityRender = renderBoard();
+  const hasReceipts = activityRender.receiptGroups.some((group) => group.receiptEventIds.length);
+  if (state.activeSectionId === "home" && !document.hidden && hasReceipts) {
+    scheduleHomeActivityAcknowledgement(
+      activityRender.receiptGroups,
+      state.generation,
+      state.user?.id || "",
+      state.homeActivityRequestSequence
+    );
+  }
   if (!dialog.open) return;
 
   syncRequirements({ clearError: false });
@@ -2287,6 +2338,7 @@ function renderOwnedLanguageChange() {
   saveButton.textContent = state.saving ? t(state.savingKey) : t("work.save_work");
   renderConflictReview();
   retranslateFormError();
+  retranslateDialogStatus();
 }
 
 function bindEvents() {

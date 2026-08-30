@@ -50,7 +50,7 @@ test("conflict reload retains both same-field values for an explicit choice", ()
   assert.match(source, /draftValues: conflict\.draftValues/);
   assert.match(source, /latestValues/);
   assert.match(hubSource, /resolveConflictChoice\(button\.dataset\.conflictKey/);
-  assert.match(hubSource, /protectedConflictNote\(state\.conflictReview\)/);
+  assert.match(hubSource, /protectedConflictNote\(\{ protectedFields \}\)/);
   assert.match(hubSource, /keepLatest\.setAttribute\("aria-describedby", latestId\)/);
   assert.match(hubSource, /useMine\.setAttribute\("aria-describedby", mineId\)/);
 });
@@ -84,7 +84,7 @@ test("status conflict review does not clear draft-only approval or blocker detai
 test("conflict reload announces success inside the modal", () => {
   const source = functionSource("reloadLatestConflict", "startMutation");
   assert.match(hubHtml, /id="work-dialog-status"[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(source, /showDialogStatus\(t\("work\.latest_[a-z]+"[\s\S]*focus: true/);
+  assert.match(source, /showTranslatedDialogStatus\("work\.latest_[a-z]+"[\s\S]*focus: true/);
   assert.doesNotMatch(source, /showNotice\(t\("work\.latest_/);
 });
 

@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { addTranslations, setLanguage, t } from "../hub-i18n.js";
 import en from "../lang/en.js";
 import nl from "../lang/nl.js";
-import { translateWorkRepositoryError, validateWorkValues } from "../hub-work-policy.js";
+import { translateWorkRepositoryError, validateWorkValues, workStatusLabel } from "../hub-work-policy.js";
 
 const html = await readFile(new URL("../hub.html", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../hub.js", import.meta.url), "utf8");
@@ -91,6 +91,29 @@ test("Work validation and repository failures are useful Dutch without database 
   setLanguage("en");
 });
 
+test("an open stage error retranslates its stage name instead of mixing languages", () => {
+  setLanguage("en");
+  const issue = validateWorkValues({
+    title: "Example",
+    status: "this_week",
+    ownerId: "",
+    approverId: "",
+    dueOn: "",
+    nextAction: "",
+    completion: "",
+    blocker: "",
+    sourceUrl: "",
+    latestFileUrl: ""
+  });
+  assert.equal(issue.vars.stage, "This week");
+  assert.equal(issue.vars.stageCode, "this_week");
+  setLanguage("nl");
+  const vars = { ...issue.vars, stage: workStatusLabel(issue.vars.stageCode) };
+  assert.equal(t(issue.key, vars), "Kies een eigenaar voordat je dit naar Deze week verplaatst.");
+  assert.match(hubSource, /if \(vars\?\.stageCode\) vars\.stage = statusLabel\(vars\.stageCode\)/);
+  setLanguage("en");
+});
+
 test("Home and Work dates and counts follow the active locale", () => {
   assert.match(hubSource, /nl: "nl-NL"/);
   assert.doesNotMatch(hubSource, /new Intl\.DateTimeFormat\("en-GB"/);
@@ -108,10 +131,22 @@ test("a language change rerenders without losing the open Work draft or inline e
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const source = hubSource.slice(start, end);
-  assert.match(source, /const draft = dialog\.open \? valuesFromForm\(\) : null/);
-  assert.match(source, /applyValuesToForm\(draft\)/);
+  assert.match(source, /const draft = dialog\.open \? rawValuesFromForm\(\) : null/);
+  assert.doesNotMatch(source, /applyValuesToForm\(draft\)/);
+  assert.match(source, /get\("work-workstream"\)\.value = draft\.workstreamId/);
   assert.match(source, /syncRequirements\(\{ clearError: false \}\)/);
   assert.match(source, /retranslateFormError\(\)/);
+  assert.match(source, /retranslateDialogStatus\(\)/);
+  assert.match(source, /disconnectHomeActivityObserver\(\)/);
+  assert.match(source, /scheduleHomeActivityAcknowledgement\(/);
   assert.doesNotMatch(source, /loadWorkspace|refreshTasks|clearFormError/);
   assert.equal(t("work.guidance_doing"), en["work.guidance_doing"]);
+});
+
+test("conflicting due dates use the active locale", () => {
+  const start = hubSource.indexOf("function conflictValueLabel");
+  const end = hubSource.indexOf("function protectedConflictNote", start);
+  const source = hubSource.slice(start, end);
+  assert.match(source, /key === "dueOn"[\s\S]*formatDate\(value\)/);
+  assert.doesNotMatch(source, /key === "dueOn"[\s\S]*String\(value\)/);
 });

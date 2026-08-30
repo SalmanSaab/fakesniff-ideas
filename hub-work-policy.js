@@ -83,11 +83,17 @@ export function validateWorkValues(values, {
   if (!WORK_STATUSES.includes(values.status)) return issue("work.error_stage_invalid", "work-status");
 
   if (active) {
-    if (!values.ownerId) return issue("work.error_owner_before_stage", "work-owner", { stage: statusLabel });
+    if (!values.ownerId) return issue("work.error_owner_before_stage", "work-owner", {
+      stage: statusLabel,
+      stageCode: values.status
+    });
     if (ownerNeedsRevalidation && !editableMemberIds.has(values.ownerId)) {
       return issue("work.error_owner_inactive", "work-owner");
     }
-    if (!values.dueOn) return issue("work.error_due_before_stage", "work-date", { stage: statusLabel });
+    if (!values.dueOn) return issue("work.error_due_before_stage", "work-date", {
+      stage: statusLabel,
+      stageCode: values.status
+    });
     if (!values.nextAction) return issue("work.error_next_required", "work-next-action");
     if (!values.completion) return issue("work.error_completion_required", "work-completion");
   }
