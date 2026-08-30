@@ -15,6 +15,8 @@
  *    to Decisions?" and choosing is very different from being moved.
  */
 
+import { setLanguage } from "./hub-i18n.js";
+
 const FN_PATH = "/functions/v1/assistant";
 const AUTH_STORAGE_KEY = "fakesniff-hub-auth";
 const LANG_KEY = "fakesniff-hub-language";
@@ -128,7 +130,11 @@ export function createAssistant(config) {
   $("#as-open").addEventListener("click", open);
   $("#as-close").addEventListener("click", close);
   $("#as-lang").addEventListener("change", (e) => {
-    try { localStorage.setItem(LANG_KEY, e.target.value); } catch { /* session only */ }
+    /* Claude — 2026-08-30, after Codex caught it: this recorded the choice and
+       nothing else, so picking Nederlands left the whole interface in English.
+       setLanguage is what actually rewrites the page; storing the preference is
+       something it already does. */
+    setLanguage(e.target.value);
     document.querySelector(".as-open-text").textContent = OPENER[e.target.value] || "Ask";
     lastGreetedSection = "";
     log.replaceChildren();

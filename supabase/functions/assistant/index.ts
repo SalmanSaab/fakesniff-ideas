@@ -558,12 +558,74 @@ Deno.serve(async (req) => {
   };
   const langKey = String(body?.language ?? "en").slice(0, 5).toLowerCase();
   const language = LANGUAGES[langKey] ?? "English";
+  /* Claude — 2026-08-30, after Codex caught it: this used to tell the model the
+     interface was entirely English and to quote English labels. That was true
+     when written and is now wrong — the Hub is translated, and quoting an
+     English button name to someone looking at a Dutch screen sends them
+     hunting for something that is not there. The labels below come from the
+     same dictionary the interface renders from, so they cannot drift. */
+  const DUTCH_LABELS = `
+  Archive = Archiveren
+  Cancel = Annuleren
+  Close = Sluiten
+  Download = Downloaden
+  Refresh = Vernieuwen
+  Save = Opslaan
+  Search = Zoeken
+  Sign out = Uitloggen
+  Record a decision = Besluit vastleggen
+  Decisions = Besluiten
+  Take one from the Idea Lab = Kies er een uit Ideeën
+  Show me = Laat zien
+  Designs = Ontwerpen
+  Save to Lookbook = Bewaar in Lookbook
+  Active work = Actief werk
+  Blocked = Geblokkeerd
+  Blocked: {reason} = Geblokkeerd: {reason}
+  Current focus = Huidige focus
+  Need review = Te beoordelen
+  Open board = Bord openen
+  Review backlog = Backlog bekijken
+  This week = Deze week
+  This week · Next: {next} = Deze week · Volgende stap: {next}
+  Idea Lab = Ideeën
+  See it made = Laat het zien
+  Add a reference = Referentie toevoegen
+  Lookbook = Lookbook
+  Decisions = Besluiten
+  Designs = Ontwerpen
+  Home = Start
+  Idea Lab = Ideeën
+  Lookbook = Lookbook
+  Work = Werk
+  Edit work item = Werkitem bewerken
+  Work = Werk
+  Member = Teamlid
+  New work item = Nieuw werkitem
+  New work = Nieuw werk
+  Owner = Eigenaar
+  Owner needed = Eigenaar kiezen
+  Admin = Beheerder
+  Member = Teamlid
+  Owner = Eigenaar
+  Viewer = Lezer
+  Shared work = Gezamenlijk werk
+`;
+
   const languageRule = langKey === "en" ? "" : `
 
-Answer entirely in ${language}. The interface around you is still in English —
-when you name a button or a page, give the English label exactly as it appears
-on screen and then explain it in ${language}, so the person can find it.
-Never apologise for the interface being in English.`;
+Answer entirely in ${language}.
+
+The interface is translated too. When you name a button, a page or a stage, use
+the words that are actually on the person's screen in ${language} — not the
+English original. Do not apologise for the interface, and do not offer to
+translate it; it is already in their language.${
+  langKey === "nl" ? `
+
+These are the exact labels on screen, English on the left and what the person
+sees on the right. Always use the right-hand side:
+${DUTCH_LABELS}` : ""
+}`;
 
   const systemText = `${SYSTEM}${languageRule}
 
