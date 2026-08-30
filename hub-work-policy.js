@@ -1,5 +1,14 @@
 /* Codex — 2026-08-12: pure Work rules shared by the browser UI and tests. */
 
+import { addTranslations, t } from "./hub-i18n.js";
+import en from "./lang/en.js";
+import nl from "./lang/nl.js";
+
+/* Codex — 2026-08-30: policy tests import this module without hub.js, so the
+   safe, human error boundary registers its own dictionaries as well. */
+addTranslations("en", en);
+addTranslations("nl", nl);
+
 export const WORK_STATUSES = ["backlog", "this_week", "doing", "review", "waiting", "done"];
 export const ACTIVE_WORK_STATUSES = new Set(["this_week", "doing", "review", "waiting"]);
 
@@ -11,6 +20,30 @@ export const WORK_STATUS_LABELS = Object.freeze({
   waiting: "Waiting / Blocked",
   done: "Done"
 });
+
+const WORK_STATUS_KEYS = Object.freeze({
+  backlog: "work.status_backlog",
+  this_week: "work.status_this_week",
+  doing: "work.status_doing",
+  review: "work.status_review",
+  waiting: "work.status_waiting",
+  done: "work.status_done"
+});
+
+export function workStatusLabel(status) {
+  return t(WORK_STATUS_KEYS[status] || "work.stage_fallback");
+}
+
+function translatedIssue(key, fieldId = "", vars = undefined) {
+  const result = { message: t(key, vars), fieldId };
+  /* Metadata lets an open inline error retranslate without changing the public
+     result shape consumed by older tests and integrations. */
+  Object.defineProperties(result, {
+    key: { value: key, enumerable: false },
+    vars: { value: vars || null, enumerable: false }
+  });
+  return result;
+}
 
 export function isValidWorkUrl(value, { httpsOnly = false } = {}) {
   if (!value) return true;
@@ -31,8 +64,8 @@ export function validateWorkValues(values, {
   editableMemberIds = new Set(),
   isAdmin = false
 } = {}) {
-  const issue = (message, fieldId) => ({ message, fieldId });
-  const statusLabel = WORK_STATUS_LABELS[values.status] || "that stage";
+  const issue = (key, fieldId, vars) => translatedIssue(key, fieldId, vars);
+  const statusLabel = workStatusLabel(values.status);
   const active = ACTIVE_WORK_STATUSES.has(values.status);
   const existing = tasks.find((task) => task.id === editingId);
   const existingWasActive = Boolean(existing && (ACTIVE_WORK_STATUSES.has(existing.status) || existing.status === "done"));
@@ -45,117 +78,123 @@ export function validateWorkValues(values, {
     || (values.status === "review" && existing.status !== "review")
     || (values.status === "done" && existing.status !== "done");
 
-  if (!values.title) return issue("Add a short title so the team can recognise this work.", "work-title-input");
-  if (values.title.length > 240) return issue("Shorten the title to 240 characters or fewer.", "work-title-input");
-  if (!WORK_STATUSES.includes(values.status)) return issue("Choose one of the available stages.", "work-status");
+  if (!values.title) return issue("work.error_title_required", "work-title-input");
+  if (values.title.length > 240) return issue("work.error_title_length", "work-title-input");
+  if (!WORK_STATUSES.includes(values.status)) return issue("work.error_stage_invalid", "work-status");
 
   if (active) {
-    if (!values.ownerId) return issue(`Choose who owns this before moving it to ${statusLabel}.`, "work-owner");
+    if (!values.ownerId) return issue("work.error_owner_before_stage", "work-owner", {
+      stage: statusLabel,
+      stageCode: values.status
+    });
     if (ownerNeedsRevalidation && !editableMemberIds.has(values.ownerId)) {
-      return issue("That owner can no longer edit work. Refresh and choose an active team member.", "work-owner");
+      return issue("work.error_owner_inactive", "work-owner");
     }
-    if (!values.dueOn) return issue(`Add a due date before moving this to ${statusLabel}.`, "work-date");
-    if (!values.nextAction) return issue("Write the next concrete step so the owner knows what to do.", "work-next-action");
-    if (!values.completion) return issue("Describe the result that will mean this work is Done.", "work-completion");
+    if (!values.dueOn) return issue("work.error_due_before_stage", "work-date", {
+      stage: statusLabel,
+      stageCode: values.status
+    });
+    if (!values.nextAction) return issue("work.error_next_required", "work-next-action");
+    if (!values.completion) return issue("work.error_completion_required", "work-completion");
   }
 
   if (values.status === "done") {
-    if (!values.ownerId) return issue("Choose who completed this work before marking it Done.", "work-owner");
+    if (!values.ownerId) return issue("work.error_done_owner", "work-owner");
     if (ownerNeedsRevalidation && !editableMemberIds.has(values.ownerId)) {
-      return issue("That owner can no longer edit work. Refresh and choose an active team member.", "work-owner");
+      return issue("work.error_owner_inactive", "work-owner");
     }
-    if (!values.completion) return issue("Record the result that means this work is Done.", "work-completion");
+    if (!values.completion) return issue("work.error_done_result", "work-completion");
   }
 
   if (values.status === "waiting" && !values.blocker) {
-    return issue("Say which person, answer, file, or event this work is waiting for.", "work-blocker");
+    return issue("work.error_waiting_reason", "work-blocker");
   }
 
   if (values.status === "review" && !values.approverId) {
-    return issue("Choose another team member to review this work.", "work-approver");
+    return issue("work.error_reviewer_required", "work-approver");
   }
   if (values.approverId && values.ownerId === values.approverId) {
-    return issue("Choose someone other than the owner to approve this work.", "work-approver");
+    return issue("work.error_reviewer_not_owner", "work-approver");
   }
   if (values.approverId && approverNeedsRevalidation && !editableMemberIds.has(values.approverId)) {
     if (existing?.approver_id === values.approverId && !isAdmin) {
-      return issue("This item's approver is no longer active and only a workspace admin or owner can replace them. Ask an admin to repair the approval before moving this item to Review or Done.", "work-status");
+      return issue("work.error_inactive_reviewer_admin", "work-status");
     }
-    return issue("That approver is no longer available. Refresh and choose another active team member.", "work-approver");
+    return issue("work.error_reviewer_inactive", "work-approver");
   }
 
   if (values.status === "done" && values.approverId && !isAdmin) {
-    if (!existing) return issue("Save this for Review first. The chosen approver can mark it Done afterward.", "work-status");
-    if (!existing.approver_id) return issue("Save the approver first. Then that person can mark the item Done.", "work-status");
+    if (!existing) return issue("work.error_review_first", "work-status");
+    if (!existing.approver_id) return issue("work.error_reviewer_first", "work-status");
   }
 
   if (!isValidWorkUrl(values.sourceUrl)) {
-    return issue("Remove spaces from the source link and make sure it starts with lowercase http:// or https://.", "work-source-url");
+    return issue("work.error_source_url", "work-source-url");
   }
   if (!isValidWorkUrl(values.latestFileUrl, { httpsOnly: true })) {
-    return issue("Remove spaces from the file link and make sure it starts with lowercase https://.", "work-latest-file-url");
+    return issue("work.error_file_url", "work-latest-file-url");
   }
 
   return null;
 }
 
 export function translateWorkRepositoryError({ serverMessage = "", code = "" } = {}, current = {}) {
-  const issue = (message, fieldId = "") => ({ message, fieldId });
+  const issue = (key, fieldId = "", vars) => translatedIssue(key, fieldId, vars);
   const server = String(serverMessage || "").toLowerCase();
 
-  if (server.includes("owner must be an active member")) return issue("That owner can no longer edit work. Refresh and choose an active team member.", "work-owner");
-  if (server.includes("approver must be an active member")) return issue("That approver is no longer available. Refresh and choose another active team member.", "work-approver");
-  if (server.includes("workspace admin can create completed approval-bound")) return issue("Save this for Review first. The approver can mark it Done afterward.", "work-status");
-  if (server.includes("workspace admin can change an assigned approver")) return issue("The approver is locked after assignment. Ask a workspace admin or owner to change it.", "work-approver");
-  if (server.includes("approval must be assigned before completion")) return issue("Save the approver first. Then that person can mark the item Done.", "work-status");
-  if (server.includes("archive this task")) return issue("Only this item's approver or a workspace admin or owner can archive it.");
-  if (server.includes("move this review")) return issue("This review is waiting for its approver. Only that person or a workspace admin or owner can move it.", "work-status");
-  if (server.includes("reopen this task")) return issue("Only this item's approver or a workspace admin or owner can reopen it.", "work-status");
-  if (server.includes("complete this task")) return issue("Only the assigned approver or a workspace admin or owner can mark this Done.", "work-status");
-  if (server.includes("the this week lane is limited to three tasks")) return issue("This week already has three items. Refresh to see the latest board, then move or finish one before adding another.", "work-status");
+  if (server.includes("owner must be an active member")) return issue("work.error_owner_inactive", "work-owner");
+  if (server.includes("approver must be an active member")) return issue("work.error_reviewer_inactive", "work-approver");
+  if (server.includes("workspace admin can create completed approval-bound")) return issue("work.error_review_first", "work-status");
+  if (server.includes("workspace admin can change an assigned approver")) return issue("work.error_reviewer_locked", "work-approver");
+  if (server.includes("approval must be assigned before completion")) return issue("work.error_reviewer_first", "work-status");
+  if (server.includes("archive this task")) return issue("work.error_archive_permission");
+  if (server.includes("move this review")) return issue("work.error_move_review_permission", "work-status");
+  if (server.includes("reopen this task")) return issue("work.error_reopen_permission", "work-status");
+  if (server.includes("complete this task")) return issue("work.error_complete_permission", "work-status");
+  if (server.includes("the this week lane is limited to three tasks")) return issue("work.error_week_limit", "work-status");
   if (server.includes("tasks_one_doing_per_owner_active_uidx") || server.includes("one active doing")) {
-    return issue("That owner already has one item in Doing. Refresh to see it, then finish or move it before starting another.", "work-owner");
+    return issue("work.error_doing_limit", "work-owner");
   }
 
-  if (server.includes("tasks_title_length")) return issue("Add a title of 240 characters or fewer.", "work-title-input");
-  if (server.includes("tasks_status_allowed")) return issue("Choose one of the available stages.", "work-status");
-  if (server.includes("tasks_priority_allowed")) return issue("Choose one of the available priorities.", "work-priority");
-  if (server.includes("tasks_position_nonnegative")) return issue("This older item's board position is invalid. Ask a workspace admin or owner to repair it.");
-  if (server.includes("tasks_kind_allowed")) return issue("This older item has an unsupported type. Ask a workspace admin or owner to repair it.");
-  if (server.includes("tasks_flags_allowed")) return issue("Choose only the available attention flags.");
-  if (server.includes("tasks_source_url_http")) return issue("Remove spaces from the source link and make sure it starts with lowercase http:// or https://.", "work-source-url");
-  if (server.includes("tasks_latest_file_url_https")) return issue("Remove spaces from the file link and make sure it starts with lowercase https://.", "work-latest-file-url");
-  if (server.includes("tasks_waiting_has_reason")) return issue("Say which person, answer, file, or event this work is waiting for.", "work-blocker");
+  if (server.includes("tasks_title_length")) return issue("work.error_title_length", "work-title-input");
+  if (server.includes("tasks_status_allowed")) return issue("work.error_stage_invalid", "work-status");
+  if (server.includes("tasks_priority_allowed")) return issue("work.error_priority_invalid", "work-priority");
+  if (server.includes("tasks_position_nonnegative")) return issue("work.error_position_invalid");
+  if (server.includes("tasks_kind_allowed")) return issue("work.error_type_invalid");
+  if (server.includes("tasks_flags_allowed")) return issue("work.error_flags_invalid");
+  if (server.includes("tasks_source_url_http")) return issue("work.error_source_url", "work-source-url");
+  if (server.includes("tasks_latest_file_url_https")) return issue("work.error_file_url", "work-latest-file-url");
+  if (server.includes("tasks_waiting_has_reason")) return issue("work.error_waiting_reason", "work-blocker");
   if (server.includes("tasks_review_has_separate_approver")) {
     return current.approverId
-      ? issue("Choose someone other than the owner to approve this work.", "work-approver")
-      : issue("Choose another team member to review this work.", "work-approver");
+      ? issue("work.error_reviewer_not_owner", "work-approver")
+      : issue("work.error_reviewer_required", "work-approver");
   }
   if (server.includes("tasks_active_work_fields_present")) {
-    if (!current.ownerId) return issue("Choose who owns this active work.", "work-owner");
-    if (!current.dueOn) return issue("Add a due date for this active work.", "work-date");
-    if (!current.nextAction) return issue("Write the next concrete step for this active work.", "work-next-action");
-    if (!current.completion) return issue("Describe the result that will mean this work is Done.", "work-completion");
-    return issue("Review the required details for this active work, save it, and try again.");
+    if (!current.ownerId) return issue("work.error_active_owner", "work-owner");
+    if (!current.dueOn) return issue("work.error_active_due", "work-date");
+    if (!current.nextAction) return issue("work.error_active_next", "work-next-action");
+    if (!current.completion) return issue("work.error_active_completion", "work-completion");
+    return issue("work.error_active_details");
   }
   if (server.includes("tasks_done_fields_present")) {
-    if (!current.ownerId) return issue("Choose who completed this work.", "work-owner");
-    if (!current.completion) return issue("Record the result that made this work complete.", "work-completion");
-    return issue("Review the completion details, save the item, and try again.");
+    if (!current.ownerId) return issue("work.error_completed_owner", "work-owner");
+    if (!current.completion) return issue("work.error_completed_result", "work-completion");
+    return issue("work.error_completed_details");
   }
 
-  if (code === "23505") return issue("This item conflicts with another saved change. Refresh the Hub and try again.");
+  if (code === "23505") return issue("work.error_concurrent_save");
   if (code === "23503") {
-    if (server.includes("tasks_workstream_fk")) return issue("That area is no longer available. Refresh and choose another area.", "work-workstream");
-    if (server.includes("tasks_owner_fk")) return issue("That owner is no longer available. Refresh and choose another team member.", "work-owner");
-    if (server.includes("tasks_approver_fk")) return issue("That approver is no longer available. Refresh and choose another team member.", "work-approver");
-    if (server.includes("tasks_source_design_fk")) return issue("That source design is no longer available. Refresh and choose another design.");
-    if (server.includes("tasks_source_idea_fk")) return issue("That source idea is no longer available. Refresh and choose another idea.");
-    return issue("A linked idea, design, or workspace changed. Refresh the Hub and try again.");
+    if (server.includes("tasks_workstream_fk")) return issue("work.error_area_missing", "work-workstream");
+    if (server.includes("tasks_owner_fk")) return issue("work.error_owner_missing", "work-owner");
+    if (server.includes("tasks_approver_fk")) return issue("work.error_reviewer_missing", "work-approver");
+    if (server.includes("tasks_source_design_fk")) return issue("work.error_design_missing");
+    if (server.includes("tasks_source_idea_fk")) return issue("work.error_idea_missing");
+    return issue("work.error_linked_changed");
   }
-  if (code === "23514") return issue("This older item does not meet a current Hub rule. Ask a workspace admin or owner to repair it.");
-  if (["42501", "PGRST301"].includes(code)) return issue("Your workspace access changed. Refresh the Hub or sign in again.");
-  return issue("The Hub could not save this change. Check your connection, then refresh and try again.");
+  if (code === "23514") return issue("work.error_legacy_rule");
+  if (["42501", "PGRST301"].includes(code)) return issue("work.error_access_changed");
+  return issue("work.error_save_unknown");
 }
 
 export function workApprovalPermissions(task, actorId, isAdmin) {

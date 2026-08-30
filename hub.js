@@ -4,32 +4,49 @@ import { createHubAuth, validateHubConfig } from "./hub-auth.js";
 import { createConnectedWorkRepository, HubRepositoryError } from "./hub-work-repository.js";
 import { composeHomeActivity, normalizeHomeChanges } from "./hub-home-activity.js";
 import {
+  addTranslations,
+  currentLanguage,
+  initLanguage,
+  onLanguageChange,
+  t
+} from "./hub-i18n.js";
+import en from "./lang/en.js";
+import nl from "./lang/nl.js";
+import {
   ACTIVE_WORK_STATUSES as ACTIVE_STATUSES,
   WORK_STATUSES as STATUSES,
-  WORK_STATUS_LABELS as STATUS_LABELS,
   isValidWorkUrl,
   reconcileWorkDraft,
   selectHomeFocus,
   translateWorkRepositoryError,
   validateWorkValues,
+  workStatusLabel,
   workApprovalPermissions
 } from "./hub-work-policy.js";
 
-const STATUS_GUIDANCE = {
-  backlog: "Backlog is simple: only the title is required. Add the working details when this is ready to move.",
-  this_week: "For This week, choose an owner, due date, next step, and what Done means. The team keeps no more than three items here.",
-  doing: "To start Doing, complete the working details. Each person keeps one item in progress at a time.",
-  review: "For Review, complete the working details and choose someone other than the owner to approve it.",
-  waiting: "For Waiting, keep the working details and say exactly which person, answer, file, or event is needed.",
-  done: "To finish an item, record its owner and the result that means it is Done."
-};
-const FLAG_LABELS = {
-  legal: "Legal",
-  budget: "Budget",
-  supplier: "Supplier",
-  account_access: "Account access",
-  missing_assets: "Missing assets"
-};
+/* Codex — 2026-08-30: register the shared dictionaries before Home or Work
+   render. Values remain functions of the active language, never import-time
+   strings that would stay English after Marco changes the selector. */
+addTranslations("en", en);
+addTranslations("nl", nl);
+
+const STATUS_GUIDANCE_KEYS = Object.freeze(Object.fromEntries(
+  STATUSES.map((status) => [status, `work.guidance_${status}`])
+));
+const FLAG_LABEL_KEYS = Object.freeze({
+  legal: "work.flag_legal",
+  budget: "work.flag_budget",
+  supplier: "work.flag_supplier",
+  account_access: "work.flag_account_access",
+  missing_assets: "work.flag_missing_assets"
+});
+const PRIORITY_LABEL_KEYS = Object.freeze({
+  low: "work.priority_low",
+  normal: "work.priority_normal",
+  high: "work.priority_high",
+  urgent: "work.priority_urgent"
+});
+const HUB_LOCALES = Object.freeze({ en: "en-GB", nl: "nl-NL", tr: "tr-TR", ar: "ar" });
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions", "designs"]);
 const PRODUCTION_SUPABASE_HOST = "kayxejofqyxoqlberrgw.supabase.co";
@@ -50,6 +67,7 @@ const state = {
   workstreams: [],
   tasks: [],
   saving: false,
+  savingKey: "work.saving",
   refreshing: false,
   refreshWhenDialogCloses: false,
   lastRefreshedAt: 0,
@@ -59,6 +77,8 @@ const state = {
   originalApproverId: "",
   formBaseline: null,
   formBaselineValues: null,
+  formIssue: null,
+  dialogIssue: null,
   conflictDraft: null,
   conflictReview: null,
   noticeTimer: null,
@@ -109,6 +129,34 @@ const workStageFilter = get("work-stage-filter");
 const mobileSignOutButton = get("mobile-signout-button");
 const primaryNav = document.querySelector(".primary-nav");
 const navLinks = [...document.querySelectorAll('.nav-link[href^="#"]')];
+
+function hubLocale() {
+  return HUB_LOCALES[currentLanguage()] || HUB_LOCALES.en;
+}
+
+function localNumber(value) {
+  return new Intl.NumberFormat(hubLocale()).format(Number(value) || 0);
+}
+
+function localStatNumber(value) {
+  return new Intl.NumberFormat(hubLocale(), { minimumIntegerDigits: 2, useGrouping: false }).format(Number(value) || 0);
+}
+
+function pluralKey(base, value) {
+  return `${base}_${new Intl.PluralRules(hubLocale()).select(Number(value) || 0) === "one" ? "one" : "other"}`;
+}
+
+function statusLabel(status) {
+  return workStatusLabel(status);
+}
+
+function flagLabel(flag) {
+  return FLAG_LABEL_KEYS[flag] ? t(FLAG_LABEL_KEYS[flag]) : "";
+}
+
+function priorityLabel(priority) {
+  return t(PRIORITY_LABEL_KEYS[priority] || "work.priority_normal");
+}
 
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -375,6 +423,7 @@ function clearWorkspaceState() {
   clearRegisteredSections();
   state.formBaseline = null;
   state.formBaselineValues = null;
+  state.formIssue = null;
   clearNotice();
   clearDialogStatus();
   renderConflictReview();
@@ -401,17 +450,17 @@ function clearWorkspaceState() {
   get("workspace-label").textContent = "FAKESNIFF workspace";
   get("rail-member-label").textContent = "Member";
   get("member-avatar").textContent = "?";
-  get("home-member-kicker").textContent = "Workspace overview";
-  get("member-role-pill").textContent = "Member";
+  get("home-member-kicker").textContent = t("home.workspace_overview");
+  get("member-role-pill").textContent = t("work.member");
   ownerFilter.replaceChildren();
-  appendOption(ownerFilter, "all", "All owners");
-  appendOption(ownerFilter, "unassigned", "Owner needed");
+  appendOption(ownerFilter, "all", t("work.all_owners"));
+  appendOption(ownerFilter, "unassigned", t("work.owner_needed"));
   ownerInput.replaceChildren();
-  appendOption(ownerInput, "", "Owner needed");
+  appendOption(ownerInput, "", t("work.owner_needed"));
   approverInput.replaceChildren();
-  appendOption(approverInput, "", "No approver");
+  appendOption(approverInput, "", t("work.no_approver"));
   get("work-workstream").replaceChildren();
-  appendOption(get("work-workstream"), "", "No area");
+  appendOption(get("work-workstream"), "", t("work.no_area"));
   state.originalApproverId = "";
   get("work-more-details").open = false;
   if (board) {
@@ -420,30 +469,30 @@ function clearWorkspaceState() {
       const count = get(`${status}-count`);
       if (count) {
         count.textContent = "0";
-        count.setAttribute("aria-label", `0 ${STATUS_LABELS[status]} items shown`);
+        count.setAttribute("aria-label", t("work.items_shown_other", { n: localNumber(0), stage: statusLabel(status) }));
       }
     });
   }
   boardStatus.textContent = "";
   get("home-week-list")?.replaceChildren();
   get("home-attention-list")?.replaceChildren();
-  get("home-changes-status").textContent = "Checking…";
+  get("home-changes-status").textContent = t("home.checking");
   get("home-changes-retry").hidden = true;
-  get("home-changes-list").replaceChildren(createElement("p", "module-empty-copy", "Checking recent changes…"));
+  get("home-changes-list").replaceChildren(createElement("p", "module-empty-copy", t("home.checking_recent")));
   get("home-changes-list").setAttribute("aria-busy", "true");
   get("home-changes-note").textContent = "";
   get("home-changes-note").hidden = true;
   hideAppError();
   get("work-nav-count").textContent = "0";
-  get("work-nav-count").setAttribute("aria-label", "0 active work items");
-  get("home-active-work-count").textContent = "00";
-  get("home-active-work-note").textContent = "No active owners";
-  get("home-week-count").textContent = "00";
-  get("home-review-count").textContent = "00";
-  get("home-waiting-count").textContent = "00";
-  get("home-focus-date").textContent = "Today";
-  get("home-focus-value").textContent = "Your next move will appear here.";
-  get("home-focus-detail").textContent = "Sign in to load the shared work board.";
+  get("work-nav-count").setAttribute("aria-label", t("work.active_items_other", { n: localNumber(0) }));
+  get("home-active-work-count").textContent = localStatNumber(0);
+  get("home-active-work-note").textContent = t("home.no_active_owners");
+  get("home-week-count").textContent = localStatNumber(0);
+  get("home-review-count").textContent = localStatNumber(0);
+  get("home-waiting-count").textContent = localStatNumber(0);
+  get("home-focus-date").textContent = t("home.today");
+  get("home-focus-value").textContent = t("home.focus_waiting_signin");
+  get("home-focus-detail").textContent = t("home.signin_for_board");
   get("home-focus-action").hidden = true;
   reloadLatestButton.hidden = true;
   setMobileWorkStatus("this_week");
@@ -469,14 +518,14 @@ function workstreamMap() {
   return new Map(state.workstreams.map((workstream) => [workstream.id, workstream]));
 }
 
-function memberName(userId, fallback = "Owner needed") {
+function memberName(userId, fallback = t("work.owner_needed")) {
   if (!userId) return fallback;
-  return memberMap().get(userId)?.display_name || "Former member";
+  return memberMap().get(userId)?.display_name || t("work.former_member");
 }
 
 function workstreamName(workstreamId) {
-  if (!workstreamId) return "General";
-  return workstreamMap().get(workstreamId)?.name || "Archived area";
+  if (!workstreamId) return t("work.general");
+  return workstreamMap().get(workstreamId)?.name || t("work.archived_area");
 }
 
 function ownerClass(userId) {
@@ -491,10 +540,10 @@ function validWebUrl(value, httpsOnly = false) {
 }
 
 function formatDate(value) {
-  if (!value) return "No date";
+  if (!value) return t("work.no_date");
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(parsed);
+  return new Intl.DateTimeFormat(hubLocale(), { day: "numeric", month: "short" }).format(parsed);
 }
 
 function isOverdue(task) {
@@ -508,7 +557,9 @@ function taskDateLabel(task) {
   if (task.status === "done" && task.completed_at) {
     const completed = new Date(task.completed_at);
     if (!Number.isNaN(completed.getTime())) {
-      return `Done ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(completed)}`;
+      return t("work.done_date", {
+        date: new Intl.DateTimeFormat(hubLocale(), { day: "numeric", month: "short" }).format(completed)
+      });
     }
   }
   return formatDate(task.due_on);
@@ -532,37 +583,44 @@ function makeTaskCard(task) {
   const button = createElement("button", classes.join(" "));
   button.type = "button";
   button.dataset.taskId = task.id;
-  button.setAttribute("aria-label", `${canEdit() ? "Edit" : "View"} ${task.title}. ${STATUS_LABELS[task.status]}.`);
+  button.setAttribute("aria-label", t(canEdit() ? "work.card_edit_aria" : "work.card_view_aria", {
+    title: task.title,
+    status: statusLabel(task.status)
+  }));
 
   const top = createElement("span", "task-card-top");
   top.append(createElement("span", "task-type", workstreamName(task.workstream_id)));
-  top.append(createElement("span", `priority-label priority-${task.priority}`, task.priority));
+  top.append(createElement("span", `priority-label priority-${task.priority}`, priorityLabel(task.priority)));
   button.append(top, createElement("span", "task-card-title", task.title));
 
   if (task.next_action) {
     const next = createElement("span", "task-card-next");
-    next.append(createElement("strong", "", "Next: "), document.createTextNode(task.next_action));
+    next.append(createElement("strong", "", t("work.card_next")), document.createTextNode(task.next_action));
     button.append(next);
   }
   if (task.status === "waiting" && task.blocker_note) {
     const blocker = createElement("span", "task-card-blocker");
-    blocker.append(createElement("strong", "", "Blocked: "), document.createTextNode(task.blocker_note));
+    blocker.append(createElement("strong", "", t("work.card_blocked")), document.createTextNode(task.blocker_note));
     button.append(blocker);
   }
 
-  const flags = Array.isArray(task.flags) ? task.flags.filter((flag) => FLAG_LABELS[flag]) : [];
+  const flags = Array.isArray(task.flags) ? task.flags.filter((flag) => FLAG_LABEL_KEYS[flag]) : [];
   const approvalLabel = task.status === "review"
     ? (task.approver_id === state.membership?.user_id
-      ? "Needs your approval"
-      : `Review by ${memberName(task.approver_id, "Approver needed")}`)
+      ? t("work.needs_your_approval")
+      : t("work.review_by", { name: memberName(task.approver_id, t("work.approver_needed")) }))
     : "";
   if (approvalLabel) {
-    button.setAttribute("aria-label", `${canEdit() ? "Edit" : "View"} ${task.title}. ${STATUS_LABELS[task.status]}. ${approvalLabel}.`);
+    button.setAttribute("aria-label", t(canEdit() ? "work.card_edit_approval_aria" : "work.card_view_approval_aria", {
+      title: task.title,
+      status: statusLabel(task.status),
+      approval: approvalLabel
+    }));
   }
   if (flags.length || !task.owner_id || approvalLabel) {
     const flagRow = createElement("span", "task-card-flags");
-    flags.forEach((flag) => flagRow.append(createElement("span", "task-flag", FLAG_LABELS[flag])));
-    if (!task.owner_id) flagRow.append(createElement("span", "task-flag task-flag-owner", "Owner needed"));
+    flags.forEach((flag) => flagRow.append(createElement("span", "task-flag", flagLabel(flag))));
+    if (!task.owner_id) flagRow.append(createElement("span", "task-flag task-flag-owner", t("work.owner_needed")));
     if (approvalLabel) flagRow.append(createElement("span", "task-flag task-flag-approval", approvalLabel));
     button.append(flagRow);
   }
@@ -574,8 +632,8 @@ function makeTaskCard(task) {
   shell.append(button);
 
   const links = [];
-  if (task.source_url && validWebUrl(task.source_url)) links.push([task.source_url, "Source ↗"]);
-  if (task.latest_file_url && validWebUrl(task.latest_file_url, true)) links.push([task.latest_file_url, "Latest file ↗"]);
+  if (task.source_url && validWebUrl(task.source_url)) links.push([task.source_url, t("work.source_link")]);
+  if (task.latest_file_url && validWebUrl(task.latest_file_url, true)) links.push([task.latest_file_url, t("work.latest_file")]);
   if (links.length) {
     const linkRow = createElement("div", "task-card-links");
     links.forEach(([url, label]) => linkRow.append(makeExternalLink(url, label)));
@@ -588,11 +646,12 @@ function taskMatches(task, search, ownerId) {
   if (ownerId === "unassigned" && task.owner_id) return false;
   if (ownerId !== "all" && ownerId !== "unassigned" && task.owner_id !== ownerId) return false;
   if (!search) return true;
-  const flags = Array.isArray(task.flags) ? task.flags.map((flag) => FLAG_LABELS[flag] || "").join(" ") : "";
+  const flags = Array.isArray(task.flags) ? task.flags.map(flagLabel).join(" ") : "";
   return [
     task.title, workstreamName(task.workstream_id), memberName(task.owner_id),
-    memberName(task.approver_id, "No approver"), task.next_action, task.completion_condition,
-    task.blocker_note, flags, task.owner_id ? "" : "owner needed"
+    memberName(task.approver_id, t("work.no_approver")), task.next_action, task.completion_condition,
+    task.blocker_note, flags, statusLabel(task.status), priorityLabel(task.priority),
+    task.owner_id ? "" : t("work.owner_needed")
   ].join(" ").toLowerCase().includes(search);
 }
 
@@ -604,8 +663,12 @@ function setMobileWorkStatus(status, { announce = false } = {}) {
     column.classList.toggle("is-mobile-current", column.dataset.workStatus === nextStatus);
   });
   if (announce) {
-    const count = get(`${nextStatus}-count`).textContent;
-    boardStatus.textContent = `Showing ${STATUS_LABELS[nextStatus]}: ${count} ${count === "1" ? "item" : "items"}.`;
+    const countElement = get(`${nextStatus}-count`);
+    const count = Number(countElement.dataset.count || 0);
+    boardStatus.textContent = t(pluralKey("work.showing_stage", count), {
+      stage: statusLabel(nextStatus),
+      n: localNumber(count)
+    });
   }
 }
 
@@ -619,16 +682,21 @@ function renderBoard() {
     const matches = visible.filter((task) => task.status === status);
     container.replaceChildren();
     matches.forEach((task) => container.append(makeTaskCard(task)));
-    if (!matches.length) container.append(createElement("p", "board-empty", search || ownerId !== "all" ? "No matching work" : "No work here"));
-    get(`${status}-count`).textContent = String(matches.length);
-    get(`${status}-count`).setAttribute("aria-label", `${matches.length} ${STATUS_LABELS[status]} items shown`);
+    if (!matches.length) container.append(createElement("p", "board-empty", t(search || ownerId !== "all" ? "work.no_matching" : "work.no_work_here")));
+    const countElement = get(`${status}-count`);
+    countElement.dataset.count = String(matches.length);
+    countElement.textContent = localNumber(matches.length);
+    countElement.setAttribute("aria-label", t(pluralKey("work.items_shown", matches.length), {
+      n: localNumber(matches.length),
+      stage: statusLabel(status)
+    }));
     const stageOption = [...workStageFilter.options].find((option) => option.value === status);
-    if (stageOption) stageOption.textContent = `${STATUS_LABELS[status]} (${matches.length})`;
+    if (stageOption) stageOption.textContent = `${statusLabel(status)} (${localNumber(matches.length)})`;
   });
 
   setMobileWorkStatus(state.mobileWorkStatus);
-  boardStatus.textContent = `${visible.length} work ${visible.length === 1 ? "item" : "items"} shown.`;
-  renderSummary();
+  boardStatus.textContent = t(pluralKey("work.board_items", visible.length), { n: localNumber(visible.length) });
+  return renderSummary();
 }
 
 function homeListItem(task, detail) {
@@ -659,43 +727,58 @@ function localDateIso(date = new Date()) {
 
 function homeActivityTime(value, now = Date.now()) {
   const timestamp = Date.parse(value || "");
-  if (!Number.isFinite(timestamp)) return "Recently";
+  if (!Number.isFinite(timestamp)) return t("home.time_recently");
   const minutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t("home.time_just_now");
+  if (minutes < 60) return t("home.time_minutes_ago", { n: localNumber(minutes) });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  if (hours < 48) return "Yesterday";
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(timestamp));
+  if (hours < 24) return t("home.time_hours_ago", { n: localNumber(hours) });
+  if (hours < 48) return t("home.time_yesterday");
+  return new Intl.DateTimeFormat(hubLocale(), { day: "numeric", month: "short" }).format(new Date(timestamp));
 }
 
 function homeActivityKindLabel(kind) {
   return {
-    task_waiting: "Waiting",
-    task_review: "Review",
-    decision_recorded: "Decision",
-    decision_agreed: "Agreed",
-    review_stale: "Untouched"
-  }[kind] || "Update";
+    task_waiting: t("home.kind_waiting"),
+    task_review: t("home.kind_review"),
+    decision_recorded: t("home.kind_decision"),
+    decision_agreed: t("home.kind_agreed"),
+    review_stale: t("home.kind_untouched")
+  }[kind] || t("home.kind_update");
+}
+
+function homeActivityActor(item) {
+  return !item.actorName || item.actorName === "Someone on the team"
+    ? t("home.someone_team")
+    : item.actorName;
+}
+
+function homeActivityTitle(item) {
+  return !item.title || item.title === "Untitled work"
+    ? t("home.untitled_work")
+    : item.title;
 }
 
 function homeActivityDetail(item) {
   if (item.kind === "task_waiting") {
-    return `${item.actorName} moved this to Waiting.`;
+    return t("home.change_waiting", { actor: homeActivityActor(item) });
   }
   if (item.kind === "task_review") {
-    if (item.needsYou) return "Ready for your review.";
-    return `${item.actorName} sent this for review.`;
+    if (item.needsYou) return t("home.change_ready_review");
+    return t("home.change_sent_review", { actor: homeActivityActor(item) });
   }
-  if (item.kind === "decision_recorded") return `${item.actorName} recorded this decision.`;
-  if (item.kind === "decision_agreed") return `${item.actorName} marked this decision agreed.`;
+  if (item.kind === "decision_recorded") return t("home.change_decision_saved", { actor: homeActivityActor(item) });
+  if (item.kind === "decision_agreed") return t("home.change_decision_agreed", { actor: homeActivityActor(item) });
   if (item.kind === "review_stale") {
     const task = taskById(item.entityId);
     const days = Math.max(1, Math.floor(item.hoursUntouched / 24));
-    if (item.needsYou) return `Waiting for your review for ${days} ${days === 1 ? "day" : "days"}.`;
-    return `Still waiting for ${memberName(task?.approver_id, "an approver")} after ${days} ${days === 1 ? "day" : "days"}.`;
+    if (item.needsYou) return t(pluralKey("home.review_wait_yours", days), { n: localNumber(days) });
+    return t(pluralKey("home.review_wait_person", days), {
+      approver: memberName(task?.approver_id, t("home.an_approver")),
+      n: localNumber(days)
+    });
   }
-  return "Open this item to see what changed.";
+  return t("home.open_to_see_changed");
 }
 
 function makeHomeActivityRow(item) {
@@ -704,7 +787,7 @@ function makeHomeActivityRow(item) {
   const copy = createElement("span", "home-change-copy");
   const detail = homeActivityDetail(item);
   copy.append(
-    createElement("strong", "", item.title),
+    createElement("strong", "", homeActivityTitle(item)),
     createElement("small", "", detail)
   );
 
@@ -712,7 +795,7 @@ function makeHomeActivityRow(item) {
   const attention = item.needsYou || item.kind === "task_waiting" || item.kind === "review_stale";
   meta.append(
     createElement("span", `home-change-kind${attention ? " is-attention" : ""}`, homeActivityKindLabel(item.kind)),
-    createElement("span", "home-change-time", item.kind === "review_stale" ? "Still open" : homeActivityTime(item.occurredAt))
+    createElement("span", "home-change-time", item.kind === "review_stale" ? t("home.still_open") : homeActivityTime(item.occurredAt))
   );
   row.append(copy, meta);
   return row;
@@ -731,13 +814,13 @@ function renderHomeActivity() {
   list.setAttribute("aria-busy", state.homeActivity.status === "loading" ? "true" : "false");
   let receiptGroups = [];
   if (state.homeActivity.status === "loading" && !hasPayload) {
-    list.replaceChildren(createElement("p", "module-empty-copy", "Checking recent changes…"));
+    list.replaceChildren(createElement("p", "module-empty-copy", t("home.checking_recent")));
   } else if (!digest.items.length) {
     const copy = state.homeActivity.status === "error"
-      ? "Couldn’t check recent changes. Your Work board is still available."
+      ? t("home.check_failed_full")
       : digest.firstVisit
-        ? "First check-in. Changes recorded today will appear here."
-        : "Nothing new since your last look.";
+        ? t("home.first_checkin")
+        : t("home.nothing_new");
     list.replaceChildren(createElement("p", "module-empty-copy", copy));
   } else {
     const rows = digest.items.map(makeHomeActivityRow);
@@ -750,18 +833,18 @@ function renderHomeActivity() {
       .filter((group) => group.receiptEventIds.length);
   }
 
-  if (state.homeActivity.status === "loading") status.textContent = "Checking…";
-  else if (state.homeActivity.status === "error") status.textContent = "Couldn’t check";
-  else if (digest.firstVisit && newCount) status.textContent = "Today";
-  else if (newCount) status.textContent = `${newCount} new`;
-  else if (digest.items.length) status.textContent = "Still open";
-  else status.textContent = "Up to date";
+  if (state.homeActivity.status === "loading") status.textContent = t("home.checking");
+  else if (state.homeActivity.status === "error") status.textContent = t("home.check_failed_short");
+  else if (digest.firstVisit && newCount) status.textContent = t("home.today");
+  else if (newCount) status.textContent = t(pluralKey("home.new", newCount), { n: localNumber(newCount) });
+  else if (digest.items.length) status.textContent = t("home.still_open");
+  else status.textContent = t("home.up_to_date");
   retry.hidden = state.homeActivity.status !== "error";
 
   const notes = [];
-  if (digest.hasMore) notes.push("Showing the newest changes. Open Work and Decisions for the rest.");
-  if (state.homeActivity.acknowledgementWarning) notes.push("This check-in may repeat because its seen marker could not be saved.");
-  if (state.homeActivity.status === "error" && hasPayload && payload.items.length) notes.push("The items shown are from the last successful check.");
+  if (digest.hasMore) notes.push(t("home.more_changes"));
+  if (state.homeActivity.acknowledgementWarning) notes.push(t("home.receipt_warning"));
+  if (state.homeActivity.status === "error" && hasPayload && payload.items.length) notes.push(t("home.cached_changes"));
   note.textContent = notes.join(" ");
   note.hidden = !notes.length;
 
@@ -901,7 +984,7 @@ function renderHomeFocus() {
   const today = new Date();
   const todayIso = localDateIso(today);
   const focus = selectHomeFocus(state.tasks, state.membership?.user_id || "", todayIso);
-  get("home-focus-date").textContent = new Intl.DateTimeFormat("en-GB", {
+  get("home-focus-date").textContent = new Intl.DateTimeFormat(hubLocale(), {
     weekday: "long", day: "numeric", month: "short"
   }).format(today);
   action.hidden = false;
@@ -912,35 +995,35 @@ function renderHomeFocus() {
     const teamHasActiveWork = state.tasks.some((task) => ACTIVE_STATUSES.has(task.status));
     const backlogCount = state.tasks.filter((task) => task.status === "backlog").length;
     if (backlogCount && !teamHasActiveWork) {
-      get("home-focus-value").textContent = "Choose what moves next.";
-      get("home-focus-detail").textContent = `${backlogCount} backlog ${backlogCount === 1 ? "item is" : "items are"} ready to plan.`;
-      action.textContent = "Review backlog";
-      action.setAttribute("aria-label", "Open the Work backlog");
+      get("home-focus-value").textContent = t("home.focus_choose_next");
+      get("home-focus-detail").textContent = t(pluralKey("home.backlog_ready", backlogCount), { n: localNumber(backlogCount) });
+      action.textContent = t("home.review_backlog");
+      action.setAttribute("aria-label", t("home.open_backlog_aria"));
       action.dataset.homeAction = "open-backlog";
     } else if (hasEditRole() && !teamHasActiveWork) {
       if (state.stale) {
-        get("home-focus-value").textContent = "Work needs a refresh.";
-        get("home-focus-detail").textContent = "Editing is paused until the shared board reconnects.";
-        action.textContent = "Refresh board";
-        action.setAttribute("aria-label", "Refresh the shared Work board");
+        get("home-focus-value").textContent = t("home.focus_refresh");
+        get("home-focus-detail").textContent = t("home.editing_paused");
+        action.textContent = t("home.refresh_board");
+        action.setAttribute("aria-label", t("home.refresh_board_aria"));
         action.dataset.homeAction = "refresh";
       } else {
         // Codex — 2026-08-13: a first visit teaches the smallest safe action instead of presenting an empty dashboard.
-        get("home-focus-value").textContent = "Add the first thing we need to do.";
-        get("home-focus-detail").textContent = "Start it in Backlog with just a title. Add details when the team chooses it for This week.";
-        action.textContent = "Create first work item";
-        action.setAttribute("aria-label", "Create the first work item");
+        get("home-focus-value").textContent = t("home.focus_create");
+        get("home-focus-detail").textContent = t("home.focus_create_detail");
+        action.textContent = t("home.create_first");
+        action.setAttribute("aria-label", t("home.create_first_aria"));
         action.dataset.homeAction = "create";
       }
     } else if (!teamHasActiveWork) {
-      get("home-focus-value").textContent = "No work has been added yet.";
-      get("home-focus-detail").textContent = "A workspace member can add the first work item.";
+      get("home-focus-value").textContent = t("home.focus_no_work");
+      get("home-focus-detail").textContent = t("home.focus_no_work_detail");
       action.hidden = true;
     } else {
-      get("home-focus-value").textContent = "Nothing needs you right now.";
-      get("home-focus-detail").textContent = "The team's active work is on the board.";
-      action.textContent = "Open Work";
-      action.setAttribute("aria-label", "Open the shared Work board");
+      get("home-focus-value").textContent = t("home.focus_nothing_needed");
+      get("home-focus-detail").textContent = t("home.focus_team_board");
+      action.textContent = t("home.open_work");
+      action.setAttribute("aria-label", t("home.open_work_aria"));
       action.dataset.homeAction = "open-work";
     }
     return;
@@ -948,20 +1031,27 @@ function renderHomeFocus() {
 
   const { task, reason } = focus;
   get("home-focus-value").textContent = task.title;
-  action.textContent = "Open item";
-  action.setAttribute("aria-label", `Open ${task.title}`);
+  action.textContent = t("home.open_item");
+  action.setAttribute("aria-label", t("home.open_item_aria", { title: task.title }));
   action.dataset.taskId = task.id;
-  const next = task.next_action ? ` Next: ${task.next_action}` : "";
   const details = {
-    assigned_review: `Needs your decision.${next}`,
-    owned_overdue: `Overdue since ${formatDate(task.due_on)}.${next}`,
-    owned_doing: task.next_action ? `Next: ${task.next_action}` : `Due ${formatDate(task.due_on)}. Add the next step.`,
-    owned_this_week: task.next_action ? `This week · Next: ${task.next_action}` : `Due ${formatDate(task.due_on)}. Add the next step.`,
+    assigned_review: task.next_action
+      ? t("home.needs_decision_next", { next: task.next_action })
+      : t("home.needs_decision"),
+    owned_overdue: task.next_action
+      ? t("home.overdue_since_next", { date: formatDate(task.due_on), next: task.next_action })
+      : t("home.overdue_since", { date: formatDate(task.due_on) }),
+    owned_doing: task.next_action
+      ? t("home.doing_next", { next: task.next_action })
+      : t("home.due_add_next", { date: formatDate(task.due_on) }),
+    owned_this_week: task.next_action
+      ? t("home.this_week_next", { next: task.next_action })
+      : t("home.due_add_next", { date: formatDate(task.due_on) }),
     team_attention: task.status === "waiting"
-      ? `Blocked: ${task.blocker_note || "Waiting reason needed"}`
-      : `Review by ${memberName(task.approver_id, "Approver needed")}.`
+      ? t("home.blocked_detail", { reason: task.blocker_note || t("home.waiting_reason_needed") })
+      : t("home.review_by", { name: memberName(task.approver_id, t("home.approver_needed")) })
   };
-  get("home-focus-detail").textContent = details[reason] || "Open this item to see the next move.";
+  get("home-focus-detail").textContent = details[reason] || t("home.open_to_see_next");
 }
 
 function renderSummary() {
@@ -971,20 +1061,22 @@ function renderSummary() {
   const waiting = state.tasks.filter((task) => task.status === "waiting");
   const owners = new Set(active.map((task) => task.owner_id).filter(Boolean));
 
-  get("work-nav-count").textContent = String(active.length);
-  get("work-nav-count").setAttribute("aria-label", `${active.length} active work items`);
-  get("home-active-work-count").textContent = String(active.length).padStart(2, "0");
-  get("home-active-work-note").textContent = owners.size ? `Across ${owners.size} ${owners.size === 1 ? "owner" : "owners"}` : "No active owners";
-  get("home-week-count").textContent = String(week.length).padStart(2, "0");
-  get("home-review-count").textContent = String(review.length).padStart(2, "0");
-  get("home-waiting-count").textContent = String(waiting.length).padStart(2, "0");
+  get("work-nav-count").textContent = localNumber(active.length);
+  get("work-nav-count").setAttribute("aria-label", t(pluralKey("work.active_items", active.length), { n: localNumber(active.length) }));
+  get("home-active-work-count").textContent = localStatNumber(active.length);
+  get("home-active-work-note").textContent = owners.size
+    ? t(pluralKey("home.across_owners", owners.size), { n: localNumber(owners.size) })
+    : t("home.no_active_owners");
+  get("home-week-count").textContent = localStatNumber(week.length);
+  get("home-review-count").textContent = localStatNumber(review.length);
+  get("home-waiting-count").textContent = localStatNumber(waiting.length);
   renderHomeFocus();
 
   renderHomeList(
     get("home-week-list"),
     week,
-    (task) => task.next_action || "Next step not recorded",
-    "Nothing is planned for this week yet. Choose up to three items from Backlog when the team is ready."
+    (task) => task.next_action || t("home.next_not_recorded"),
+    t("home.week_empty")
   );
   const memberId = state.membership?.user_id;
   const attention = [...review, ...waiting].sort((left, right) => {
@@ -999,10 +1091,12 @@ function renderSummary() {
   renderHomeList(
     get("home-attention-list"),
     attention.slice(0, 5),
-    (task) => task.status === "waiting" ? task.blocker_note : `Review by ${memberName(task.approver_id, "Approver needed")}`,
-    "All clear — nothing is waiting for review or blocked."
+    (task) => task.status === "waiting"
+      ? task.blocker_note
+      : t("work.review_by", { name: memberName(task.approver_id, t("work.approver_needed")) }),
+    t("home.attention_clear")
   );
-  renderHomeActivity();
+  return renderHomeActivity();
 }
 
 function appendOption(select, value, label) {
@@ -1015,8 +1109,8 @@ function appendOption(select, value, label) {
 function populateReferenceControls() {
   const currentFilter = ownerFilter.value;
   ownerFilter.replaceChildren();
-  appendOption(ownerFilter, "all", "All owners");
-  appendOption(ownerFilter, "unassigned", "Owner needed");
+  appendOption(ownerFilter, "all", t("work.all_owners"));
+  appendOption(ownerFilter, "unassigned", t("work.owner_needed"));
 
   const activeMembers = state.members.filter((member) => !member.archived_at);
   const editableMembers = activeMembers.filter((member) => ROLE_RANK[member.role] >= ROLE_RANK.member);
@@ -1025,16 +1119,16 @@ function populateReferenceControls() {
 
   const ownerSelect = ownerInput;
   ownerSelect.replaceChildren();
-  appendOption(ownerSelect, "", "Owner needed");
+  appendOption(ownerSelect, "", t("work.owner_needed"));
   editableMembers.forEach((member) => appendOption(ownerSelect, member.user_id, member.display_name));
 
   approverInput.replaceChildren();
-  appendOption(approverInput, "", "No approver");
+  appendOption(approverInput, "", t("work.no_approver"));
   editableMembers.forEach((member) => appendOption(approverInput, member.user_id, member.display_name));
 
   const workstreamSelect = get("work-workstream");
   workstreamSelect.replaceChildren();
-  appendOption(workstreamSelect, "", "No area");
+  appendOption(workstreamSelect, "", t("work.no_area"));
   state.workstreams
     .filter((workstream) => !workstream.archived_at && workstream.status === "active")
     .forEach((workstream) => appendOption(workstreamSelect, workstream.id, workstream.name));
@@ -1048,13 +1142,16 @@ function renderWorkspace({ focus = false } = {}) {
   get("workspace-label").textContent = state.workspace?.name || "FAKESNIFF workspace";
   get("rail-member-label").textContent = `${displayName} · ${role}`;
   get("member-avatar").textContent = displayName.trim().slice(0, 1).toUpperCase() || "?";
-  get("home-member-kicker").textContent = `Welcome, ${displayName}`;
-  get("member-role-pill").textContent = role;
+  get("home-member-kicker").textContent = t("home.welcome", { name: displayName });
+  get("member-role-pill").textContent = t(`work.role_${role}`);
   get("work-mode-copy").textContent = role === "viewer"
-    ? "You have read-only access. A workspace member must make changes."
-    : "Signed-in changes are written to the private workspace.";
+    ? t("work.readonly_mode")
+    : t("work.private_mode");
   const dataNote = get("work-data-note");
-  dataNote.replaceChildren(createElement("strong", "", "Private data."), document.createTextNode(" Loaded for verified members only."));
+  dataNote.replaceChildren(
+    createElement("strong", "", t("work.private_data")),
+    document.createTextNode(` ${t("work.verified_only")}`)
+  );
 
   newWorkButton.hidden = !canEdit();
   newWorkButton.disabled = !canEdit();
@@ -1130,7 +1227,7 @@ function isFormDirty() {
 
 function requestDialogClose() {
   if (state.saving) return;
-  if (isFormDirty() && !window.confirm("Discard your unsaved changes?")) return;
+  if (isFormDirty() && !window.confirm(t("work.discard_confirm"))) return;
   state.formBaseline = null;
   state.formBaselineValues = null;
   dialog.close();
@@ -1138,7 +1235,7 @@ function requestDialogClose() {
 
 async function requestWorkspaceRefresh() {
   if (state.refreshing) return;
-  if (isFormDirty() && !window.confirm("Refresh the Hub and discard your unsaved changes?")) return;
+  if (isFormDirty() && !window.confirm(t("work.refresh_discard_confirm"))) return;
   state.formBaseline = null;
   state.formBaselineValues = null;
   if (dialog.open) dialog.close();
@@ -1201,55 +1298,77 @@ function clearEditedFieldError(event) {
   clearFieldError(event.target);
   formError.hidden = true;
   formError.textContent = "";
+  state.formIssue = null;
 }
 
 function clearFormError() {
   formError.hidden = true;
   formError.textContent = "";
+  state.formIssue = null;
   clearFieldErrors();
 }
 
 function clearDialogStatus() {
   dialogStatus.hidden = true;
   dialogStatus.textContent = "";
+  state.dialogIssue = null;
 }
 
-function showDialogStatus(message, { focus = false } = {}) {
+function showDialogStatus(message, { focus = false, translate = null } = {}) {
+  state.dialogIssue = typeof translate === "function" ? translate : null;
   dialogStatus.textContent = message;
   dialogStatus.hidden = false;
   if (focus) window.requestAnimationFrame(() => dialogStatus.focus());
 }
 
-const CONFLICT_FIELD_LABELS = Object.freeze({
-  title: "Title",
-  workstreamId: "Area",
-  status: "Status",
-  ownerId: "Owner",
-  approverId: "Approver",
-  priority: "Priority",
-  dueOn: "Due date",
-  nextAction: "Next step",
-  completion: "Done condition",
-  blocker: "Waiting reason",
-  flags: "Attention flags",
-  sourceUrl: "Source link",
-  latestFileUrl: "File link"
+function showTranslatedDialogStatus(key, varsOrFactory = undefined, { focus = false } = {}) {
+  const translate = () => {
+    const vars = typeof varsOrFactory === "function" ? varsOrFactory() : varsOrFactory;
+    return t(key, vars);
+  };
+  showDialogStatus(translate(), { focus, translate });
+}
+
+function retranslateDialogStatus() {
+  if (!dialogStatus.hidden && state.dialogIssue) dialogStatus.textContent = state.dialogIssue();
+}
+
+const CONFLICT_FIELD_KEYS = Object.freeze({
+  title: "work.conflict_title",
+  workstreamId: "work.conflict_area",
+  status: "work.conflict_status",
+  ownerId: "work.conflict_owner",
+  approverId: "work.conflict_approver",
+  priority: "work.conflict_priority",
+  dueOn: "work.conflict_due",
+  nextAction: "work.conflict_next",
+  completion: "work.conflict_done",
+  blocker: "work.conflict_waiting",
+  flags: "work.conflict_flags",
+  sourceUrl: "work.conflict_source",
+  latestFileUrl: "work.conflict_file"
 });
 
+function conflictFieldLabel(key) {
+  return CONFLICT_FIELD_KEYS[key] ? t(CONFLICT_FIELD_KEYS[key]) : key;
+}
+
 function conflictValueLabel(key, value) {
-  if (key === "ownerId" || key === "approverId") return memberName(value, "Nobody");
-  if (key === "workstreamId") return value ? workstreamName(value) : "No area";
-  if (key === "status") return STATUS_LABELS[value] || value;
-  if (key === "flags") return value?.length ? value.map((flag) => FLAG_LABELS[flag] || flag).join(", ") : "None";
-  return String(value || "Empty");
+  if (key === "ownerId" || key === "approverId") return memberName(value, t("work.nobody"));
+  if (key === "workstreamId") return value ? workstreamName(value) : t("work.no_area");
+  if (key === "status") return value ? statusLabel(value) : t("work.empty");
+  if (key === "priority") return value ? priorityLabel(value) : t("work.empty");
+  if (key === "dueOn") return value ? formatDate(value) : t("work.empty");
+  if (key === "flags") return value?.length ? value.map((flag) => flagLabel(flag) || flag).join(", ") : t("work.none");
+  return String(value || t("work.empty"));
 }
 
 function protectedConflictNote(review) {
   const labels = (review?.protectedFields || [])
-    .map((key) => CONFLICT_FIELD_LABELS[key]?.toLowerCase())
+    .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
     .filter(Boolean)
     .join(", ");
-  return labels ? ` The latest ${labels} was kept because approval authority changed.` : "";
+  return labels ? t("work.authority_kept", { fields: labels }) : "";
 }
 
 function renderConflictReview() {
@@ -1261,7 +1380,7 @@ function renderConflictReview() {
   }
 
   review.unresolvedKeys.forEach((key, index) => {
-    const label = CONFLICT_FIELD_LABELS[key] || key;
+    const label = conflictFieldLabel(key);
     const row = createElement("article", "conflict-choice");
     const copy = createElement("div", "conflict-choice-copy");
     const title = createElement("p", "conflict-field-label");
@@ -1272,24 +1391,24 @@ function renderConflictReview() {
     title.append(createElement("strong", "", label));
     const latest = createElement("p");
     latest.id = latestId;
-    latest.append(createElement("strong", "", "Latest: "), document.createTextNode(conflictValueLabel(key, review.latestValues[key])));
+    latest.append(createElement("strong", "", t("work.conflict_latest")), document.createTextNode(conflictValueLabel(key, review.latestValues[key])));
     const mine = createElement("p");
     mine.id = mineId;
-    mine.append(createElement("strong", "", "Yours: "), document.createTextNode(conflictValueLabel(key, review.draftValues[key])));
+    mine.append(createElement("strong", "", t("work.conflict_yours")), document.createTextNode(conflictValueLabel(key, review.draftValues[key])));
     copy.append(title, latest, mine);
 
     const actions = createElement("div", "conflict-choice-actions");
-    const keepLatest = createElement("button", "text-button", "Keep latest");
+    const keepLatest = createElement("button", "text-button", t("work.keep_latest"));
     keepLatest.type = "button";
     keepLatest.dataset.conflictKey = key;
     keepLatest.dataset.conflictChoice = "latest";
-    keepLatest.setAttribute("aria-label", `Keep latest ${label.toLowerCase()}`);
+    keepLatest.setAttribute("aria-label", t("work.keep_latest_aria", { field: label.toLocaleLowerCase(hubLocale()) }));
     keepLatest.setAttribute("aria-describedby", latestId);
-    const useMine = createElement("button", "text-button", "Use mine");
+    const useMine = createElement("button", "text-button", t("work.use_mine"));
     useMine.type = "button";
     useMine.dataset.conflictKey = key;
     useMine.dataset.conflictChoice = "draft";
-    useMine.setAttribute("aria-label", `Use my ${label.toLowerCase()}`);
+    useMine.setAttribute("aria-label", t("work.use_mine_aria", { field: label.toLocaleLowerCase(hubLocale()) }));
     useMine.setAttribute("aria-describedby", mineId);
     actions.append(keepLatest, useMine);
     row.setAttribute("role", "group");
@@ -1315,13 +1434,21 @@ function resolveConflictChoice(key, choice) {
   saveButton.disabled = Boolean(review.unresolvedKeys.length) || !canEdit();
   archiveButton.disabled = Boolean(review.unresolvedKeys.length);
   if (review.unresolvedKeys.length) {
-    showDialogStatus(`${review.unresolvedKeys.length} conflict ${review.unresolvedKeys.length === 1 ? "choice remains" : "choices remain"}.${protectedConflictNote(review)}`);
+    const conflictKey = new Intl.PluralRules(hubLocale()).select(review.unresolvedKeys.length) === "one"
+      ? "work.conflict_one_left"
+      : "work.conflict_other_left";
+    showTranslatedDialogStatus(conflictKey, () => ({
+      n: localNumber(review.unresolvedKeys.length),
+      note: protectedConflictNote(review)
+    }));
     conflictFields.querySelector("button")?.focus();
     return;
   }
-  const authorityNote = protectedConflictNote(review);
+  const protectedFields = [...(review.protectedFields || [])];
   state.conflictReview = null;
-  showDialogStatus(`Conflict choices resolved.${authorityNote} Review the item, then save your edits.`);
+  showTranslatedDialogStatus("work.conflict_resolved", () => ({
+    note: protectedConflictNote({ protectedFields })
+  }));
   const firstAffectedControl = get({
     title: "work-title-input", workstreamId: "work-workstream", status: "work-status",
     ownerId: "work-owner", approverId: "work-approver", priority: "work-priority",
@@ -1345,8 +1472,11 @@ function resolveConflictChoice(key, choice) {
   });
 }
 
-function showFormError(message, fieldId = "") {
+function showFormError(message, fieldId = "", issue = null) {
   clearFieldErrors();
+  state.formIssue = issue?.key
+    ? { key: issue.key, vars: issue.vars || null, fieldId: fieldId || issue.fieldId || "" }
+    : null;
   formError.textContent = message;
   formError.hidden = false;
   const control = fieldId ? get(fieldId) : null;
@@ -1364,6 +1494,22 @@ function showFormError(message, fieldId = "") {
   control.setAttribute("aria-invalid", "true");
   control.dataset.fieldErrorId = inlineError.id;
   control.focus();
+}
+
+function showTranslatedFormError(key, vars = undefined, fieldId = "") {
+  const issue = { key, vars: vars || null, fieldId };
+  showFormError(t(key, vars), fieldId, issue);
+}
+
+function retranslateFormError() {
+  if (!state.formIssue || formError.hidden) return;
+  const vars = state.formIssue.vars ? { ...state.formIssue.vars } : undefined;
+  if (vars?.stageCode) vars.stage = statusLabel(vars.stageCode);
+  const message = t(state.formIssue.key, vars);
+  formError.textContent = message;
+  const control = state.formIssue.fieldId ? get(state.formIssue.fieldId) : null;
+  const errorId = control?.dataset?.fieldErrorId;
+  if (errorId) get(errorId).textContent = message;
 }
 
 function addMissingReferenceOption(select, value, label) {
@@ -1390,11 +1536,11 @@ function setFormReadOnly(readOnly) {
   });
   saveButton.hidden = readOnly;
   if (readOnly) archiveButton.hidden = true;
-  if (get("work-id").value) get("work-dialog-title").textContent = readOnly ? "View work item" : "Edit work item";
-  get("cancel-work-button").textContent = readOnly ? "Close" : "Cancel";
+  if (get("work-id").value) get("work-dialog-title").textContent = t(readOnly ? "work.view_item" : "work.edit_item");
+  get("cancel-work-button").textContent = t(readOnly ? "work.close" : "work.cancel");
 }
 
-function syncRequirements() {
+function syncRequirements({ clearError = true } = {}) {
   const status = statusInput.value;
   const active = ACTIVE_STATUSES.has(status);
   const done = status === "done";
@@ -1417,8 +1563,8 @@ function syncRequirements() {
   get("work-completion").required = active || done;
   get("work-blocker").required = waiting;
   approverInput.required = review;
-  get("work-status-guidance").textContent = STATUS_GUIDANCE[status] || STATUS_GUIDANCE.backlog;
-  clearFormError();
+  get("work-status-guidance").textContent = t(STATUS_GUIDANCE_KEYS[status] || "work.guidance_backlog");
+  if (clearError) clearFormError();
 }
 
 function taskById(id) {
@@ -1434,7 +1580,9 @@ function configureApprovalControls(task) {
      before somebody writes into fields that the database cannot save. */
   if (permissions.readOnly) {
     setFormReadOnly(true);
-    get("work-status-guidance").textContent = `This approved item is locked. Only ${memberName(task.approver_id, "its approver")} or a workspace admin or owner can change or reopen it.`;
+    get("work-status-guidance").textContent = t("work.approved_locked", {
+      approver: memberName(task.approver_id, t("work.its_approver"))
+    });
     archiveButton.hidden = true;
     return;
   }
@@ -1465,7 +1613,7 @@ function openNewTask() {
   get("work-updated-at").value = "";
   statusInput.value = "backlog";
   get("work-priority").value = "normal";
-  get("work-dialog-title").textContent = "New work item";
+  get("work-dialog-title").textContent = t("work.new_item");
   archiveButton.hidden = true;
   syncRequirements();
   captureFormBaseline();
@@ -1476,8 +1624,8 @@ function openNewTask() {
 function openTask(id) {
   if (state.refreshing || state.saving) {
     boardStatus.textContent = state.saving
-      ? "Wait for the current save to finish before opening another item."
-      : "Wait for Refresh to finish before opening work.";
+      ? t("work.wait_save")
+      : t("work.wait_refresh");
     return;
   }
   const task = taskById(id);
@@ -1493,9 +1641,9 @@ function openTask(id) {
   clearDialogStatus();
   saveButton.disabled = false;
   populateReferenceControls();
-  addMissingReferenceOption(get("work-workstream"), task.workstream_id, "Archived area");
-  addMissingReferenceOption(ownerInput, task.owner_id, "Former member");
-  addMissingReferenceOption(approverInput, task.approver_id, "Former member");
+  addMissingReferenceOption(get("work-workstream"), task.workstream_id, t("work.archived_area"));
+  addMissingReferenceOption(ownerInput, task.owner_id, t("work.former_member"));
+  addMissingReferenceOption(approverInput, task.approver_id, t("work.former_member"));
   setFormReadOnly(!canEdit());
 
   get("work-id").value = task.id;
@@ -1503,7 +1651,7 @@ function openTask(id) {
   state.originalApproverId = task.approver_id || "";
   applyValuesToForm(valuesFromTask(task));
   get("work-more-details").open = false;
-  get("work-dialog-title").textContent = canEdit() ? "Edit work item" : "View work item";
+  get("work-dialog-title").textContent = t(canEdit() ? "work.edit_item" : "work.view_item");
   archiveButton.hidden = !canEdit();
   syncRequirements();
   configureApprovalControls(task);
@@ -1512,22 +1660,35 @@ function openTask(id) {
   get("close-work-dialog").focus();
 }
 
-function valuesFromForm() {
+function rawValuesFromForm() {
   return {
-    title: get("work-title-input").value.trim(),
+    title: get("work-title-input").value,
     workstreamId: get("work-workstream").value,
     status: statusInput.value,
     ownerId: ownerInput.value,
     approverId: approverInput.value,
     priority: get("work-priority").value,
     dueOn: get("work-date").value,
-    nextAction: get("work-next-action").value.trim(),
-    completion: get("work-completion").value.trim(),
-    blocker: get("work-blocker").value.trim(),
+    nextAction: get("work-next-action").value,
+    completion: get("work-completion").value,
+    blocker: get("work-blocker").value,
     flags: Array.from(form.querySelectorAll('input[name="flags"]:checked'), (checkbox) => checkbox.value),
-    sourceUrl: get("work-source-url").value.trim(),
-    latestFileUrl: get("work-latest-file-url").value.trim(),
+    sourceUrl: get("work-source-url").value,
+    latestFileUrl: get("work-latest-file-url").value,
     position: 0
+  };
+}
+
+function valuesFromForm() {
+  const values = rawValuesFromForm();
+  return {
+    ...values,
+    title: values.title.trim(),
+    nextAction: values.nextAction.trim(),
+    completion: values.completion.trim(),
+    blocker: values.blocker.trim(),
+    sourceUrl: values.sourceUrl.trim(),
+    latestFileUrl: values.latestFileUrl.trim()
   };
 }
 
@@ -1582,13 +1743,19 @@ function validationError(values, editingId) {
 
 function humanRepositoryError(error) {
   if (!(error instanceof HubRepositoryError)) {
-    return { message: "The Hub could not save this change. Check your connection and try again.", fieldId: "" };
+    return {
+      message: t("work.save_unknown_short"),
+      fieldId: "",
+      key: "work.save_unknown_short",
+      vars: null
+    };
   }
   return translateWorkRepositoryError(error, valuesFromForm());
 }
 
-function setSaving(saving, busyLabel = "Saving…") {
+function setSaving(saving, busyKey = "work.saving") {
   state.saving = saving;
+  state.savingKey = busyKey;
   form.setAttribute("aria-busy", String(saving));
   if (saving) {
     form.querySelectorAll("input, select, textarea").forEach((control) => {
@@ -1600,9 +1767,9 @@ function setSaving(saving, busyLabel = "Saving…") {
     if (task && !state.conflictDraft) configureApprovalControls(task);
     if (state.conflictDraft) {
       get("work-dialog-title").textContent = state.conflictDraft.locked
-        ? "Draft — item is now locked"
-        : "Work item changed";
-      get("cancel-work-button").textContent = "Cancel";
+        ? t("work.draft_locked")
+        : t("work.item_changed");
+      get("cancel-work-button").textContent = t("work.cancel");
     }
   }
   saveButton.disabled = saving
@@ -1616,7 +1783,7 @@ function setSaving(saving, busyLabel = "Saving…") {
   refreshButton.disabled = saving || state.refreshing;
   get("close-work-dialog").disabled = saving;
   get("cancel-work-button").disabled = saving;
-  saveButton.textContent = saving ? busyLabel : "Save work";
+  saveButton.textContent = saving ? t(busyKey) : t("work.save_work");
 }
 
 async function reloadLatestConflict() {
@@ -1624,7 +1791,7 @@ async function reloadLatestConflict() {
   const userId = state.user?.id;
   if (!conflict || !userId || state.saving || !state.repository) return;
   const generation = state.generation;
-  setSaving(true, "Reloading…");
+  setSaving(true, "work.reloading");
   clearDialogStatus();
   clearFormError();
   try {
@@ -1648,7 +1815,7 @@ async function reloadLatestConflict() {
       reloadLatestButton.hidden = true;
       setFormReadOnly(true);
       renderBoard();
-      showFormError("This item was archived or removed by someone else. Your draft remains visible here, but it can no longer be saved.");
+      showTranslatedFormError("work.item_removed");
       return;
     }
 
@@ -1657,7 +1824,7 @@ async function reloadLatestConflict() {
       reloadLatestButton.hidden = true;
       setFormReadOnly(true);
       renderBoard();
-      showFormError("Your workspace access changed while this draft was open. The draft remains visible so you can copy it, but it can no longer be saved.");
+      showTranslatedFormError("work.draft_access_changed");
       return;
     }
 
@@ -1666,17 +1833,17 @@ async function reloadLatestConflict() {
       state.conflictDraft = { ...conflict, locked: true };
       reloadLatestButton.hidden = true;
       renderBoard();
-      showFormError("This item was approved by someone else and is now locked. Your unsaved draft is still visible here so you can copy it, but it cannot be saved.");
+      showTranslatedFormError("work.draft_approved_locked");
       return;
     }
 
     populateReferenceControls();
-    addMissingReferenceOption(get("work-workstream"), latest.workstream_id, "Archived area");
-    addMissingReferenceOption(get("work-workstream"), conflict.draftValues.workstreamId, "No longer active");
-    addMissingReferenceOption(ownerInput, latest.owner_id, "Former member");
-    addMissingReferenceOption(approverInput, latest.approver_id, "Former member");
-    addMissingReferenceOption(ownerInput, conflict.draftValues.ownerId, "No longer active");
-    addMissingReferenceOption(approverInput, conflict.draftValues.approverId, "No longer active");
+    addMissingReferenceOption(get("work-workstream"), latest.workstream_id, t("work.archived_area"));
+    addMissingReferenceOption(get("work-workstream"), conflict.draftValues.workstreamId, t("work.no_longer_active"));
+    addMissingReferenceOption(ownerInput, latest.owner_id, t("work.former_member"));
+    addMissingReferenceOption(approverInput, latest.approver_id, t("work.former_member"));
+    addMissingReferenceOption(ownerInput, conflict.draftValues.ownerId, t("work.no_longer_active"));
+    addMissingReferenceOption(approverInput, conflict.draftValues.approverId, t("work.no_longer_active"));
     get("work-updated-at").value = latest.updated_at;
     state.originalApproverId = latest.approver_id || "";
 
@@ -1709,17 +1876,27 @@ async function reloadLatestConflict() {
     renderConflictReview();
     renderBoard();
     if (unresolvedKeys.length) {
-      const labels = unresolvedKeys.map((key) => CONFLICT_FIELD_LABELS[key]).filter(Boolean).join(", ");
-      showDialogStatus(`Latest version loaded. Choose which ${labels || "conflicting values"} to keep before saving.${protectedConflictNote(state.conflictReview)}`, { focus: true });
+      showTranslatedDialogStatus("work.latest_choose", () => {
+        const labels = unresolvedKeys.map(conflictFieldLabel).filter(Boolean).join(", ");
+        return {
+          fields: labels || t("work.conflicting_values"),
+          note: protectedConflictNote({ protectedFields })
+        };
+      }, { focus: true });
     } else if (protectedFields.length) {
-      const labels = protectedFields.map((key) => CONFLICT_FIELD_LABELS[key]?.toLowerCase()).filter(Boolean).join(", ");
-      showDialogStatus(`Latest version loaded. Your other edits are still here; the latest ${labels || "approval workflow"} was kept because approval authority changed.`, { focus: true });
+      showTranslatedDialogStatus("work.latest_authority", () => {
+        const labels = protectedFields
+          .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
+          .filter(Boolean)
+          .join(", ");
+        return { fields: labels || t("work.approval_workflow") };
+      }, { focus: true });
     } else {
-      showDialogStatus("Latest version loaded. Your edits are still here and ready to review.", { focus: true });
+      showTranslatedDialogStatus("work.latest_ready", undefined, { focus: true });
     }
-    boardStatus.textContent = "Latest item loaded; draft ready to review.";
+    boardStatus.textContent = t("work.latest_board_status");
   } catch {
-    showFormError("The latest version could not be loaded. Check your connection and try again.");
+    showTranslatedFormError("work.latest_failed");
   } finally {
     if (generation === state.generation) setSaving(false);
   }
@@ -1757,7 +1934,7 @@ async function refreshTasks({ quiet = false } = {}) {
   state.refreshing = true;
   newWorkButton.disabled = true;
   refreshButton.disabled = true;
-  if (!quiet) setSyncState("Refreshing…", true);
+  if (!quiet) setSyncState(t("work.refreshing"), true);
   try {
     const workspaceData = await state.repository.loadWorkspace(userId);
     if (
@@ -1795,8 +1972,8 @@ async function refreshTasks({ quiet = false } = {}) {
     newWorkButton.disabled = true;
     if (dialog.open) setFormReadOnly(true);
     renderHomeFocus();
-    setSyncState("Refresh failed", false);
-    showAppError("The last loaded board is still visible, but editing is paused until refresh succeeds.");
+    setSyncState(t("work.refresh_failed"), false);
+    showAppError(t("work.refresh_failed_detail"));
     return false;
   }
 }
@@ -1815,14 +1992,13 @@ async function saveTask(event) {
   const values = valuesFromForm();
   const invalid = validationError(values, id);
   if (invalid) {
-    showFormError(invalid.message, invalid.fieldId);
+    showFormError(invalid.message, invalid.fieldId, invalid);
     return;
   }
   if (!form.checkValidity()) {
     const invalidControl = form.querySelector("input:invalid, select:invalid, textarea:invalid");
     if (invalidControl && get("work-more-details").contains(invalidControl)) get("work-more-details").open = true;
-    showFormError("Check this field and try again.", invalidControl?.id || "");
-    form.reportValidity();
+    showTranslatedFormError("work.check_field", undefined, invalidControl?.id || "");
     return;
   }
 
@@ -1843,8 +2019,8 @@ async function saveTask(event) {
         draftValues: values
       };
       reloadLatestButton.hidden = false;
-      showFormError("This item changed elsewhere, so your draft was not saved. Choose Reload latest version below; your typing will stay here for review.");
-      boardStatus.textContent = "Draft not saved because the item changed elsewhere.";
+      showTranslatedFormError("work.changed_unsaved");
+      boardStatus.textContent = t("work.draft_not_saved");
       return;
     }
     state.conflictDraft = null;
@@ -1856,16 +2032,16 @@ async function saveTask(event) {
     state.formBaselineValues = null;
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
-    boardStatus.textContent = `${values.title} saved.`;
+    boardStatus.textContent = t("work.saved", { title: values.title });
     if (refreshed) {
-      showNotice(`${values.title} saved in ${STATUS_LABELS[values.status]}.`);
+      showNotice(t("work.saved_in", { title: values.title, stage: statusLabel(values.status) }));
     } else {
-      showFormError(`${values.title} was saved, but the board could not refresh. Close this window, then use Refresh to see the latest version.`);
+      showTranslatedFormError("work.saved_no_refresh", { title: values.title });
     }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     const friendly = humanRepositoryError(error);
-    showFormError(friendly.message, friendly.fieldId);
+    showFormError(friendly.message, friendly.fieldId, friendly);
   } finally {
     if (mutationIsCurrent(mutation)) setSaving(false);
   }
@@ -1883,8 +2059,8 @@ async function archiveTask() {
     || archiveButton.hidden
   ) return;
   const archiveMessage = isFormDirty()
-    ? `Archive “${task.title}”? It will leave the active board and unsaved edits will be discarded.`
-    : `Archive “${task.title}”? It will leave the active board.`;
+    ? t("work.archive_dirty_confirm", { title: task.title })
+    : t("work.archive_confirm", { title: task.title });
   if (!window.confirm(archiveMessage)) return;
   setSaving(true);
   const mutation = startMutation();
@@ -1892,8 +2068,8 @@ async function archiveTask() {
     const archived = await state.repository.archiveTask(id, get("work-updated-at").value);
     if (!mutationIsCurrent(mutation)) return;
     if (!archived) {
-      showFormError("This item changed elsewhere or your access changed, so it was not archived. Nothing was removed, and your draft is still here. Close this window, refresh the Hub, and reopen the item before trying again.");
-      boardStatus.textContent = "The item was not archived because it changed elsewhere.";
+      showTranslatedFormError("work.archive_changed");
+      boardStatus.textContent = t("work.archive_changed_status");
       return;
     }
     state.conflictDraft = null;
@@ -1902,17 +2078,17 @@ async function archiveTask() {
     state.formBaselineValues = null;
     const refreshed = await refreshTasks({ quiet: true });
     if (!mutationIsCurrent(mutation)) return;
-    boardStatus.textContent = `${task.title} archived.`;
+    boardStatus.textContent = t("work.archived", { title: task.title });
     if (refreshed) {
-      showNotice(`${task.title} archived and removed from the board.`);
+      showNotice(t("work.archived_notice", { title: task.title }));
     } else {
       archiveButton.hidden = true;
-      showFormError(`${task.title} was archived, but the board could not refresh. Close this window, then use Refresh to update the board.`);
+      showTranslatedFormError("work.archived_no_refresh", { title: task.title });
     }
   } catch (error) {
     if (!mutationIsCurrent(mutation)) return;
     const friendly = humanRepositoryError(error);
-    showFormError(friendly.message, friendly.fieldId);
+    showFormError(friendly.message, friendly.fieldId, friendly);
   } finally {
     if (mutationIsCurrent(mutation)) setSaving(false);
   }
@@ -2103,6 +2279,68 @@ function handleDialogClose() {
   if (shouldRefresh) window.setTimeout(refreshAfterReturning, 0);
 }
 
+/* Codex — 2026-08-30: a language switch is a render, not a reload. Keep the
+   current filters, draft, conflict choices and inline error exactly where they
+   are while replacing every generated Home/Work label. */
+function renderOwnedLanguageChange() {
+  if (!state.membership) return;
+
+  const draft = dialog.open ? rawValuesFromForm() : null;
+  const detailsOpen = get("work-more-details").open;
+  populateReferenceControls();
+  if (draft) {
+    addMissingReferenceOption(get("work-workstream"), draft.workstreamId, t("work.no_longer_active"));
+    addMissingReferenceOption(ownerInput, draft.ownerId, t("work.no_longer_active"));
+    addMissingReferenceOption(approverInput, draft.approverId, t("work.no_longer_active"));
+    /* Only these three selects had their options rebuilt. Leaving every text
+       control untouched preserves whitespace, selection and the typing caret. */
+    get("work-workstream").value = draft.workstreamId;
+    ownerInput.value = draft.ownerId;
+    approverInput.value = draft.approverId;
+    get("work-more-details").open = detailsOpen;
+  }
+
+  const role = state.membership.role;
+  get("home-member-kicker").textContent = t("home.welcome", { name: state.membership.display_name });
+  get("member-role-pill").textContent = t(`work.role_${role}`);
+  get("work-mode-copy").textContent = role === "viewer" ? t("work.readonly_mode") : t("work.private_mode");
+  get("work-data-note").replaceChildren(
+    createElement("strong", "", t("work.private_data")),
+    document.createTextNode(` ${t("work.verified_only")}`)
+  );
+
+  disconnectHomeActivityObserver();
+  const activityRender = renderBoard();
+  const hasReceipts = activityRender.receiptGroups.some((group) => group.receiptEventIds.length);
+  if (state.activeSectionId === "home" && !document.hidden && hasReceipts) {
+    scheduleHomeActivityAcknowledgement(
+      activityRender.receiptGroups,
+      state.generation,
+      state.user?.id || "",
+      state.homeActivityRequestSequence
+    );
+  }
+  if (!dialog.open) return;
+
+  syncRequirements({ clearError: false });
+  const task = taskById(get("work-id").value);
+  if (task) configureApprovalControls(task);
+  if (state.conflictDraft) {
+    get("work-dialog-title").textContent = t(state.conflictDraft.locked ? "work.draft_locked" : "work.item_changed");
+  } else if (!task) {
+    get("work-dialog-title").textContent = t("work.new_item");
+  } else if (!get("work-dialog-title").textContent) {
+    get("work-dialog-title").textContent = t(canEdit() ? "work.edit_item" : "work.view_item");
+  } else {
+    get("work-dialog-title").textContent = t(saveButton.hidden ? "work.view_item" : "work.edit_item");
+  }
+  get("cancel-work-button").textContent = t(saveButton.hidden ? "work.close" : "work.cancel");
+  saveButton.textContent = state.saving ? t(state.savingKey) : t("work.save_work");
+  renderConflictReview();
+  retranslateFormError();
+  retranslateDialogStatus();
+}
+
 function bindEvents() {
   signInForm.addEventListener("submit", signInWithPassword);
   get("magiclink-button").addEventListener("click", requestMagicLink);
@@ -2143,7 +2381,7 @@ function bindEvents() {
     event.returnValue = "";
   });
   dialog.addEventListener("cancel", (event) => {
-    if (state.saving || (isFormDirty() && !window.confirm("Discard your unsaved changes?"))) {
+    if (state.saving || (isFormDirty() && !window.confirm(t("work.discard_confirm")))) {
       event.preventDefault();
       return;
     }
@@ -2184,6 +2422,8 @@ function bindEvents() {
 }
 
 function boot() {
+  initLanguage();
+  onLanguageChange(renderOwnedLanguageChange);
   const phoneLayout = window.matchMedia("(max-width: 820px)");
   get("work-tools").open = !phoneLayout.matches;
   phoneLayout.addEventListener("change", (event) => {

@@ -39,7 +39,7 @@ test("a pending save freezes editor fields", () => {
 test("stale drafts have an in-dialog recovery action", () => {
   assert.match(hubHtml, /id="reload-latest-work-button"/);
   assert.match(hubSource, /reloadLatestButton\.addEventListener\("click", reloadLatestConflict\)/);
-  assert.match(hubSource, /your typing will stay here for review/i);
+  assert.match(hubSource, /showTranslatedFormError\("work\.changed_unsaved"\)/);
 });
 
 test("conflict reload retains both same-field values for an explicit choice", () => {
@@ -50,7 +50,7 @@ test("conflict reload retains both same-field values for an explicit choice", ()
   assert.match(source, /draftValues: conflict\.draftValues/);
   assert.match(source, /latestValues/);
   assert.match(hubSource, /resolveConflictChoice\(button\.dataset\.conflictKey/);
-  assert.match(hubSource, /protectedConflictNote\(state\.conflictReview\)/);
+  assert.match(hubSource, /protectedConflictNote\(\{ protectedFields \}\)/);
   assert.match(hubSource, /keepLatest\.setAttribute\("aria-describedby", latestId\)/);
   assert.match(hubSource, /useMine\.setAttribute\("aria-describedby", mineId\)/);
 });
@@ -84,8 +84,8 @@ test("status conflict review does not clear draft-only approval or blocker detai
 test("conflict reload announces success inside the modal", () => {
   const source = functionSource("reloadLatestConflict", "startMutation");
   assert.match(hubHtml, /id="work-dialog-status"[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(source, /showDialogStatus\("Latest version loaded\.[\s\S]*focus: true/);
-  assert.doesNotMatch(source, /showNotice\("Latest version loaded/);
+  assert.match(source, /showTranslatedDialogStatus\("work\.latest_[a-z]+"[\s\S]*focus: true/);
+  assert.doesNotMatch(source, /showNotice\(t\("work\.latest_/);
 });
 
 test("Home exposes one dynamic next-action control", () => {
@@ -97,20 +97,20 @@ test("Home exposes one dynamic next-action control", () => {
 // Codex — 2026-08-13: an empty board is a valid first-use state, not an endless loading state.
 test("Home gives an actionable empty-workspace fallback", () => {
   assert.doesNotMatch(hubHtml, /Loading your next move/i);
-  assert.match(hubHtml, /Nothing is planned yet\./);
+  assert.match(hubHtml, /data-t="home\.nothing_planned"/);
   const source = functionSource("renderHomeFocus", "renderSummary");
-  assert.match(source, /Add the first thing we need to do\./);
-  assert.match(source, /Start it in Backlog with just a title\./);
-  assert.match(source, /Create first work item/);
+  assert.match(source, /t\("home\.focus_create"\)/);
+  assert.match(source, /t\("home\.focus_create_detail"\)/);
+  assert.match(source, /t\("home\.create_first"\)/);
   assert.match(source, /action\.dataset\.homeAction = "create"/);
   assert.match(source, /action\.dataset\.homeAction = "open-work"/);
-  assert.match(source, /A workspace member can add the first work item\.[\s\S]*action\.hidden = true/);
+  assert.match(source, /t\("home\.focus_no_work_detail"\)[\s\S]*action\.hidden = true/);
   assert.match(source, /state\.stale[\s\S]*action\.dataset\.homeAction = "refresh"/);
   assert.match(hubSource, /homeAction === "refresh"[\s\S]*requestWorkspaceRefresh\(\)/);
 });
 
 test("Home checks sanitized changes only while Home is visible", () => {
-  assert.match(hubHtml, /id="home-changes-title">Since your last look</);
+  assert.match(hubHtml, /id="home-changes-title" data-t="home\.since_last_look"/);
   assert.match(hubHtml, /id="home-changes-list"/);
   const activate = functionSource("activateSection", "registerSection");
   assert.match(activate, /normalized !== "home"[\s\S]*disconnectHomeActivityObserver/);
