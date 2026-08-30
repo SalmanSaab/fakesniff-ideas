@@ -17,21 +17,30 @@
  *    important code in this file.
  */
 
+import { t, onLanguageChange } from "./hub-i18n.js";
+
 const TOPICS = [
-  ["fabric", "Fabric"], ["price", "Price"], ["moq", "Minimum order"],
-  ["delivery", "Delivery"], ["sample", "Sample"], ["quality", "Quality"],
-  ["supplier", "Supplier"], ["packaging", "Packaging"],
-  ["design", "Design"], ["brand", "Brand"], ["other", "Other"],
+  ["fabric", "decisions.topic_fabric"],
+  ["price", "decisions.topic_price"],
+  ["moq", "decisions.topic_moq"],
+  ["delivery", "decisions.topic_delivery"],
+  ["sample", "decisions.topic_sample"],
+  ["quality", "decisions.topic_quality"],
+  ["supplier", "decisions.topic_supplier"],
+  ["packaging", "decisions.topic_packaging"],
+  ["design", "decisions.topic_design"],
+  ["brand", "decisions.topic_brand"],
+  ["other", "decisions.topic_other"],
 ];
-const TOPIC_LABEL = new Map(TOPICS);
+const TOPIC_LABEL = new Map(TOPICS);   /* value is a key, not text */
 
 /* 001 defines these four. 'decided' additionally requires the detail field,
    which is why the form asks for it before letting you choose that status. */
 const STATUSES = [
-  ["proposed", "Still deciding"],
-  ["decided", "Agreed"],
-  ["superseded", "Replaced"],
-  ["cancelled", "Dropped"],
+  ["proposed", "decisions.state_proposed"],
+  ["decided", "decisions.state_decided"],
+  ["superseded", "decisions.state_superseded"],
+  ["cancelled", "decisions.state_cancelled"],
 ];
 const STATUS_LABEL = new Map(STATUSES);
 
@@ -59,28 +68,17 @@ function whenText(iso) {
  * because a constraint name on screen is always a bug.
  * ------------------------------------------------------------------------ */
 const CONSTRAINT_MESSAGES = [
-  [/decisions_title_length/i,
-   `Give the decision a short title, up to ${MAX_TITLE} characters. That is the one thing this needs.`],
-  [/decisions_decided_state/i,
-   "To mark this Agreed, write what was actually agreed in the detail box first."],
-  [/decisions_status_allowed/i,
-   "Pick one of the four states: Still deciding, Agreed, Replaced or Dropped."],
-  [/decisions_topic_allowed/i,
-   "Choose one of the listed topics."],
-  [/decisions_counterparty_length/i,
-   `Keep the supplier or factory name under ${MAX_NAME} characters.`],
-  [/decisions_decided_by_name_length/i,
-   `Keep the name under ${MAX_NAME} characters.`],
-  [/decisions_lookbook_fk/i,
-   "That Lookbook photo is no longer available, so it could not be linked."],
-  [/decisions_workstream_fk/i,
-   "That workstream no longer exists. Leave it unset and save again."],
-  [/decisions_owner_fk/i,
-   "That owner is not a member of this workspace."],
-  [/violates row-level security|permission denied|42501/i,
-   "You have view-only access, so this could not be saved. Ask Marco or Salman for edit access."],
-  [/duplicate key/i,
-   "That looks like it has already been saved."],
+  [/decisions_title_length/i,        () => t("decisions.err_title_len", { n: MAX_TITLE })],
+  [/decisions_decided_state/i,       () => t("decisions.err_needs_detail")],
+  [/decisions_status_allowed/i,      () => t("decisions.err_state")],
+  [/decisions_topic_allowed/i,       () => t("decisions.err_topic")],
+  [/decisions_counterparty_length/i, () => t("decisions.err_with_len", { n: MAX_NAME })],
+  [/decisions_decided_by_name_length/i, () => t("decisions.err_by_len", { n: MAX_NAME })],
+  [/decisions_lookbook_fk/i,         () => t("decisions.err_photo_gone")],
+  [/decisions_workstream_fk/i,       () => t("decisions.err_workstream")],
+  [/decisions_owner_fk/i,            () => t("decisions.err_owner")],
+  [/violates row-level security|permission denied|42501/i, () => t("decisions.err_readonly")],
+  [/duplicate key/i,                 () => t("decisions.err_duplicate")],
 ];
 
 /* Exported so it can be tested without a DOM or a network, the same way Codex's
@@ -90,14 +88,14 @@ const CONSTRAINT_MESSAGES = [
 export function humanError(raw) {
   const text = String(raw?.message || raw || "");
   for (const [pattern, sentence] of CONSTRAINT_MESSAGES) {
-    if (pattern.test(text)) return sentence;
+    if (pattern.test(text)) return sentence();
   }
   if (/failed to fetch|networkerror|load failed/i.test(text)) {
-    return "That did not reach the server. Check your connection and try again — nothing was lost.";
+    return t("decisions.err_network");
   }
   /* Deliberately not returning `text`. An unrecognised database error is still
      a database error, and showing it teaches people the Hub is broken. */
-  return "That could not be saved. Nothing was lost — try again, and tell Salman if it keeps happening.";
+  return t("decisions.err_unknown");
 }
 
 /* Same pattern as the Lookbook: an external same-origin stylesheet, so the hub
@@ -128,35 +126,48 @@ export function mount(root, ctx) {
   root.innerHTML = shell();
 
   const $ = (sel) => root.querySelector(sel);
-  const listEl = $("#dc-list");
-  const errEl = $("#dc-error");
-  const sheet = $("#dc-sheet");
+  let listEl, errEl, sheet;
 
-  $("#dc-search").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
-  $("#dc-filters").addEventListener("click", (e) => {
-    const chip = e.target.closest("[data-topic]");
-    if (!chip) return;
-    topicFilter = chip.dataset.topic;
-    render();
-  });
-  $("#dc-add")?.addEventListener("click", () => openSheet(null));
-  $("#dc-close").addEventListener("click", closeSheet);
-  sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
-  $("#dc-form").addEventListener("submit", save);
+  /* Claude — 2026-08-30: pulled out of the mount body so a language change can
+     rebuild the markup and re-attach, rather than leaving listeners pointing at
+     elements that no longer exist. */
+  function wire() {
+    listEl = $("#dc-list");
+    errEl = $("#dc-error");
+    sheet = $("#dc-sheet");
 
-  listEl.addEventListener("click", (e) => {
-    const card = e.target.closest("[data-id]");
-    if (!card) return;
-    const found = items.find((i) => i.id === card.dataset.id);
-    if (found) openSheet(found);
-  });
+    $("#dc-search").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+    $("#dc-filters").addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-topic]");
+      if (!chip) return;
+      topicFilter = chip.dataset.topic;
+      render();
+    });
+    $("#dc-add")?.addEventListener("click", () => openSheet(null));
+    $("#dc-close").addEventListener("click", closeSheet);
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+    $("#dc-form").addEventListener("submit", save);
+
+    listEl.addEventListener("click", (e) => {
+      const card = e.target.closest("[data-id]");
+      if (!card) return;
+      const found = items.find((i) => i.id === card.dataset.id);
+      if (found) openSheet(found);
+    });
+  }
+  wire();
 
   document.addEventListener("keydown", onKey);
+  /* Claude — 2026-08-30: the vocabulary and every label are resolved at render
+     time, so switching language only needs a redraw. Without this the page
+     keeps the words it was built with until someone reloads. */
+  const stopLang = onLanguageChange(() => { root.innerHTML = shell(); wire(); render(); });
   const timer = setInterval(load, 60000);
   void load();
 
   return () => {
     clearInterval(timer);
+    stopLang();
     document.removeEventListener("keydown", onKey);
     document.body.classList.remove("hub-sheet-open");
     root.innerHTML = "";
@@ -166,7 +177,7 @@ export function mount(root, ctx) {
   /* ---------------------------------------------------------------- data */
 
   async function rest(path, options = {}) {
-    if (c.mode !== "authed") throw new Error("Sign in to use Decisions.");
+    if (c.mode !== "authed") throw new Error(t("decisions.sign_in"));
     const token = await c.getAccessToken();
     const res = await fetch(`${c.restUrl}${path}`, {
       ...options,
@@ -187,7 +198,7 @@ export function mount(root, ctx) {
   }
 
   async function load() {
-    if (c.mode !== "authed") { showError("Sign in to see decisions."); return; }
+    if (c.mode !== "authed") { showError(t("decisions.sign_in")); return; }
     try {
       const rows = await rest(
         "/decisions?select=id,title,decision,context,status,topic,counterparty,decided_by_name"
@@ -209,13 +220,13 @@ export function mount(root, ctx) {
 
     /* Checked here as well as in the database, so the common mistake gets a
        helpful sentence instantly instead of a round trip. */
-    if (!title) { fieldError("Write a short title first — that is all this needs to save."); return; }
-    if (title.length > MAX_TITLE) { fieldError(`That title is ${title.length} characters. Keep it under ${MAX_TITLE}.`); return; }
+    if (!title) { fieldError(t("decisions.need_title")); return; }
+    if (title.length > MAX_TITLE) { fieldError(t("decisions.title_too_long", { n: title.length, max: MAX_TITLE })); return; }
 
     const status = safeEnum($("#dc-status").value, STATUSES.map(([v]) => v), "proposed");
     const detail = $("#dc-detail").value.trim();
     if (status === "decided" && !detail) {
-      fieldError("To mark this Agreed, write what was actually agreed in the detail box.");
+      fieldError(t("decisions.err_needs_detail"));
       $("#dc-detail").focus();
       return;
     }
@@ -289,10 +300,10 @@ export function mount(root, ctx) {
     if (!rows.length) {
       listEl.innerHTML = `<p class="dc-empty">${
         items.length
-          ? "Nothing matches that."
+          ? t("decisions.nothing_matches")
           : (readOnly
-              ? "No decisions recorded yet."
-              : "No decisions yet. When something is agreed — a fabric, a price, a delivery date — record it here so it is not lost.")
+              ? t("decisions.empty_readonly")
+              : t("decisions.empty"))
       }</p>`;
       return;
     }
@@ -302,12 +313,12 @@ export function mount(root, ctx) {
   function card(it) {
     const when = whenText(it.decided_at || it.updated_at);
     const meta = [
-      TOPIC_LABEL.get(it.topic) || "Other",
-      it.counterparty ? `with ${esc(it.counterparty)}` : "",
+      t(TOPIC_LABEL.get(it.topic) || "decisions.topic_other"),
+      it.counterparty ? t("decisions.with_prefix", { name: it.counterparty }) : "",
       when,
     ].filter(Boolean);
     return `<button class="dc-card" data-id="${esc(it.id)}" type="button">
-      <span class="dc-status dc-${esc(it.status)}">${esc(STATUS_LABEL.get(it.status) || it.status)}</span>
+      <span class="dc-status dc-${esc(it.status)}">${esc(t(STATUS_LABEL.get(it.status) || it.status))}</span>
       <span class="dc-title">${esc(it.title)}</span>
       ${it.decision ? `<span class="dc-what">${esc(it.decision)}</span>` : ""}
       <span class="dc-meta">${meta.map(esc).join(" · ")}</span>
@@ -319,7 +330,7 @@ export function mount(root, ctx) {
   function openSheet(item) {
     if (readOnly && !item) return;
     editing = item;
-    $("#dc-heading").textContent = item ? "Decision" : "Record a decision";
+    $("#dc-heading").textContent = t(item ? "decisions.sheet_view" : "decisions.sheet_new");
     $("#dc-title").value = item?.title || "";
     $("#dc-detail").value = item?.decision || "";
     $("#dc-context").value = item?.context || "";
@@ -363,59 +374,59 @@ export function mount(root, ctx) {
   }
 
   function shell() {
-    const chips = [["all", "All"], ...TOPICS]
-      .map(([v, label]) => `<button class="dc-chip" data-topic="${v}" type="button">${label}</button>`)
+    const chips = [["all", "decisions.all"], ...TOPICS]
+      .map(([v, label]) => `<button class="dc-chip" data-topic="${v}" type="button">${esc(t(label))}</button>`)
       .join("");
-    const topicOptions = TOPICS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
-    const statusOptions = STATUSES.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    const topicOptions = TOPICS.map(([v, l]) => `<option value="${v}">${esc(t(l))}</option>`).join("");
+    const statusOptions = STATUSES.map(([v, l]) => `<option value="${v}">${esc(t(l))}</option>`).join("");
 
     return `
     <div class="dc-bar">
-      <span class="dc-mark">Decisions<small>what we agreed, and with whom</small></span>
+      <span class="dc-mark">${esc(t("decisions.heading"))}<small>${esc(t("decisions.tagline"))}</small></span>
     </div>
     <p id="dc-error" class="dc-errbox" hidden></p>
-    <input id="dc-search" class="dc-search" type="search" placeholder="Search decisions, suppliers, people" aria-label="Search decisions">
+    <input id="dc-search" class="dc-search" type="search" placeholder="${esc(t("decisions.search"))}" aria-label="${esc(t("decisions.search"))}">
     <div id="dc-filters" class="dc-filters">${chips}</div>
     <div id="dc-list" class="dc-list"></div>
-    ${readOnly ? "" : `<button id="dc-add" class="dc-add" type="button" aria-label="Record a decision">+</button>`}
+    ${readOnly ? "" : `<button id="dc-add" class="dc-add" type="button" aria-label="${esc(t("decisions.add"))}">+</button>`}
 
     <div id="dc-sheet" class="dc-sheetwrap" role="dialog" aria-modal="true" aria-labelledby="dc-heading">
       <div class="dc-sheet">
-        <button id="dc-close" class="dc-close" type="button" aria-label="Close">&times;</button>
-        <h2 id="dc-heading" class="dc-h">Record a decision</h2>
+        <button id="dc-close" class="dc-close" type="button" aria-label="${esc(t("common.close"))}">&times;</button>
+        <h2 id="dc-heading" class="dc-h">${esc(t("decisions.sheet_new"))}</h2>
         <form id="dc-form" class="dc-form">
-          <label class="dc-lbl" for="dc-title">What was decided</label>
+          <label class="dc-lbl" for="dc-title">${esc(t("decisions.what"))}</label>
           <input id="dc-title" class="dc-input" type="text" maxlength="${MAX_TITLE}"
-                 placeholder="280gsm French terry for the winter hoodie">
-          <p class="dc-hint">This is the only thing you need. Everything else can wait.</p>
+                 placeholder="${esc(t("decisions.what_placeholder"))}">
+          <p class="dc-hint">${esc(t("decisions.what_hint"))}</p>
 
-          <label class="dc-lbl" for="dc-topic">Topic</label>
+          <label class="dc-lbl" for="dc-topic">${esc(t("decisions.topic"))}</label>
           <select id="dc-topic" class="dc-input">${topicOptions}</select>
 
-          <label class="dc-lbl" for="dc-status">State</label>
+          <label class="dc-lbl" for="dc-status">${esc(t("decisions.state"))}</label>
           <select id="dc-status" class="dc-input">${statusOptions}</select>
 
-          <label class="dc-lbl" for="dc-detail">The detail</label>
+          <label class="dc-lbl" for="dc-detail">${esc(t("decisions.detail"))}</label>
           <textarea id="dc-detail" class="dc-input dc-area"
-                    placeholder="Numbers, terms, what exactly was agreed"></textarea>
+                    placeholder="${esc(t("decisions.detail_placeholder"))}"></textarea>
 
-          <label class="dc-lbl" for="dc-counterparty">Agreed with</label>
+          <label class="dc-lbl" for="dc-counterparty">${esc(t("decisions.with"))}</label>
           <input id="dc-counterparty" class="dc-input" type="text" maxlength="${MAX_NAME}"
-                 placeholder="Factory or supplier name">
+                 placeholder="${esc(t("decisions.with_placeholder"))}">
 
-          <label class="dc-lbl" for="dc-by">Who agreed it</label>
+          <label class="dc-lbl" for="dc-by">${esc(t("decisions.by"))}</label>
           <input id="dc-by" class="dc-input" type="text" maxlength="${MAX_NAME}"
-                 placeholder="Marco, Emiel, the factory manager">
+                 placeholder="${esc(t("decisions.by_placeholder"))}">
 
-          <label class="dc-lbl" for="dc-context">Why, or what it replaces</label>
+          <label class="dc-lbl" for="dc-context">${esc(t("decisions.context"))}</label>
           <textarea id="dc-context" class="dc-input dc-area"
-                    placeholder="Optional background"></textarea>
+                    placeholder="${esc(t("decisions.context_placeholder"))}"></textarea>
 
           <p id="dc-formerror" class="dc-formerror" role="alert" hidden></p>
 
           <div class="dc-actions">
-            <button id="dc-archive" class="dc-archive" type="button" hidden>Archive</button>
-            <button id="dc-save" class="dc-savebtn" type="submit">Save decision</button>
+            <button id="dc-archive" class="dc-archive" type="button" hidden>${esc(t("common.archive"))}</button>
+            <button id="dc-save" class="dc-savebtn" type="submit">${esc(t("decisions.save"))}</button>
           </div>
         </form>
       </div>
