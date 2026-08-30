@@ -12,6 +12,12 @@
  *   mount(rootEl, ctx)  where ctx = { restUrl, getAccessToken, anonKey, member, workspaceId }
  */
 
+import { t, onLanguageChange, currentLanguage } from "./hub-i18n.js";
+
+/* The category label for a stored value. The value in the database never
+   changes; only what we show for it does. */
+export const catLabel = (c) => t(`lookbook.cat_${c}`);
+
 const CATEGORIES = [
   "unsorted",
   "tee", "hoodie", "sweat", "longsleeve", "jacket", "knit", "trousers",
@@ -22,15 +28,15 @@ const CATEGORIES = [
 
 /* Grouped for the filter bar so twenty categories don't read as a wall. */
 const CATEGORY_GROUPS = [
-  { label: "Garments", items: ["tee", "hoodie", "sweat", "longsleeve", "jacket", "knit", "trousers", "headwear", "accessory"] },
-  { label: "Design",   items: ["print", "graphic", "typography", "colour", "fabric", "detail", "fit"] },
-  { label: "Around it", items: ["packaging", "campaign", "store"] },
+  { label: "lookbook.group_garments", items: ["tee", "hoodie", "sweat", "longsleeve", "jacket", "knit", "trousers", "headwear", "accessory"] },
+  { label: "lookbook.group_design", items: ["print", "graphic", "typography", "colour", "fabric", "detail", "fit"] },
+  { label: "lookbook.group_around", items: ["packaging", "campaign", "store"] },
 ];
 
 const BUCKET = "lookbook";
 const MAX_BYTES = 25 * 1024 * 1024;
 
-/* The brief used by "ask an AI about this", mirroring Idea Lab's copy-for-AI.
+/* The brief behind "ask an AI about this", mirroring Idea Lab's copy-for-AI.
    Free route: the person pastes it into whatever assistant they already pay
    for. When an API key exists this same text drives the automatic pass. */
 const ANALYSE_BRIEF = `Look at this clothing or material reference and describe it for a small streetwear brand's design library.
@@ -60,11 +66,13 @@ function safeHttpUrl(value) {
 const shortHost = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
 function timeAgo(iso) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 90) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-  if (s < 604800) return `${Math.round(s / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" });
+  if (s < 90) return t("lookbook.just_now");
+  if (s < 3600) return t("lookbook.mins_ago", { n: Math.round(s / 60) });
+  if (s < 86400) return t("lookbook.hours_ago", { n: Math.round(s / 3600) });
+  if (s < 604800) return t("lookbook.days_ago", { n: Math.round(s / 86400) });
+  /* Claude — 2026-08-30: the locale must follow the chosen language, or a
+     Dutch interface prints English month names. */
+  return new Date(iso).toLocaleDateString(currentLanguage(), { day: "numeric", month: "short" });
 }
 
 /* ---------- module ---------- */
@@ -90,6 +98,11 @@ export function mount(root, ctx) {
     lastFocused: null,
   };
   const q = (sel) => el.querySelector(sel);
+
+  /* Claude — 2026-08-30: every label resolves at render time, so a language
+     change only needs a redraw. Without this the page keeps the words it was
+     built with until someone reloads, which reads as the switch not working. */
+  const stopLang = onLanguageChange(() => { render(); hydrateImages(); });
 
   /* ----- api ----- */
   async function authHeaders(extra = {}) {
@@ -209,7 +222,7 @@ export function mount(root, ctx) {
       }
     }
     const blob = await directImageBlob(path, signal);
-    if (!blob) throw new Error("The photograph could not be downloaded.");
+    if (!blob) throw new Error(t("lookbook.photo_failed"));
     return blob;
   }
 
@@ -225,7 +238,7 @@ export function mount(root, ctx) {
       render();
       hydrateImages();
     } catch (e) {
-      showErr("could not load the lookbook. " + String(e.message || e).slice(0, 120));
+      showErr(t("lookbook.load_failed") + " " + String(e.message || e).slice(0, 120));
     }
   }
 
@@ -256,7 +269,7 @@ export function mount(root, ctx) {
     const host = q(".lb-err");
     const d = document.createElement("div");
     d.className = "lb-errbox";
-    d.textContent = String(m || "something went wrong");
+    d.textContent = String(m || t("lookbook.went_wrong"));
     host.replaceChildren(d);
   }
 
@@ -277,10 +290,10 @@ export function mount(root, ctx) {
       : "";
     clear.hidden = total === 0;
     button.disabled = total === 0 || state.exporting;
-    button.textContent = state.exporting ? "Building PDF…" : "Export PDF";
+    button.textContent = state.exporting ? t("lookbook.export_building") : t("lookbook.export_pdf");
     button.setAttribute("aria-label", total
       ? `Export ${total} selected reference${total === 1 ? "" : "s"} as PDF`
-      : "Export selected references as PDF");
+      : t("lookbook.export_aria"));
   }
 
   function setSelected(id, selected) {
@@ -308,15 +321,15 @@ export function mount(root, ctx) {
     for (const i of state.items) counts[i.category] = (counts[i.category] || 0) + 1;
 
     const f = q("#lb-filters");
-    let html = `<button class="lb-chip ${state.fCategory === "all" ? "on" : ""}" data-c="all">everything ${state.items.length}</button>`;
+    let html = `<button class="lb-chip ${state.fCategory === "all" ? "on" : ""}" data-c="all">${esc(t("lookbook.all"))} ${state.items.length}</button>`;
     for (const g of CATEGORY_GROUPS) {
       const present = g.items.filter((c) => counts[c]);
       if (!present.length) continue;
       html += present.map((c) =>
-        `<button class="lb-chip ${state.fCategory === c ? "on" : ""}" data-c="${c}">${c} ${counts[c]}</button>`).join("");
+        `<button class="lb-chip ${state.fCategory === c ? "on" : ""}" data-c="${c}">${esc(catLabel(c))} ${counts[c]}</button>`).join("");
     }
     if (counts.unsorted) {
-      html += `<button class="lb-chip ${state.fCategory === "unsorted" ? "on" : ""}" data-c="unsorted">unsorted ${counts.unsorted}</button>`;
+      html += `<button class="lb-chip ${state.fCategory === "unsorted" ? "on" : ""}" data-c="unsorted">${esc(catLabel("unsorted"))} ${counts.unsorted}</button>`;
     }
     f.innerHTML = html;
     f.querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => { state.fCategory = b.dataset.c; render(); hydrateImages(); }));
@@ -326,7 +339,7 @@ export function mount(root, ctx) {
     if (!list.length) {
       host.innerHTML = `<div class="lb-empty">${
         state.query ? `nothing matches "${esc(state.query)}"`
-                    : "nothing saved yet. tap + to add the first thing."}</div>`;
+                    : t("lookbook.empty_prompt")}</div>`;
       renderSelectionControls();
       return;
     }
@@ -344,11 +357,11 @@ export function mount(root, ctx) {
             ${media}
             <div class="lb-meta">
               ${i.title ? `<span class="lb-title">${esc(i.title)}</span>` : ""}
-              <span class="lb-cat">${esc(cat)}</span>
+              <span class="lb-cat">${esc(catLabel(cat))}</span>
               ${i.ai_analysed_at ? `<span class="lb-ai" title="described automatically">✦</span>` : ""}
             </div>
           </button>
-          <label class="lb-select-control" title="Select for PDF">
+          <label class="lb-select-control" title=t("lookbook.select_for_pdf")>
             <input class="lb-select" type="checkbox" data-select-id="${i.id}"
               aria-label="Select ${esc(itemName(i))} for PDF" ${selected ? "checked" : ""}>
             <span class="lb-select-mark" aria-hidden="true">✓</span>
@@ -421,7 +434,7 @@ export function mount(root, ctx) {
     } else if (progress.phase === "building") {
       status.textContent = `Laying out reference ${progress.current} of ${progress.total}`;
     } else {
-      status.textContent = "Finishing the PDF…";
+      status.textContent = t("lookbook.export_finishing");
     }
   }
 
@@ -436,12 +449,12 @@ export function mount(root, ctx) {
       <p class="lb-note">${isPhotoError
         ? `We could not prepare ${esc(names[0] || "one photograph")}. Nothing was downloaded.`
         : error?.name === "LookbookTooLargeError"
-          ? "This selection is too large to build safely on this device. Select fewer references and try again."
+          ? t("lookbook.export_too_large")
           : error?.name === "LookbookTextError"
             ? `This PDF cannot yet print some characters in ${esc(error.itemTitle || "one reference")}. Use Latin letters and try again.`
-          : "Something interrupted the export. Your selection is still here."}</p>
+          : t("lookbook.export_interrupted")}</p>
       <div class="lb-export-actions">
-        <button class="lb-export-primary" id="lb-export-retry" type="button">${isTooLarge ? "Close and select fewer" : "Try again"}</button>
+        <button class="lb-export-primary" id="lb-export-retry" type="button">${isTooLarge ? t("lookbook.export_fewer") : "Try again"}</button>
         ${isPhotoError && !allowMissingPhotos
           ? `<button class="lb-export-secondary" id="lb-export-without" type="button">Make PDF without that photo</button>`
           : ""}
@@ -554,7 +567,7 @@ export function mount(root, ctx) {
       <div class="lb-drop" id="lb-drop">
         <input type="file" id="lb-file" accept="image/*" capture="environment" hidden>
         <button type="button" class="lb-bigbtn" id="lb-pick">Take or choose a photo</button>
-        <p class="lb-hint">or paste a link, or just drop an image here</p>
+        <p class="lb-hint">${esc(t("lookbook.drop_hint"))}</p>
         <img id="lb-preview" hidden alt="">
       </div>
 
@@ -564,14 +577,14 @@ export function mount(root, ctx) {
                placeholder="https://...">
 
         <label class="lb-flabel" for="lb-note">What did you like about it? (optional)</label>
-        <textarea id="lb-note" name="note" placeholder="the ribbing on the cuffs"></textarea>
+        <textarea id="lb-note" name="note" placeholder="${esc(t("lookbook.note_placeholder"))}"></textarea>
 
-        <label class="lb-flabel" for="lb-cat">Category</label>
+        <label class="lb-flabel" for="lb-cat">${esc(t("lookbook.category"))}</label>
         <select id="lb-cat" name="category">
-          ${CATEGORIES.map((c) => `<option value="${c}"${c === "unsorted" ? " selected" : ""}>${c}</option>`).join("")}
+          ${CATEGORIES.map((c) => `<option value="${c}"${c === "unsorted" ? " selected" : ""}>${esc(catLabel(c))}</option>`).join("")}
         </select>
 
-        <button type="submit" id="lb-save">Save</button>
+        <button type="submit" id="lb-save">${esc(t("common.save"))}</button>
         <p class="lb-hint lb-center">You can leave everything blank except the photo.</p>
       </form>`;
     openSheet("lb-sheet-title");
@@ -584,7 +597,7 @@ export function mount(root, ctx) {
 
     const takeFile = (f) => {
       if (!f || !f.type.startsWith("image/")) return;
-      if (f.size > MAX_BYTES) { showErr("that image is over 25MB — try a smaller one."); return; }
+      if (f.size > MAX_BYTES) { showErr(t("lookbook.too_big")); return; }
       file = f;
       preview.src = URL.createObjectURL(f);
       preview.hidden = false;
@@ -611,10 +624,10 @@ export function mount(root, ctx) {
       const f = new FormData(ev.target);
       const note = String(f.get("note") || "").trim();
       const url = String(f.get("source_url") || "").trim();
-      if (!file && !url && !note) { showErr("add a photo, a link, or a note."); return; }
+      if (!file && !url && !note) { showErr(t("lookbook.need_something")); return; }
 
       const btn = sheet.querySelector("#lb-save");
-      saving = true; btn.disabled = true; btn.textContent = "Saving…";
+      saving = true; btn.disabled = true; btn.textContent = t("lookbook.saving");
       sheet.setAttribute("aria-busy", "true");
       try {
         /* Claude — 2026-08-13: the row used to be created first and the photo
@@ -659,7 +672,7 @@ export function mount(root, ctx) {
            look like the upload failed. */
         if (uploadedPath) void describeNow(row.id, uploadedPath, note);
       } catch (e) {
-        showErr("could not save. " + String(e.message || e).slice(0, 120));
+        showErr(t("lookbook.could_not_save") + " " + String(e.message || e).slice(0, 120));
         saving = false; btn.disabled = false; btn.textContent = "Save";
         sheet.removeAttribute("aria-busy");
       }
@@ -780,8 +793,8 @@ export function mount(root, ctx) {
           ${CATEGORIES.map((c) => `<button data-v="${c}" class="${i.category === c ? "on" : ""}">${c}</button>`).join("")}
         </div>
         <div class="lb-actions">
-          <button class="lb-askai" id="lb-ask">copy for AI</button>
-          <button class="lb-archive" id="lb-arch">remove from lookbook</button>
+          <button class="lb-askai" id="lb-ask">${esc(t("lookbook.copy_for_ai"))}</button>
+          <button class="lb-archive" id="lb-arch">${esc(t("lookbook.remove"))}</button>
         </div>` : ""}
 
       <p class="lb-src lb-mt">added by ${esc(i.added_by || "—")} · ${timeAgo(i.created_at)}</p>`;
@@ -882,6 +895,7 @@ export function mount(root, ctx) {
   const timer = setInterval(load, 45000);
   return { destroy() {
     state.destroyed = true;
+    stopLang();
     clearInterval(timer);
     clearTimeout(state.searchTimer);
     state.hydrationController.abort();
@@ -922,7 +936,7 @@ if (typeof window !== "undefined") {
 /* ---------- template + styles ---------- */
 const TEMPLATE = `
   <div class="lb-bar">
-    <div class="lb-mark">lookbook<small>things we liked</small></div>
+    <div class="lb-mark">lookbook<small>${esc(t("lookbook.tagline_short"))}</small></div>
     <div class="lb-export-controls">
       <span id="lb-selected-count" class="lb-selected-count" aria-live="polite"></span>
       <button id="lb-clear-selection" class="lb-clear-selection" type="button" hidden>Clear</button>
@@ -933,7 +947,7 @@ const TEMPLATE = `
   <div class="lb-filters" id="lb-filters"></div>
   <div class="lb-err"></div>
   <div class="lb-grid" id="lb-grid"></div>
-  <button id="lb-add" type="button" title="Add to lookbook" aria-label="Add to lookbook">+</button>
+  <button id="lb-add" type="button" title=t("lookbook.add_aria") aria-label=t("lookbook.add_aria")>+</button>
   <div id="lb-detail"><div class="lb-sheet" id="lb-sheet" tabindex="-1"></div></div>
 `;
 

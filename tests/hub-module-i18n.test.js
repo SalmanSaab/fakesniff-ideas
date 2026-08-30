@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import en from "../lang/en.js";
 
 const webRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TRANSLATED = ["hub-decisions.js"];
+const TRANSLATED = ["hub-decisions.js", "hub-lookbook.js"];
 
 const read = (f) => fs.readFileSync(path.join(webRoot, f), "utf8");
 const keysUsedIn = (src) =>
