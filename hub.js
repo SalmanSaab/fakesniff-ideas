@@ -46,6 +46,16 @@ const PRIORITY_LABEL_KEYS = Object.freeze({
   high: "work.priority_high",
   urgent: "work.priority_urgent"
 });
+/* Codex — 2026-08-30: translate only untouched seed names. A name the team has
+   edited is company content and must remain exactly as they wrote it. */
+const SEEDED_WORKSTREAMS = Object.freeze({
+  operations: Object.freeze({ source: "Operations", key: "work.area_operations" }),
+  "product-design": Object.freeze({ source: "Product & Design", key: "work.area_product_design" }),
+  "brand-content": Object.freeze({ source: "Brand & Content", key: "work.area_brand_content" }),
+  marketing: Object.freeze({ source: "Marketing", key: "work.area_marketing" }),
+  automation: Object.freeze({ source: "Automation", key: "work.area_automation" }),
+  administration: Object.freeze({ source: "Administration", key: "work.area_administration" })
+});
 const HUB_LOCALES = Object.freeze({ en: "en-GB", nl: "nl-NL", tr: "tr-TR", ar: "ar" });
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions", "designs"]);
@@ -155,7 +165,7 @@ function flagLabel(flag) {
 }
 
 function priorityLabel(priority) {
-  return t(PRIORITY_LABEL_KEYS[priority] || "work.priority_normal");
+  return t(PRIORITY_LABEL_KEYS[priority] || "work.priority_unknown");
 }
 
 function createElement(tag, className, text) {
@@ -163,6 +173,21 @@ function createElement(tag, className, text) {
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+function appendTranslatedValue(element, key, value) {
+  const marker = "\uE000";
+  const copy = t(key, { value: marker });
+  const markerIndex = copy.indexOf(marker);
+  if (markerIndex < 0) {
+    element.textContent = copy;
+    return;
+  }
+  const before = copy.slice(0, markerIndex);
+  const after = copy.slice(markerIndex + marker.length);
+  if (before) element.append(createElement("strong", "", before));
+  element.append(document.createTextNode(String(value)));
+  if (after) element.append(document.createTextNode(after));
 }
 
 function isLoopback() {
@@ -525,7 +550,10 @@ function memberName(userId, fallback = t("work.owner_needed")) {
 
 function workstreamName(workstreamId) {
   if (!workstreamId) return t("work.general");
-  return workstreamMap().get(workstreamId)?.name || t("work.archived_area");
+  const workstream = workstreamMap().get(workstreamId);
+  if (!workstream) return t("work.archived_area");
+  const seeded = SEEDED_WORKSTREAMS[workstream.slug];
+  return seeded && workstream.name === seeded.source ? t(seeded.key) : workstream.name;
 }
 
 function ownerClass(userId) {
@@ -595,12 +623,12 @@ function makeTaskCard(task) {
 
   if (task.next_action) {
     const next = createElement("span", "task-card-next");
-    next.append(createElement("strong", "", t("work.card_next")), document.createTextNode(task.next_action));
+    appendTranslatedValue(next, "work.card_next_value", task.next_action);
     button.append(next);
   }
   if (task.status === "waiting" && task.blocker_note) {
     const blocker = createElement("span", "task-card-blocker");
-    blocker.append(createElement("strong", "", t("work.card_blocked")), document.createTextNode(task.blocker_note));
+    appendTranslatedValue(blocker, "work.card_blocked_value", task.blocker_note);
     button.append(blocker);
   }
 
@@ -1131,7 +1159,7 @@ function populateReferenceControls() {
   appendOption(workstreamSelect, "", t("work.no_area"));
   state.workstreams
     .filter((workstream) => !workstream.archived_at && workstream.status === "active")
-    .forEach((workstream) => appendOption(workstreamSelect, workstream.id, workstream.name));
+    .forEach((workstream) => appendOption(workstreamSelect, workstream.id, workstreamName(workstream.id)));
 }
 
 function renderWorkspace({ focus = false } = {}) {
@@ -1353,22 +1381,28 @@ function conflictFieldLabel(key) {
   return CONFLICT_FIELD_KEYS[key] ? t(CONFLICT_FIELD_KEYS[key]) : key;
 }
 
+function conflictFieldList(keys, { lowercase = true } = {}) {
+  const labels = (keys || [])
+    .map((key) => conflictFieldLabel(key))
+    .filter(Boolean)
+    .map((label) => lowercase ? label.toLocaleLowerCase(hubLocale()) : label);
+  return new Intl.ListFormat(hubLocale(), { type: "conjunction" }).format(labels);
+}
+
 function conflictValueLabel(key, value) {
   if (key === "ownerId" || key === "approverId") return memberName(value, t("work.nobody"));
   if (key === "workstreamId") return value ? workstreamName(value) : t("work.no_area");
   if (key === "status") return value ? statusLabel(value) : t("work.empty");
   if (key === "priority") return value ? priorityLabel(value) : t("work.empty");
   if (key === "dueOn") return value ? formatDate(value) : t("work.empty");
-  if (key === "flags") return value?.length ? value.map((flag) => flagLabel(flag) || flag).join(", ") : t("work.none");
+  if (key === "flags") return value?.length
+    ? value.map((flag) => flagLabel(flag) || t("work.flag_unknown")).join(", ")
+    : t("work.none");
   return String(value || t("work.empty"));
 }
 
-function protectedConflictNote(review) {
-  const labels = (review?.protectedFields || [])
-    .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
-    .filter(Boolean)
-    .join(", ");
-  return labels ? t("work.authority_kept", { fields: labels }) : "";
+function protectedConflictFields(review) {
+  return conflictFieldList(review?.protectedFields || []);
 }
 
 function renderConflictReview() {
@@ -1391,10 +1425,10 @@ function renderConflictReview() {
     title.append(createElement("strong", "", label));
     const latest = createElement("p");
     latest.id = latestId;
-    latest.append(createElement("strong", "", t("work.conflict_latest")), document.createTextNode(conflictValueLabel(key, review.latestValues[key])));
+    appendTranslatedValue(latest, "work.conflict_latest_value", conflictValueLabel(key, review.latestValues[key]));
     const mine = createElement("p");
     mine.id = mineId;
-    mine.append(createElement("strong", "", t("work.conflict_yours")), document.createTextNode(conflictValueLabel(key, review.draftValues[key])));
+    appendTranslatedValue(mine, "work.conflict_yours_value", conflictValueLabel(key, review.draftValues[key]));
     copy.append(title, latest, mine);
 
     const actions = createElement("div", "conflict-choice-actions");
@@ -1434,20 +1468,23 @@ function resolveConflictChoice(key, choice) {
   saveButton.disabled = Boolean(review.unresolvedKeys.length) || !canEdit();
   archiveButton.disabled = Boolean(review.unresolvedKeys.length);
   if (review.unresolvedKeys.length) {
-    const conflictKey = new Intl.PluralRules(hubLocale()).select(review.unresolvedKeys.length) === "one"
+    const authorityFields = protectedConflictFields(review);
+    const baseConflictKey = new Intl.PluralRules(hubLocale()).select(review.unresolvedKeys.length) === "one"
       ? "work.conflict_one_left"
       : "work.conflict_other_left";
+    const conflictKey = authorityFields ? `${baseConflictKey}_authority` : baseConflictKey;
     showTranslatedDialogStatus(conflictKey, () => ({
       n: localNumber(review.unresolvedKeys.length),
-      note: protectedConflictNote(review)
+      fields: protectedConflictFields(review)
     }));
     conflictFields.querySelector("button")?.focus();
     return;
   }
   const protectedFields = [...(review.protectedFields || [])];
   state.conflictReview = null;
-  showTranslatedDialogStatus("work.conflict_resolved", () => ({
-    note: protectedConflictNote({ protectedFields })
+  const resolvedKey = protectedFields.length ? "work.conflict_resolved_authority" : "work.conflict_resolved";
+  showTranslatedDialogStatus(resolvedKey, () => ({
+    fields: protectedConflictFields({ protectedFields })
   }));
   const firstAffectedControl = get({
     title: "work-title-input", workstreamId: "work-workstream", status: "work-status",
@@ -1876,19 +1913,17 @@ async function reloadLatestConflict() {
     renderConflictReview();
     renderBoard();
     if (unresolvedKeys.length) {
-      showTranslatedDialogStatus("work.latest_choose", () => {
-        const labels = unresolvedKeys.map(conflictFieldLabel).filter(Boolean).join(", ");
+      const latestKey = protectedFields.length ? "work.latest_choose_authority" : "work.latest_choose";
+      showTranslatedDialogStatus(latestKey, () => {
+        const labels = conflictFieldList(unresolvedKeys);
         return {
           fields: labels || t("work.conflicting_values"),
-          note: protectedConflictNote({ protectedFields })
+          authorityFields: protectedConflictFields({ protectedFields })
         };
       }, { focus: true });
     } else if (protectedFields.length) {
       showTranslatedDialogStatus("work.latest_authority", () => {
-        const labels = protectedFields
-          .map((key) => conflictFieldLabel(key).toLocaleLowerCase(hubLocale()))
-          .filter(Boolean)
-          .join(", ");
+        const labels = protectedConflictFields({ protectedFields });
         return { fields: labels || t("work.approval_workflow") };
       }, { focus: true });
     } else {
