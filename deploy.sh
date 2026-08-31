@@ -59,6 +59,18 @@ copy_into() {
   # telling someone to hard-refresh is a workaround, not a fix.
   "$PYTHON" "$SRC/stamp_assets.py" "$dest/hub.html" || echo "  $name: WARNING could not stamp assets"
 
+  # Claude — 2026-08-31: subdirectories the browser actually loads. The copy
+  # above walks top-level files only, so lang/ silently did not ship and the
+  # Hub fetched its dictionaries into a 404 — translated code, untranslated
+  # screen, no error. If a module imports from a folder, that folder ships.
+  for dir in lang; do
+    if [ -d "$SRC/$dir" ]; then
+      mkdir -p "$dest/$dir"
+      cp "$SRC/$dir"/*.js "$dest/$dir"/ 2>/dev/null || true
+      echo "  $name: shipped $dir/ ($(ls "$dest/$dir" | wc -l | tr -d ' ') files)"
+    fi
+  done
+
   # The root URL must be the same shell as hub.html, or a stale copy of it
   # gets served the current JavaScript and the page hangs. That happened.
   cp "$dest/hub.html" "$dest/index.html"
@@ -80,6 +92,11 @@ copy_into() {
   for asset in $(grep -ohE 'hub-lookbook-export\.js|hub-lookbook-pdf-worker\.js|vendor-pdf-lib\.min\.js' "$dest"/hub-*.js 2>/dev/null | sort -u); do
     [ -f "$dest/$asset" ] || { echo "  MISSING in $name: $asset"; missing=1; }
   done
+  # Anything a module imports by relative path must exist in the deploy too.
+  while read -r imp; do
+    [ -f "$dest/$imp" ] || { echo "  MISSING in $name: $imp (imported by a module)"; missing=1; }
+  done < <(grep -ohE 'from "\./[a-zA-Z0-9/_-]+\.js"' "$dest"/*.js 2>/dev/null            | sed 's/from "\.\///;s/"//' | sort -u)
+
   [ "$missing" -eq 0 ] && echo "  $name: every referenced asset is present"
   return $missing
 }

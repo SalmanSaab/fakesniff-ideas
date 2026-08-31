@@ -17,6 +17,19 @@
  * snaps into the hub the moment the hook lands.
  */
 
+/* Claude — 2026-08-30: imported as `text` rather than `t`. This file already
+   uses `t` as a local for a trigger and for a string accumulator, and a local
+   shadows an import — so text("idea.foo") inside those scopes would have called
+   the trigger, not the translator. Renaming one import beats renaming a dozen
+   locals and hoping none were missed. */
+import { t as text, onLanguageChange, currentLanguage } from "./hub-i18n.js";
+
+/* Stored values never change; only what we print for them does. A status of
+   "needs work" stays "needs work" in the database and reads "Moet nog beter"
+   on a Dutch screen. */
+export const statusLabel = (v) => text(`idea.status_${String(v).replace(/\s+/g, "_")}`);
+export const catLabel = (v) => text(`idea.cat_${v}`);
+
 const STANDALONE = {
   restUrl: "https://kayxejofqyxoqlberrgw.supabase.co/rest/v1",
   anonKey:
@@ -152,7 +165,7 @@ export function mount(root, ctx) {
       q(".ilab-err").replaceChildren();
       render();
     } catch (e) {
-      showErr("could not reach the database. " + String(e.message || e).slice(0, 120));
+      showErr(text("idea.db_unreachable") + " " + String(e.message || e).slice(0, 120));
     }
   }
   const isUsed = (t) =>
@@ -164,11 +177,15 @@ export function mount(root, ctx) {
     return rows.map((r) => {
       // legacy rows copied by migration 001 already carry who/what
       if (r.legacy_who || r.legacy_what) {
-        return { who: r.legacy_who || "someone", what: r.legacy_what || "", at: r.occurred_at };
+        return { who: r.legacy_who || text("idea.someone"), what: r.legacy_what || "", at: r.occurred_at };
       }
-      const verb = { insert: "added", update: "updated", delete: "removed" }[r.action] || r.action;
-      const thing = String(r.entity_type || "record").replace(/s$/, "");
-      return { who: names.get(r.actor_id) || "someone", what: `${verb} a ${thing}`, at: r.occurred_at };
+      const key = { insert: "idea.added_a", update: "idea.updated_a", delete: "idea.removed_a" }[r.action];
+      const thing = String(r.entity_type || text("idea.record")).replace(/s$/, "");
+      return {
+        who: names.get(r.actor_id) || text("idea.someone"),
+        what: key ? t(key, { thing }) : `${r.action} ${thing}`,
+        at: r.occurred_at,
+      };
     });
   }
 
@@ -181,7 +198,7 @@ export function mount(root, ctx) {
     catch { /* activity is best-effort */ }
   }
   function showErr(m) {
-    const text = String(m || "something went wrong");
+    const text = String(m || text("idea.went_wrong"));
     /* Claude — 2026-08-13: this only ever wrote into the page behind the sheet.
        When a save failed the person saw the sheet sit there doing nothing, shut
        it, and found the message underneath — if they looked. So it now speaks
@@ -213,8 +230,8 @@ export function mount(root, ctx) {
     const out = q("#ilab-shotout");
     const btn = q("#ilab-makeshot");
     if (!out || !btn) return;
-    if (cfg.mode !== "authed") { out.textContent = "Sign in to generate pictures."; return; }
-    btn.disabled = true; btn.textContent = "Making it…";
+    if (cfg.mode !== "authed") { out.textContent = text("idea.sign_in_images"); return; }
+    btn.disabled = true; btn.textContent = text("idea.making");
     out.textContent = "";
     try {
       const { promptFromIdea, referenceFromLookbook } = await import("./hub-brand.js");
@@ -231,16 +248,16 @@ export function mount(root, ctx) {
         body: JSON.stringify({ mode: "image", prompt: promptFromIdea(idea, referenceFromLookbook(refRows || [])) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.image) { out.textContent = data.error || "That picture could not be made."; return; }
+      if (!res.ok || !data.image) { out.textContent = data.error || text("idea.image_failed"); return; }
       const img = document.createElement("img");
       img.className = "ilab-shotimg";
       img.src = data.image;
       img.alt = `${idea.line} on a t-shirt`;
       out.replaceChildren(img);
     } catch (e) {
-      out.textContent = `That did not work: ${String(e?.message || e).slice(0, 140)}`;
+      out.textContent = text("idea.did_not_work", { reason: String(e?.message || e).slice(0, 140) });
     } finally {
-      btn.disabled = false; btn.textContent = "Make another";
+      btn.disabled = false; btn.textContent = text("idea.make_another");
     }
   }
 
@@ -311,7 +328,7 @@ export function mount(root, ctx) {
     f.innerHTML =
       `<button class="ilab-chip ${state.fStatus === "all" ? "on" : ""}" data-s="all">all ${state.ideas.length}</button>` +
       STATUSES.filter((s) => counts[s]).map((s) =>
-        `<button class="ilab-chip ${state.fStatus === s ? "on" : ""}" data-s="${s}">${s} ${counts[s]}</button>`).join("") +
+        `<button class="ilab-chip ${state.fStatus === s ? "on" : ""}" data-s="${s}">${esc(statusLabel(s))} ${counts[s]}</button>`).join("") +
       (flagged ? `<button class="ilab-chip ${state.fRisk === "flagged" ? "on" : ""}" data-r="flagged">flagged ${flagged}</button>` : "");
     f.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => { state.fStatus = b.dataset.s; state.fRisk = "all"; render(); }));
     const rb = f.querySelector("[data-r]");
@@ -404,9 +421,9 @@ export function mount(root, ctx) {
            of a blank. Useful for reading the line, useless for judging whether
            the thing is worth making. This makes the real one. -->
       <div class="ilab-realshot">
-        <button id="ilab-makeshot" class="ilab-makeshot" type="button">See it made</button>
-        <button id="ilab-todesign" class="ilab-todesign" type="button">Open in Designs</button>
-        <span class="ilab-shothint">a real photograph, using our own materials</span>
+        <button id="ilab-makeshot" class="ilab-makeshot" type="button">${esc(text("idea.see_it_made"))}</button>
+        <button id="ilab-todesign" class="ilab-todesign" type="button">${esc(text("idea.open_in_designs"))}</button>
+        <span class="ilab-shothint">${esc(text("idea.shot_hint"))}</span>
         <div id="ilab-shotout" class="ilab-shotout"></div>
       </div>
       ${i.sparked_by ? `<div class="ilab-src">sparked by: ${esc(i.sparked_by)}
@@ -414,13 +431,13 @@ export function mount(root, ctx) {
       ${canEdit ? `
       <div class="ilab-lbl">status</div>
       <div class="ilab-setline" id="ilab-setstatus">
-        ${STATUSES.map((s) => `<button data-v="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}
+        ${STATUSES.map((s) => `<button data-v="${s}" class="${i.status === s ? "on" : ""}">${esc(statusLabel(s))}</button>`).join("")}
       </div>
       <div class="ilab-lbl">risk</div>
       <div class="ilab-setline" id="ilab-setrisk">
         ${RISKS.map((r) => `<button data-v="${r}" class="${i.risk === r ? "on" : ""}">${r}</button>`).join("")}
       </div>` : `
-      <div class="ilab-lbl">status</div><div class="ilab-src">${esc(i.status)}${i.risk !== "clean" ? ` · risk: ${esc(i.risk)}` : ""}</div>`}
+      <div class="ilab-lbl">status</div><div class="ilab-src">${esc(statusLabel(i.status))}${i.risk !== "clean" ? ` · risk: ${esc(i.risk)}` : ""}</div>`}
       <div class="ilab-src ilab-mt16">
         added by ${esc(i.added_by || "—")}${i.updated_by ? ` · last touched by ${esc(i.updated_by)}` : ""}
       </div>`;
@@ -537,7 +554,7 @@ export function mount(root, ctx) {
         <div class="ilab-row">
           <div>
             <label class="ilab-flabel" for="ilab-f-cat">Category</label>
-            <select id="ilab-f-cat" name="category">${CATS.map((c) => `<option ${t && t.category === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+            <select id="ilab-f-cat" name="category">${CATS.map((c) => `<option value="${c}" ${t && t.category === c ? "selected" : ""}>${esc(catLabel(c))}</option>`).join("")}</select>
           </div>
           <div>
             <label class="ilab-flabel" for="ilab-f-risk">Risk</label>

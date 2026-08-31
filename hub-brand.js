@@ -32,30 +32,44 @@ const HOUSE = [
   "overlay, no watermark, no brand logo other than the graphic described.",
 ].join(" ");
 
+/* Claude — 2026-08-30: each entry is [value, label key, prompt text].
+ *
+ * The middle one is translated because a person reads it. The third is NOT and
+ * must never be: it goes to the image model, the whole house brief around it is
+ * English, and a prompt written half in Dutch produces a worse picture. What
+ * Marco sees changes with his language; what the model is asked for does not. */
 export const GARMENTS = [
-  ["hoodie", "Hoodie", "a heavyweight oversized pullover hoodie"],
-  ["tee", "T-shirt", "a boxy heavyweight cotton t-shirt"],
-  ["longsleeve", "Long sleeve", "a boxy long-sleeve cotton top"],
-  ["sweat", "Sweatshirt", "a heavyweight crewneck sweatshirt"],
-  ["jacket", "Jacket", "a workwear-cut cotton jacket"],
-  ["cap", "Cap", "a six-panel cap"],
-  ["beanie", "Beanie", "a ribbed knit beanie"],
-  ["trousers", "Trousers", "a pair of relaxed-fit cotton trousers"],
-  ["tote", "Tote", "a heavy cotton tote bag"],
+  ["hoodie", "designs.garment_hoodie", "a heavyweight oversized pullover hoodie"],
+  ["tee", "designs.garment_tee", "a boxy heavyweight cotton t-shirt"],
+  ["longsleeve", "designs.garment_longsleeve", "a boxy long-sleeve cotton top"],
+  ["sweat", "designs.garment_sweat", "a heavyweight crewneck sweatshirt"],
+  ["jacket", "designs.garment_jacket", "a workwear-cut cotton jacket"],
+  ["cap", "designs.garment_cap", "a six-panel cap"],
+  ["beanie", "designs.garment_beanie", "a ribbed knit beanie"],
+  ["trousers", "designs.garment_trousers", "a pair of relaxed-fit cotton trousers"],
+  ["tote", "designs.garment_tote", "a heavy cotton tote bag"],
 ];
 
 export const COLOURS = [
-  ["black", "Black"], ["washed-black", "Washed black"], ["cream", "Cream"],
-  ["bone", "Bone"], ["grey", "Heather grey"], ["olive", "Olive"],
-  ["navy", "Navy"], ["brown", "Brown"],
+  ["black", "designs.colour_black"], ["washed-black", "designs.colour_washed_black"], ["cream", "designs.colour_cream"],
+  ["bone", "designs.colour_bone"], ["grey", "designs.colour_grey"], ["olive", "designs.colour_olive"],
+  ["navy", "designs.colour_navy"], ["brown", "designs.colour_brown"],
 ];
 
 export const SHOTS = [
-  ["flat", "Flat lay", "laid flat and photographed from directly above on plain concrete"],
-  ["hanger", "On a hanger", "hanging on a plain metal rail against a plain wall"],
-  ["worn", "Worn", "worn by a person photographed from the chest up, plain background, their face not the subject"],
-  ["detail", "Close detail", "a close macro photograph of the print and the fabric texture"],
+  ["flat", "designs.shot_flat", "laid flat and photographed from directly above on plain concrete"],
+  ["hanger", "designs.shot_hanger", "hanging on a plain metal rail against a plain wall"],
+  ["worn", "designs.shot_worn", "worn by a person photographed from the chest up, plain background, their face not the subject"],
+  ["detail", "designs.shot_detail", "a close macro photograph of the print and the fabric texture"],
 ];
+
+/* The English words the model is asked for, kept apart from the labels a person
+   reads so translating the interface cannot change the picture we generate. */
+const COLOUR_WORDS = {
+  "black": "black", "washed-black": "washed black", "cream": "cream",
+  "bone": "bone", "grey": "heather grey", "olive": "olive",
+  "navy": "navy", "brown": "brown",
+};
 
 const find = (list, v, fallbackIndex = 0) => list.find(([key]) => key === v) || list[fallbackIndex];
 
@@ -72,7 +86,7 @@ export function buildGarmentPrompt({ graphic, garment, colour, shot, reference =
   const s = find(SHOTS, shot);
 
   const parts = [
-    `A realistic product photograph of ${g[2]} in ${c[1].toLowerCase()}.`,
+    `A realistic product photograph of ${g[2]} in ${COLOUR_WORDS[c[0]]}.`,
     `The graphic on it: ${String(graphic || "").trim() || "no graphic, a plain blank"}.`,
     `It is ${s[2]}.`,
     HOUSE,
