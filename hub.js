@@ -8,6 +8,7 @@ import {
   currentLanguage,
   initLanguage,
   onLanguageChange,
+  setLanguage,
   t
 } from "./hub-i18n.js";
 import en from "./lang/en.js";
@@ -59,6 +60,16 @@ const SEEDED_WORKSTREAMS = Object.freeze({
 const HUB_LOCALES = Object.freeze({ en: "en-GB", nl: "nl-NL", tr: "tr-TR", ar: "ar" });
 const ROLE_RANK = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const REGISTERABLE_SECTION_IDS = new Set(["idea-lab", "lookbook", "decisions", "designs"]);
+const SECTION_LABEL_KEYS = Object.freeze({
+  home: "nav.home",
+  work: "nav.work",
+  "idea-lab": "nav.idea_lab",
+  lookbook: "nav.lookbook",
+  designs: "nav.designs",
+  decisions: "nav.decisions"
+});
+const CORE_REFRESH_SECTIONS = new Set(["home", "work"]);
+const MOBILE_CREATE_SECTIONS = new Set(["idea-lab", "designs"]);
 const PRODUCTION_SUPABASE_HOST = "kayxejofqyxoqlberrgw.supabase.co";
 const registeredSections = new Map();
 
@@ -137,8 +148,17 @@ const searchInput = get("work-search");
 const ownerFilter = get("work-owner-filter");
 const workStageFilter = get("work-stage-filter");
 const mobileSignOutButton = get("mobile-signout-button");
+const mobileRefreshButton = get("mobile-refresh-button");
+const mobileMoreButton = get("mobile-more-button");
+const mobileMoreMenu = get("mobile-more-menu");
+const closeMobileMoreButton = get("close-mobile-more");
+const homeNewWorkAction = get("home-new-work-action");
+/* Codex — 2026-08-31: signed-in language choice remains owned by the assistant
+   panel. This access picker makes Dutch reachable before Marco can sign in. */
+const languagePickers = [get("access-language-picker")];
 const primaryNav = document.querySelector(".primary-nav");
 const navLinks = [...document.querySelectorAll('.nav-link[href^="#"]')];
+let restoreMobileMoreFocus = true;
 
 function hubLocale() {
   return HUB_LOCALES[currentLanguage()] || HUB_LOCALES.en;
@@ -267,13 +287,17 @@ function clearRegisteredSections() {
   registeredSections.forEach(clearRegisteredSection);
 }
 
-function renderSectionLoadError(root) {
+function sectionLabel(sectionId) {
+  return t(SECTION_LABEL_KEYS[sectionId] || "nav.home");
+}
+
+function renderSectionLoadError(root, sectionId) {
   const message = createElement("div", "module-placeholder");
   message.setAttribute("role", "alert");
   message.append(
-    createElement("span", "preview-label", "Could not load"),
-    createElement("h2", "", "Idea Lab is temporarily unavailable."),
-    createElement("p", "", "Refresh the Hub and try again. Your existing ideas were not changed.")
+    createElement("span", "preview-label", t("shell.section_load_failed")),
+    createElement("h2", "", t("shell.section_unavailable", { section: sectionLabel(sectionId) })),
+    createElement("p", "", t("shell.section_safe_retry"))
   );
   root.replaceChildren(message);
 }
@@ -309,14 +333,14 @@ async function mountRegisteredSection(sectionId) {
     registration.contextKey = contextKey;
   } catch {
     if (registration.sequence === mountSequence && sectionContextIsCurrent(generation, userId)) {
-      renderSectionLoadError(registration.root);
+      renderSectionLoadError(registration.root, sectionId);
     }
   } finally {
     if (registration.sequence === mountSequence) registration.mountingKey = "";
   }
 }
 
-function activateSection(sectionId) {
+function activateSection(sectionId, { focus = false } = {}) {
   const normalized = get(sectionId)?.classList.contains("page-section") ? sectionId : "home";
   const sectionChanged = state.activeSectionId !== normalized;
   state.activeSectionId = normalized;
@@ -331,6 +355,25 @@ function activateSection(sectionId) {
     if (current) link.setAttribute("aria-current", "location");
     else link.removeAttribute("aria-current");
   });
+  const createSectionActive = MOBILE_CREATE_SECTIONS.has(normalized);
+  mobileMoreButton.classList.toggle("is-current", createSectionActive);
+  if (createSectionActive) {
+    delete mobileMoreButton.dataset.tAria;
+    mobileMoreButton.setAttribute("aria-label", t("nav.more_current", { section: sectionLabel(normalized) }));
+  } else {
+    mobileMoreButton.dataset.tAria = "nav.more_aria";
+    mobileMoreButton.setAttribute("aria-label", t("nav.more_aria"));
+  }
+
+  const titleKey = SECTION_LABEL_KEYS[normalized] || "nav.home";
+  const topbarTitle = get("topbar-section-title");
+  topbarTitle.dataset.t = titleKey;
+  topbarTitle.textContent = t(titleKey);
+
+  const canRefreshHere = CORE_REFRESH_SECTIONS.has(normalized);
+  refreshButton.hidden = !canRefreshHere;
+  mobileRefreshButton.hidden = !canRefreshHere;
+  if (mobileMoreMenu.open) closeMobileMoreNavigation(false);
   void mountRegisteredSection(normalized);
   if (normalized !== "home") {
     disconnectHomeActivityObserver();
@@ -341,6 +384,7 @@ function activateSection(sectionId) {
   ) {
     void refreshHomeActivity();
   }
+  if (focus) window.requestAnimationFrame(() => get(normalized)?.focus());
 }
 
 /* Codex — 2026-08-13: the environment marker belongs to the shell, not an
@@ -385,16 +429,29 @@ Object.defineProperty(globalThis, "Hub", {
   writable: false
 });
 
-function setAccessView({ copy, loading = false, signin = false, setup = false, retry = false, switchAccount = false, status = "" }) {
+/* Codex — 2026-08-31: access copy remains keyed while its state is visible, so
+   changing language after a denial or failed sign-in translates that exact
+   message instead of restoring the initial “checking” sentence. */
+function setAccessText(element, key = "") {
+  if (key) {
+    element.dataset.t = key;
+    element.textContent = t(key);
+    return;
+  }
+  delete element.dataset.t;
+  element.textContent = "";
+}
+
+function setAccessView({ copyKey, loading = false, signin = false, setup = false, retry = false, switchAccount = false, statusKey = "" }) {
   appShell.hidden = true;
   accessScreen.hidden = false;
-  accessCopy.textContent = copy;
+  setAccessText(accessCopy, copyKey);
   accessLoading.hidden = !loading;
   signInForm.hidden = !signin;
   setupActions.hidden = !setup;
   retryAccessButton.hidden = !retry;
   accessSignOutButton.hidden = !switchAccount;
-  accessStatus.textContent = status;
+  setAccessText(accessStatus, statusKey);
   document.querySelector(".skip-link")?.setAttribute("href", "#access-screen");
   window.requestAnimationFrame(() => {
     if (accessScreen.hidden) return;
@@ -404,33 +461,36 @@ function setAccessView({ copy, loading = false, signin = false, setup = false, r
 }
 
 function showSetupMode(configErrors = []) {
-  const detail = configErrors.length ? "The connected configuration is incomplete." : "The connected workspace has not been enabled yet.";
-  setAccessView({ copy: detail, setup: true, status: configErrors.join(" ") });
+  setAccessView({
+    copyKey: configErrors.length ? "auth.setup_incomplete" : "auth.setup_disabled",
+    setup: true,
+    statusKey: configErrors.length ? "auth.config_retry" : ""
+  });
   localPreviewLink.hidden = !isLoopback();
 }
 
-function showSignedOut(status = "") {
+function showSignedOut(statusKey = "") {
   clearWorkspaceState();
   setAccessView({
-    copy: "Use an invited email address. We will send a one-time sign-in link.",
+    copyKey: "auth.signin_invited",
     signin: true,
-    status
+    statusKey
   });
   get("team-email").disabled = false;
   get("signin-button").disabled = false;
 }
 
-function showChecking(copy = "Verifying your invited workspace membership…") {
-  setAccessView({ copy, loading: true });
+function showChecking(copyKey = "auth.verifying_membership") {
+  setAccessView({ copyKey, loading: true });
 }
 
 function showAccessDenied() {
   clearWorkspaceState();
   setAccessView({
-    copy: "This signed-in account does not have active access to the FAKESNIFF workspace.",
+    copyKey: "auth.access_denied",
     retry: true,
     switchAccount: true,
-    status: "Ask a workspace owner to confirm the invitation and membership record."
+    statusKey: "auth.access_denied_help"
   });
 }
 
@@ -440,6 +500,7 @@ function clearWorkspaceState() {
   state.homeActivityRequestSequence += 1;
   state.homeActivityAckSequence += 1;
   disconnectHomeActivityObserver();
+  closeMobileMoreNavigation(false);
   state.conflictDraft = null;
   state.conflictReview = null;
   setSaving(false);
@@ -472,8 +533,8 @@ function clearWorkspaceState() {
   form?.reset();
   clearFormError();
   searchInput.value = "";
-  get("workspace-label").textContent = "FAKESNIFF workspace";
-  get("rail-member-label").textContent = "Member";
+  get("workspace-label").textContent = "FAKESNIFF";
+  get("rail-member-label").textContent = t("shell.member");
   get("member-avatar").textContent = "?";
   get("home-member-kicker").textContent = t("home.workspace_overview");
   get("member-role-pill").textContent = t("work.member");
@@ -519,6 +580,7 @@ function clearWorkspaceState() {
   get("home-focus-value").textContent = t("home.focus_waiting_signin");
   get("home-focus-detail").textContent = t("home.signin_for_board");
   get("home-focus-action").hidden = true;
+  homeNewWorkAction.hidden = true;
   reloadLatestButton.hidden = true;
   setMobileWorkStatus("this_week");
 }
@@ -1166,9 +1228,10 @@ function renderWorkspace({ focus = false } = {}) {
   populateReferenceControls();
   const role = state.membership.role;
   const displayName = state.membership.display_name;
+  const roleLabel = t(`work.role_${role}`);
 
   get("workspace-label").textContent = state.workspace?.name || "FAKESNIFF workspace";
-  get("rail-member-label").textContent = `${displayName} · ${role}`;
+  get("rail-member-label").textContent = `${displayName} · ${roleLabel}`;
   get("member-avatar").textContent = displayName.trim().slice(0, 1).toUpperCase() || "?";
   get("home-member-kicker").textContent = t("home.welcome", { name: displayName });
   get("member-role-pill").textContent = t(`work.role_${role}`);
@@ -1183,20 +1246,27 @@ function renderWorkspace({ focus = false } = {}) {
 
   newWorkButton.hidden = !canEdit();
   newWorkButton.disabled = !canEdit();
+  homeNewWorkAction.hidden = !canEdit();
   renderBoard();
   appShell.hidden = false;
   accessScreen.hidden = true;
   document.querySelector(".skip-link")?.setAttribute("href", "#main-content");
   activateSection(sectionIdFromHash());
   state.lastRefreshedAt = Date.now();
-  setSyncState("Loaded just now", false);
+  setSyncState("shell.loaded_now", false);
   if (focus) window.requestAnimationFrame(() => get("main-content").focus());
 }
 
-function setSyncState(label, busy) {
-  get("sync-label").textContent = label;
+function setSyncState(key, busy) {
+  const syncLabel = get("sync-label");
+  syncLabel.dataset.t = key;
+  syncLabel.textContent = t(key);
   refreshButton.disabled = Boolean(busy);
-  get("connection-label").textContent = state.stale ? "Stale" : "Connected";
+  mobileRefreshButton.disabled = Boolean(busy);
+  const connectionKey = state.stale ? "shell.stale" : "shell.connected";
+  const connectionLabel = get("connection-label");
+  connectionLabel.dataset.t = connectionKey;
+  connectionLabel.textContent = t(connectionKey);
   get("connection-pulse").classList.toggle("pulse-warn", state.stale);
 }
 
@@ -1969,7 +2039,8 @@ async function refreshTasks({ quiet = false } = {}) {
   state.refreshing = true;
   newWorkButton.disabled = true;
   refreshButton.disabled = true;
-  if (!quiet) setSyncState(t("work.refreshing"), true);
+  mobileRefreshButton.disabled = true;
+  if (!quiet) setSyncState("work.refreshing", true);
   try {
     const workspaceData = await state.repository.loadWorkspace(userId);
     if (
@@ -2005,9 +2076,10 @@ async function refreshTasks({ quiet = false } = {}) {
     state.refreshing = false;
     state.stale = true;
     newWorkButton.disabled = true;
+    homeNewWorkAction.hidden = true;
     if (dialog.open) setFormReadOnly(true);
     renderHomeFocus();
-    setSyncState(t("work.refresh_failed"), false);
+    setSyncState("work.refresh_failed", false);
     showAppError(t("work.refresh_failed_detail"));
     return false;
   }
@@ -2152,7 +2224,7 @@ async function reconcileSession(session, event = "MANUAL") {
     const userResponse = await state.auth.getVerifiedUser();
     if (generation !== state.generation) return;
     if (userResponse.error || !userResponse.data?.user) {
-      showSignedOut("Your sign-in expired. Request a new link.");
+      showSignedOut("auth.expired");
       return;
     }
     const user = userResponse.data.user;
@@ -2174,15 +2246,15 @@ async function reconcileSession(session, event = "MANUAL") {
     if (generation !== state.generation) return;
     clearWorkspaceState();
     setAccessView({
-      copy: "The private workspace could not be verified.",
+      copyKey: "auth.workspace_verify_failed",
       retry: true,
-      status: "Check the connection and try again. No company data was loaded."
+      statusKey: "auth.connection_retry"
     });
   }
 }
 
 async function startConnectedMode() {
-  showChecking("Starting secure access…");
+  showChecking("auth.starting_secure");
   try {
     state.auth = await createHubAuth(state.config);
     state.repository = createConnectedWorkRepository(state.auth.client, state.config.workspaceId);
@@ -2195,9 +2267,9 @@ async function startConnectedMode() {
   } catch {
     clearWorkspaceState();
     setAccessView({
-      copy: "Secure access could not start.",
+      copyKey: "auth.secure_start_failed",
       retry: true,
-      status: "Check the Hub configuration and network connection."
+      statusKey: "auth.config_retry"
     });
   }
 }
@@ -2217,17 +2289,17 @@ async function signInWithPassword(event) {
   emailInput.disabled = true;
   passwordInput.disabled = true;
   button.disabled = true;
-  accessStatus.textContent = "Signing in…";
+  setAccessText(accessStatus, "auth.signing_in");
   try {
     const result = await state.auth.signInWithPassword(emailInput.value, passwordInput.value);
     if (result?.error) throw result.error;
-    accessStatus.textContent = "Signed in. Checking your workspace access…";
+    setAccessText(accessStatus, "auth.signed_in_checking");
     passwordInput.value = "";
   } catch (error) {
     const message = String(error?.message || "");
-    accessStatus.textContent = /invalid login/i.test(message)
-      ? "That email and password did not match."
-      : "Could not sign in. Please try again.";
+    setAccessText(accessStatus, /invalid login/i.test(message)
+      ? "auth.login_mismatch"
+      : "auth.signin_failed");
   } finally {
     emailInput.disabled = false;
     passwordInput.disabled = false;
@@ -2238,20 +2310,20 @@ async function signInWithPassword(event) {
 async function requestMagicLink() {
   const emailInput = get("team-email");
   if (!emailInput.value.trim()) {
-    accessStatus.textContent = "Enter your email address first.";
+    setAccessText(accessStatus, "auth.email_first");
     emailInput.focus();
     return;
   }
   const button = get("magiclink-button");
   button.disabled = true;
-  accessStatus.textContent = "Sending a one-time link…";
+  setAccessText(accessStatus, "auth.sending_link");
   try {
     const result = await state.auth.requestMagicLink(emailInput.value);
-    accessStatus.textContent = result?.error && /rate limit/i.test(String(result.error.message || ""))
-      ? "Too many emails requested. Wait an hour, or sign in with your password."
-      : "If this address is invited, check its inbox for a sign-in link.";
+    setAccessText(accessStatus, result?.error && /rate limit/i.test(String(result.error.message || ""))
+      ? "auth.email_rate_limit"
+      : "auth.check_inbox");
   } catch {
-    accessStatus.textContent = "If this address is invited, check its inbox for a sign-in link.";
+    setAccessText(accessStatus, "auth.check_inbox");
   } finally {
     button.disabled = false;
   }
@@ -2259,7 +2331,7 @@ async function requestMagicLink() {
 
 async function signOut() {
   ++state.generation;
-  showSignedOut("Signed out on this device.");
+  showSignedOut("auth.signed_out");
   try {
     await state.auth?.signOut();
   } catch {
@@ -2279,9 +2351,9 @@ async function retryAccess() {
   } catch {
     clearWorkspaceState();
     setAccessView({
-      copy: "Secure access could not be retried.",
+      copyKey: "auth.retry_failed",
       retry: true,
-      status: "Check the connection and try again. No company data was loaded."
+      statusKey: "auth.connection_retry"
     });
   } finally {
     retryAccessButton.disabled = false;
@@ -2338,11 +2410,14 @@ function renderOwnedLanguageChange() {
   const role = state.membership.role;
   get("home-member-kicker").textContent = t("home.welcome", { name: state.membership.display_name });
   get("member-role-pill").textContent = t(`work.role_${role}`);
+  get("rail-member-label").textContent = `${state.membership.display_name} · ${t(`work.role_${role}`)}`;
   get("work-mode-copy").textContent = role === "viewer" ? t("work.readonly_mode") : t("work.private_mode");
   get("work-data-note").replaceChildren(
     createElement("strong", "", t("work.private_data")),
     document.createTextNode(` ${t("work.verified_only")}`)
   );
+  setSyncState(state.refreshing ? "work.refreshing" : state.stale ? "work.refresh_failed" : "shell.loaded_now", state.refreshing);
+  activateSection(state.activeSectionId);
 
   disconnectHomeActivityObserver();
   const activityRender = renderBoard();
@@ -2376,12 +2451,66 @@ function renderOwnedLanguageChange() {
   retranslateDialogStatus();
 }
 
+/* Codex — 2026-08-31: phones keep the four daily destinations visible and
+   put the two creation tools in one native, Escape-safe menu. */
+function openMobileMoreNavigation() {
+  if (mobileMoreMenu.open) return;
+  restoreMobileMoreFocus = true;
+  mobileMoreButton.setAttribute("aria-expanded", "true");
+  mobileMoreMenu.showModal();
+  window.requestAnimationFrame(() => mobileMoreMenu.querySelector("a")?.focus());
+}
+
+function closeMobileMoreNavigation(restoreFocus = true) {
+  restoreMobileMoreFocus = restoreFocus;
+  if (mobileMoreMenu.open) mobileMoreMenu.close();
+}
+
+function syncLanguagePickers() {
+  const language = currentLanguage();
+  languagePickers.forEach((picker) => {
+    if ([...picker.options].some((option) => option.value === language)) picker.value = language;
+  });
+}
+
+function renderLanguageChange() {
+  syncLanguagePickers();
+  renderOwnedLanguageChange();
+}
+
 function bindEvents() {
   signInForm.addEventListener("submit", signInWithPassword);
   get("magiclink-button").addEventListener("click", requestMagicLink);
   retryAccessButton.addEventListener("click", retryAccess);
   signOutButton.addEventListener("click", signOut);
-  mobileSignOutButton.addEventListener("click", signOut);
+  mobileSignOutButton.addEventListener("click", () => {
+    closeMobileMoreNavigation(false);
+    void signOut();
+  });
+  mobileRefreshButton.addEventListener("click", () => {
+    closeMobileMoreNavigation();
+    void requestWorkspaceRefresh();
+  });
+  mobileMoreButton.addEventListener("click", openMobileMoreNavigation);
+  languagePickers.forEach((picker) => picker.addEventListener("change", (event) => setLanguage(event.target.value)));
+  closeMobileMoreButton.addEventListener("click", () => closeMobileMoreNavigation());
+  mobileMoreMenu.addEventListener("close", () => {
+    mobileMoreButton.setAttribute("aria-expanded", "false");
+    if (restoreMobileMoreFocus && !appShell.hidden) {
+      window.requestAnimationFrame(() => mobileMoreButton.focus());
+    }
+    restoreMobileMoreFocus = true;
+  });
+  mobileMoreMenu.addEventListener("click", (event) => {
+    if (event.target === mobileMoreMenu) {
+      closeMobileMoreNavigation();
+      return;
+    }
+    const link = event.target.closest('a[href^="#"]');
+    if (!link) return;
+    closeMobileMoreNavigation(false);
+    activateSection(link.getAttribute("href").slice(1), { focus: true });
+  });
   accessSignOutButton.addEventListener("click", signOut);
   refreshButton.addEventListener("click", requestWorkspaceRefresh);
   get("dismiss-app-error").addEventListener("click", hideAppError);
@@ -2405,7 +2534,7 @@ function bindEvents() {
   workStageFilter.addEventListener("change", () => setMobileWorkStatus(workStageFilter.value, { announce: true }));
   primaryNav.addEventListener("click", (event) => {
     const link = event.target.closest('.nav-link[href^="#"]');
-    if (link) activateSection(link.getAttribute("href").slice(1));
+    if (link) activateSection(link.getAttribute("href").slice(1), { focus: true });
   });
   window.addEventListener("hashchange", () => activateSection(sectionIdFromHash()));
   window.addEventListener("focus", refreshHomeAfterReturning);
@@ -2454,11 +2583,28 @@ function bindEvents() {
       window.setTimeout(() => get("work").focus(), 0);
     }
   });
+  homeNewWorkAction.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (!canEdit()) return;
+    window.location.hash = "work";
+    activateSection("work");
+    window.setTimeout(openNewTask, 0);
+  });
+  get("home-quick-grid").addEventListener("click", (event) => {
+    const link = event.target.closest('.home-quick-action[href^="#"]');
+    if (!link || link === homeNewWorkAction) return;
+    activateSection(link.getAttribute("href").slice(1), { focus: true });
+  });
+  get("home-stat-grid").addEventListener("click", (event) => {
+    const link = event.target.closest("[data-home-work-stage]");
+    if (link) setMobileWorkStatus(link.dataset.homeWorkStage);
+  });
 }
 
 function boot() {
   initLanguage();
-  onLanguageChange(renderOwnedLanguageChange);
+  syncLanguagePickers();
+  onLanguageChange(renderLanguageChange);
   const phoneLayout = window.matchMedia("(max-width: 820px)");
   get("work-tools").open = !phoneLayout.matches;
   phoneLayout.addEventListener("change", (event) => {
