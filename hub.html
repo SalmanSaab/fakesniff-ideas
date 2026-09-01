@@ -33,218 +33,263 @@
 </head>
 <body>
   <!-- Codex — 2026-08-11: publishable Hub shell. Company records render only after authenticated membership is verified. -->
-  <a class="skip-link" href="#main-content">Skip to the workspace</a>
+  <a class="skip-link" href="#main-content" data-t="shell.skip_workspace">Skip to the workspace</a>
 
   <main id="access-screen" class="access-screen" aria-labelledby="access-title" tabindex="-1">
     <section class="access-card">
       <a class="brand access-brand" href="./" aria-label="FAKESNIFF">
         <span class="brand-word">fakesniff.</span>
-        <span class="brand-sub">company hub</span>
+        <span class="brand-sub" data-t="shell.company_hub">company hub</span>
       </a>
+      <label class="language-control access-language-control">
+        <span class="sr-only" data-t="shell.language">Language</span>
+        <select id="access-language-picker" aria-label="Language" data-t-aria="shell.language">
+          <option value="en">EN</option>
+          <option value="nl">NL</option>
+        </select>
+      </label>
       <div class="access-mark" aria-hidden="true">fs.</div>
-      <p class="eyebrow">Private workspace</p>
-      <h1 id="access-title">Make the work<br><em>visible.</em></h1>
-      <p id="access-copy" class="access-copy">Checking workspace access…</p>
+      <p class="eyebrow" data-t="auth.private_workspace">Private workspace</p>
+      <h1 id="access-title"><span data-t="auth.hero_lead">Make the work</span><br><em data-t="auth.hero_emphasis">visible.</em></h1>
+      <p id="access-copy" class="access-copy" data-t="auth.checking_workspace">Checking workspace access…</p>
 
       <div id="access-loading" class="access-loading" role="status">
         <span class="pulse" aria-hidden="true"></span>
-        <span>Checking secure access</span>
+        <span data-t="auth.checking_secure_access">Checking secure access</span>
       </div>
 
       <form id="signin-form" class="signin-form" novalidate hidden>
-        <label for="team-email">Your email</label>
+        <label for="team-email" data-t="auth.email">Your email</label>
         <input id="team-email" name="email" type="email" autocomplete="email" inputmode="email" required>
-        <label for="team-password">Password</label>
+        <label for="team-password" data-t="auth.password">Password</label>
         <input id="team-password" name="password" type="password" autocomplete="current-password" required>
-        <button id="signin-button" type="submit">Sign in</button>
+        <button id="signin-button" type="submit" data-t="auth.signin">Sign in</button>
         <!-- Claude — 2026-08-12: magic link kept as a fallback. Email delivery is
              rate limited and lands in junk, so password is the primary route. -->
-        <button id="magiclink-button" class="text-button" type="button">Email me a sign-in link instead</button>
+        <button id="magiclink-button" class="text-button" type="button" data-t="auth.magic_link">Email me a sign-in link instead</button>
       </form>
 
       <div id="setup-actions" class="setup-actions" hidden>
-        <p>Connected access is not configured yet. No company data is included in this public shell.</p>
-        <a id="local-preview-link" class="primary-button" href="hub-preview.local.html" hidden>Open local private preview</a>
+        <p data-t="auth.not_configured">Connected access is not configured yet. No company data is included in this public shell.</p>
+        <a id="local-preview-link" class="primary-button" href="hub-preview.local.html" hidden data-t="auth.open_preview">Open local private preview</a>
       </div>
 
       <p id="access-status" class="access-status" role="status" aria-live="polite"></p>
-      <button id="retry-access-button" class="text-button" type="button" hidden>Try again</button>
-      <button id="access-signout-button" class="text-button" type="button" hidden>Use another account</button>
-      <p class="access-footnote">Invite-only · access is verified against the workspace membership list</p>
+      <button id="retry-access-button" class="text-button" type="button" hidden data-t="common.try_again">Try again</button>
+      <button id="access-signout-button" class="text-button" type="button" hidden data-t="auth.use_another">Use another account</button>
+      <p class="access-footnote" data-t="auth.invite_only">Invite-only · access is checked against the workspace member list</p>
     </section>
   </main>
 
   <div id="app-shell" class="app-shell" hidden>
-    <aside class="side-rail" aria-label="Workspace navigation">
-      <a class="brand" href="#home" aria-label="FAKESNIFF hub home">
+    <aside class="side-rail" aria-label="Workspace navigation" data-t-aria="shell.workspace_navigation">
+      <a class="brand" href="#home" aria-label="FAKESNIFF Hub home" data-t-aria="shell.home_aria">
         <span class="brand-word">fakesniff.</span>
-        <span class="brand-sub">company hub</span>
+        <span class="brand-sub" data-t="shell.company_hub">company hub</span>
       </a>
 
-      <nav class="primary-nav" aria-label="Hub sections">
-        <a class="nav-link is-current" href="#home" aria-current="page">
-          <span class="nav-index" aria-hidden="true">01</span>
-          <span>Home</span>
+      <!-- Codex — 2026-08-31: navigation mirrors the team's day. Home stands
+           alone; company work and creation tools are deliberately grouped. -->
+      <nav class="primary-nav" aria-label="Hub sections" data-t-aria="shell.hub_sections">
+        <span class="nav-group-label" data-t="nav.today_group">Start here</span>
+        <a class="nav-link is-current" href="#home" aria-current="page" data-mobile-nav="primary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><path d="M12 8v4l3 2"></path></svg></span>
+          <span class="nav-label" data-t="nav.home">Home</span>
         </a>
-        <a class="nav-link" href="#work">
-          <span class="nav-index" aria-hidden="true">02</span>
-          <span>Work</span>
+        <span class="nav-group-label" data-t="nav.run_group">Run the company</span>
+        <a class="nav-link" href="#work" data-mobile-nav="primary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="m8 12 3 3 5-6"></path></svg></span>
+          <span class="nav-label" data-t="nav.work">Work</span>
           <span id="work-nav-count" class="nav-count" aria-label="0 active items">0</span>
         </a>
-        <a class="nav-link" href="#idea-lab">
-          <span class="nav-index" aria-hidden="true">03</span>
-          <span>Idea Lab</span>
-          <span class="nav-meta">Next</span>
+        <a class="nav-link" href="#decisions" data-mobile-nav="primary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h14v10H9l-4 3V6Z"></path><path d="m9 11 2 2 4-4"></path></svg></span>
+          <span class="nav-label" data-t="nav.decisions">Decisions</span>
         </a>
-        <a class="nav-link" href="#lookbook">
-          <span class="nav-index" aria-hidden="true">04</span>
-          <span>Lookbook</span>
-          <span class="nav-meta">Next</span>
+        <span class="nav-group-label" data-t="nav.create_group">Create</span>
+        <a class="nav-link" href="#lookbook" data-mobile-nav="primary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m6 17 4-4 3 3 2-2 3 3"></path></svg></span>
+          <span class="nav-label" data-t="nav.lookbook">Lookbook</span>
         </a>
-        <a class="nav-link" href="#designs">
-          <span class="nav-index" aria-hidden="true">05</span>
-          <span>Designs</span>
-          <span class="nav-meta">Next</span>
+        <a class="nav-link" href="#idea-lab" data-mobile-nav="secondary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17h6M10 20h4"></path><path d="M8 14c-1.3-1.1-2-2.6-2-4.2A6 6 0 0 1 18 10c0 1.6-.7 3-2 4.1-.8.7-1 1.3-1 1.9H9c0-.6-.2-1.3-1-2Z"></path></svg></span>
+          <span class="nav-label" data-t="nav.idea_lab">Idea Lab</span>
         </a>
-        <a class="nav-link" href="#decisions">
-          <span class="nav-index" aria-hidden="true">06</span>
-          <span>Decisions</span>
-          <span class="nav-meta">Next</span>
+        <a class="nav-link" href="#designs" data-mobile-nav="secondary">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8 5 4 2 4-2 4 4-3 2v8H7v-8L4 9l4-4Z"></path></svg></span>
+          <span class="nav-label" data-t="nav.designs">Designs</span>
         </a>
+        <button id="mobile-more-button" class="nav-link nav-more-button" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="mobile-more-menu" aria-label="Open more Hub actions" data-t-aria="nav.more_aria">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></span>
+          <span class="nav-label" data-t="nav.more">More</span>
+        </button>
       </nav>
 
       <div class="rail-footer">
         <div class="system-status">
           <span id="connection-pulse" class="pulse" aria-hidden="true"></span>
-          <span id="connection-label">Connected</span>
+          <span id="connection-label" data-t="shell.connected">Connected</span>
         </div>
-        <p id="rail-member-label">Member</p>
-        <button id="signout-button" class="rail-signout" type="button">Sign out</button>
+        <p id="rail-member-label" data-t="shell.member">Member</p>
+        <button id="signout-button" class="rail-signout" type="button" data-t="common.signout">Sign out</button>
       </div>
+
+      <dialog id="mobile-more-menu" class="mobile-more-menu" aria-labelledby="mobile-more-title">
+        <div class="mobile-more-heading">
+          <div>
+            <h2 id="mobile-more-title" data-t="nav.more_menu_title">More</h2>
+            <p data-t="nav.more_menu_help">Create something, refresh Work or manage your account.</p>
+          </div>
+          <button id="close-mobile-more" class="dialog-close" type="button" aria-label="Close more actions" data-t-aria="nav.close_more">×</button>
+        </div>
+        <nav class="mobile-more-links" aria-label="Creation tools" data-t-aria="nav.create_tools_aria">
+          <a href="#idea-lab">
+            <strong data-t="nav.idea_lab">Idea Lab</strong>
+            <span data-t="nav.idea_lab_hint">Find, save or add an idea</span>
+          </a>
+          <a href="#designs">
+            <strong data-t="nav.designs">Designs</strong>
+            <span data-t="nav.designs_hint">Turn an idea into a garment mockup</span>
+          </a>
+        </nav>
+        <div class="mobile-more-actions">
+          <button id="mobile-refresh-button" class="text-button" type="button" data-t="shell.refresh_work">Refresh Work</button>
+          <button id="mobile-signout-button" class="text-button" type="button" data-t="common.signout">Sign out</button>
+        </div>
+      </dialog>
     </aside>
 
     <main id="main-content" class="workspace" tabindex="-1">
       <header class="topbar">
+        <a class="topbar-brand" href="#home" aria-label="FAKESNIFF Hub home" data-t-aria="shell.home_aria">fakesniff.</a>
         <div>
           <p id="workspace-label" class="eyebrow">FAKESNIFF workspace</p>
-          <p class="topbar-title">Internal control tower</p>
+          <p id="topbar-section-title" class="topbar-title" data-t="nav.home">Home</p>
         </div>
         <div class="topbar-actions">
-          <button id="refresh-button" class="quiet-button" type="button">Refresh</button>
-          <span id="sync-label" class="sync-label" role="status" aria-live="polite">Loading…</span>
-          <!-- Codex — 2026-08-11: account access remains reachable when the desktop rail collapses on phones. -->
-          <button id="mobile-signout-button" class="quiet-button mobile-only-action" type="button">Sign out</button>
+          <button id="refresh-button" class="quiet-button" type="button" data-t="shell.refresh_work">Refresh Work</button>
+          <span id="sync-label" class="sync-label" role="status" aria-live="polite" data-t="shell.loading">Loading…</span>
           <div id="member-avatar" class="avatar avatar-green" aria-hidden="true">?</div>
         </div>
       </header>
 
       <div id="app-error" class="app-error" role="alert" hidden>
-        <strong>Could not update the Hub.</strong>
+        <strong data-t="work.refresh_failed_detail">The last loaded board is still visible, but editing is paused until refresh succeeds.</strong>
         <span id="app-error-copy"></span>
-        <button id="dismiss-app-error" type="button" aria-label="Dismiss error">×</button>
+        <button id="dismiss-app-error" type="button" aria-label="Dismiss error" data-t-aria="shell.dismiss_error">×</button>
       </div>
 
       <!-- Codex — 2026-08-11: visible outcomes stop saved or moved work from feeling as if it disappeared. -->
       <div id="hub-notice" class="hub-notice" role="status" aria-live="polite" hidden>
         <span id="hub-notice-copy"></span>
-        <button id="dismiss-hub-notice" type="button" aria-label="Dismiss message">×</button>
+        <button id="dismiss-hub-notice" type="button" aria-label="Dismiss message" data-t-aria="shell.dismiss_message">×</button>
       </div>
 
-      <section id="home" class="page-section hero-section" aria-labelledby="home-title">
-        <div class="hero-copy">
-          <p id="home-member-kicker" class="kicker" data-t="home.workspace_overview">Workspace overview</p>
-          <!-- Codex — 2026-08-30: translate the leaf text so i18n never removes the intended line break or emphasis. -->
-          <h1 id="home-title"><span data-t="home.hero_lead">Make the work</span><br><em data-t="home.hero_emphasis">visible.</em></h1>
-          <p class="hero-note" data-t="home.hero_note">One place for what is moving, what is blocked, and what needs a decision.</p>
-        </div>
-        <div class="week-signal home-focus" role="group" aria-label="Your next move" data-t-aria="home.next_move_aria">
-          <!-- Codex — 2026-08-13: truthful first-use copy prevents an empty workspace from looking stuck while authenticated data is resolved. -->
-          <span id="home-focus-date" class="signal-label" data-t="home.today">Today</span>
-          <span id="home-focus-value" class="signal-value" data-t="home.nothing_planned">Nothing is planned yet.</span>
-          <span id="home-focus-detail" class="signal-detail" role="status" aria-live="polite" aria-atomic="true" data-t="home.create_first_hint">Open Work to create the first shared item.</span>
-          <button id="home-focus-action" class="signal-action" type="button" hidden data-t="home.open_item">Open item</button>
+      <section id="home" class="page-section hero-section" aria-labelledby="home-title" tabindex="-1">
+        <!-- Codex — 2026-08-31: Home is now the daily starting point, not a
+             brand poster followed by a duplicate dashboard. -->
+        <div class="home-start">
+          <div class="hero-copy">
+            <p id="home-member-kicker" class="kicker" data-t="home.workspace_overview">Workspace overview</p>
+            <h1 id="home-title"><span data-t="home.hero_lead">What needs</span><br><em data-t="home.hero_emphasis">you.</em></h1>
+            <p class="hero-note" data-t="home.hero_note">Your next move, new activity and the team’s work — without hunting through every page.</p>
+          </div>
+          <div class="week-signal home-focus" role="group" aria-label="Your next move" data-t-aria="home.next_move_aria">
+            <span id="home-focus-date" class="signal-label" data-t="home.today">Today</span>
+            <span id="home-focus-value" class="signal-value" data-t="home.nothing_planned">Nothing is planned yet.</span>
+            <span id="home-focus-detail" class="signal-detail" role="status" aria-live="polite" aria-atomic="true" data-t="home.create_first_hint">Open Work to create the first shared item.</span>
+            <button id="home-focus-action" class="signal-action" type="button" hidden data-t="home.open_item">Open item</button>
+          </div>
         </div>
 
-        <!-- Codex — 2026-08-13: a private, server-receipted check-in that
-             speaks first without sending raw audit snapshots to the browser. -->
-        <article class="panel home-changes-panel" aria-labelledby="home-changes-title">
-          <div class="panel-heading home-changes-heading">
-            <div>
-              <p class="eyebrow" data-t="home.checkin_eyebrow">Automatic check-in</p>
-              <h2 id="home-changes-title" data-t="home.since_last_look">Since your last look</h2>
-            </div>
-            <div class="home-changes-actions">
-              <span id="home-changes-status" class="micro-status" role="status" aria-live="polite" data-t="home.checking">Checking…</span>
-              <button id="home-changes-retry" class="micro-link home-changes-retry" type="button" hidden data-t="home.retry">Try again</button>
-            </div>
+        <section class="home-quick-actions" aria-labelledby="home-quick-title">
+          <p id="home-quick-title" class="eyebrow" data-t="home.quick_actions">Common actions</p>
+          <div id="home-quick-grid" class="home-quick-grid" role="group" aria-label="Common Hub actions" data-t-aria="home.quick_actions_aria">
+            <a id="home-new-work-action" class="home-quick-action" href="#work">
+              <span class="home-quick-icon" aria-hidden="true">＋</span>
+              <span><strong data-t="home.add_work">Add work</strong><small data-t="home.add_work_hint">Something the team needs to do</small></span>
+            </a>
+            <a class="home-quick-action" href="#idea-lab">
+              <span class="home-quick-icon" aria-hidden="true">✦</span>
+              <span><strong data-t="home.add_idea">Open Idea Lab</strong><small data-t="home.add_idea_hint">Save a thought, statement or trend</small></span>
+            </a>
+            <a class="home-quick-action" href="#lookbook">
+              <span class="home-quick-icon" aria-hidden="true">▧</span>
+              <span><strong data-t="home.add_reference">Open Lookbook</strong><small data-t="home.add_reference_hint">Upload a photo or paste a link</small></span>
+            </a>
+            <a class="home-quick-action" href="#decisions">
+              <span class="home-quick-icon" aria-hidden="true">✓</span>
+              <span><strong data-t="home.record_decision">Open Decisions</strong><small data-t="home.record_decision_hint">Write down what the team agreed</small></span>
+            </a>
           </div>
-          <div id="home-changes-list" class="home-changes-list" aria-live="polite" aria-busy="true">
-            <p class="module-empty-copy" data-t="home.checking_recent">Checking recent changes…</p>
-          </div>
-          <p id="home-changes-note" class="home-changes-note" hidden></p>
-        </article>
+        </section>
 
-        <div class="stat-grid" aria-label="Workspace snapshot" data-t-aria="home.snapshot_aria">
-          <article class="stat-card">
+        <div class="home-command-grid">
+          <!-- Codex — 2026-08-13: a private, server-receipted check-in that
+               speaks first without sending raw audit snapshots to the browser. -->
+          <article class="panel home-changes-panel" aria-labelledby="home-changes-title">
+            <div class="panel-heading home-changes-heading">
+              <div>
+                <p class="eyebrow" data-t="home.checkin_eyebrow">Automatic check-in</p>
+                <h2 id="home-changes-title" data-t="home.since_last_look">Since your last look</h2>
+              </div>
+              <div class="home-changes-actions">
+                <span id="home-changes-status" class="micro-status" role="status" aria-live="polite" data-t="home.checking">Checking…</span>
+                <button id="home-changes-retry" class="micro-link home-changes-retry" type="button" hidden data-t="home.retry">Try again</button>
+              </div>
+            </div>
+            <div id="home-changes-list" class="home-changes-list" aria-live="polite" aria-busy="true">
+              <p class="module-empty-copy" data-t="home.checking_recent">Checking recent changes…</p>
+            </div>
+            <p id="home-changes-note" class="home-changes-note" hidden></p>
+          </article>
+
+          <div class="home-work-stack">
+            <article class="panel priorities-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow" data-t="home.current_focus">Current focus</p>
+                  <h2 data-t="home.this_week">This week</h2>
+                </div>
+                <a class="micro-link" href="#work" data-t="home.open_board">Open board</a>
+              </div>
+              <div id="home-week-list" class="home-work-list"></div>
+            </article>
+
+            <article class="panel attention-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow" data-t="home.attention">Attention</p>
+                  <h2 data-t="home.review_and_blockers">Review and blockers</h2>
+                </div>
+                <span class="alert-dot" aria-hidden="true"></span>
+              </div>
+              <div id="home-attention-list" class="home-work-list"></div>
+            </article>
+          </div>
+        </div>
+
+        <div id="home-stat-grid" class="stat-grid" aria-label="Workspace snapshot" data-t-aria="home.snapshot_aria">
+          <a class="stat-card" href="#work">
             <span id="home-active-work-count" class="stat-number">00</span>
             <span class="stat-label" data-t="home.active_work">Active work</span>
             <span id="home-active-work-note" class="stat-note" data-t="home.no_active_owners">No active owners</span>
-          </article>
-          <article class="stat-card">
+          </a>
+          <a class="stat-card" href="#work" data-home-work-stage="this_week">
             <span id="home-week-count" class="stat-number">00</span>
             <span class="stat-label" data-t="home.this_week">This week</span>
-            <span class="stat-note" data-t="home.maximum_three">Maximum three</span>
-          </article>
-          <article class="stat-card stat-card-alert">
+            <span class="stat-note" data-t="home.maximum_three">The team’s current focus</span>
+          </a>
+          <a class="stat-card stat-card-alert" href="#work" data-home-work-stage="review">
             <span id="home-review-count" class="stat-number">00</span>
             <span class="stat-label" data-t="home.need_review">Need review</span>
-            <span class="stat-note" data-t="home.approver_controlled">Approver-controlled</span>
-          </article>
-          <article class="stat-card">
+            <span class="stat-note" data-t="home.approver_controlled">Waiting for a teammate</span>
+          </a>
+          <a class="stat-card" href="#work" data-home-work-stage="waiting">
             <span id="home-waiting-count" class="stat-number">00</span>
             <span class="stat-label" data-t="home.blocked">Blocked</span>
-            <span class="stat-note" data-t="home.waiting_reason_rule">Waiting needs a reason</span>
-          </article>
-        </div>
-
-        <div class="dashboard-grid dashboard-grid-connected">
-          <article class="panel priorities-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow" data-t="home.current_focus">Current focus</p>
-                <h2 data-t="home.this_week">This week</h2>
-              </div>
-              <a class="micro-link" href="#work" data-t="home.open_board">Open board</a>
-            </div>
-            <div id="home-week-list" class="home-work-list"></div>
-          </article>
-
-          <article class="panel attention-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow" data-t="home.attention">Attention</p>
-                <h2 data-t="home.review_and_blockers">Review and blockers</h2>
-              </div>
-              <span class="alert-dot" aria-hidden="true"></span>
-            </div>
-            <div id="home-attention-list" class="home-work-list"></div>
-          </article>
-
-          <article class="panel rhythm-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow" data-t="home.team_rhythm">Team rhythm</p>
-                <h2 data-t="home.one_short_loop">One short loop</h2>
-              </div>
-            </div>
-            <div class="rhythm-steps" aria-label="Weekly operating rhythm" data-t-aria="home.rhythm_aria">
-              <div class="rhythm-step"><span data-t="home.rhythm_start">Start</span><strong data-t="home.rhythm_choose">Choose</strong><small data-t="home.rhythm_up_to_three">up to 3</small></div>
-              <div class="rhythm-line" aria-hidden="true"></div>
-              <div class="rhythm-step"><span data-t="home.rhythm_move">Move</span><strong data-t="home.rhythm_do">Do</strong><small data-t="home.rhythm_one_each">one each</small></div>
-              <div class="rhythm-line" aria-hidden="true"></div>
-              <div class="rhythm-step"><span data-t="home.rhythm_finish">Finish</span><strong data-t="home.rhythm_close">Close</strong><small data-t="home.rhythm_record">record it</small></div>
-            </div>
-          </article>
+            <span class="stat-note" data-t="home.waiting_reason_rule">Needs a way forward</span>
+          </a>
         </div>
       </section>
 
@@ -253,7 +298,7 @@
           <div>
             <p class="kicker" data-t="work.shared_kicker">02 / Shared work</p>
             <h2 id="work-title" data-t="work.heading">Work</h2>
-            <p data-t="work.intro">Every active item gets one owner, a next move, a finish condition and a due date.</p>
+            <p data-t="work.intro">See what the team is doing, what is waiting and what comes next.</p>
           </div>
           <button id="new-work-button" class="primary-button" type="button"><span data-t="work.new_work">New work</span> <span aria-hidden="true">＋</span></button>
         </div>
@@ -355,15 +400,15 @@
       </section>
 
       <!-- Codex — 2026-08-11: intentionally empty integration root. The separately owned Idea Lab module mounts here through window.Hub. -->
-      <section id="idea-lab" class="page-section" aria-label="Idea Lab"></section>
-      <section id="lookbook" class="page-section" aria-label="Lookbook"></section>
-      <section id="designs" class="page-section" aria-labelledby="designs-title"><p class="kicker">04 / Product development</p><h2 id="designs-title">Designs</h2><div class="module-placeholder"><span class="preview-label">Loading</span><h3>Try it on the garment.</h3><p>Sign in to generate. No internal design names or assets are embedded in this publishable page.</p></div></section>
+      <section id="idea-lab" class="page-section" aria-label="Idea Lab" data-t-aria="nav.idea_lab" tabindex="-1"></section>
+      <section id="lookbook" class="page-section" aria-label="Lookbook" data-t-aria="nav.lookbook" tabindex="-1"></section>
+      <section id="designs" class="page-section" aria-labelledby="designs-title" tabindex="-1"><p class="kicker" data-t="designs.kicker">04 / Product development</p><h2 id="designs-title" data-t="designs.heading">Designs</h2><div class="module-placeholder"><span class="preview-label" data-t="shell.module_loading">Loading</span><h3 data-t="designs.tagline">Try it on the garment before anyone cuts fabric.</h3><p data-t="shell.private_module_note">Sign in to open this page. The public shell contains no private company data.</p></div></section>
       <!-- Claude — 2026-08-13: no longer a placeholder. The module mounts here
            once it registers; the copy below is what a signed-out or still-loading
            visitor sees, and deliberately contains no private decision text. -->
-      <section id="decisions" class="page-section" aria-labelledby="decisions-title"><p class="kicker">05 / Company memory</p><h2 id="decisions-title">Decisions</h2><div class="module-placeholder"><span class="preview-label">Loading</span><h3>What we agreed, and with whom.</h3><p>Sign in to see the decision record. The static source contains no private decision log.</p></div></section>
+      <section id="decisions" class="page-section" aria-labelledby="decisions-title" tabindex="-1"><p class="kicker" data-t="decisions.kicker">05 / Company memory</p><h2 id="decisions-title" data-t="decisions.heading">Decisions</h2><div class="module-placeholder"><span class="preview-label" data-t="shell.module_loading">Loading</span><h3 data-t="decisions.tagline">What we agreed, and with whom.</h3><p data-t="shell.private_module_note">Sign in to open this page. The public shell contains no private company data.</p></div></section>
 
-      <footer class="site-footer"><span class="brand-word">fakesniff.</span><p>Nothing is real. The workflow should be.</p><a href="#home">Back to top <span aria-hidden="true">↑</span></a></footer>
+      <footer class="site-footer"><span class="brand-word">fakesniff.</span><p data-t="shell.footer_line">Nothing is real. The workflow should be.</p><a href="#home"><span data-t="shell.back_to_top">Back to top</span> <span aria-hidden="true">↑</span></a></footer>
     </main>
   </div>
 </body>
