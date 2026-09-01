@@ -15,7 +15,7 @@
  *    to Decisions?" and choosing is very different from being moved.
  */
 
-import { setLanguage } from "./hub-i18n.js";
+import { setLanguage, t } from "./hub-i18n.js";
 
 const FN_PATH = "/functions/v1/assistant";
 const AUTH_STORAGE_KEY = "fakesniff-hub-auth";
@@ -32,18 +32,17 @@ const LANGUAGES = [
   ["tr", "Türkçe"],
   ["ar", "العربية"],
 ];
-const OPENER = {
-  en: "Ask", nl: "Vraag", tr: "Vraag", ar: "اسأل",
-};
-const GREETING = {
-  nl: {
-    home: "Je bent op Home. Ik vertel je wat aandacht nodig heeft, of breng je waar je wilt.",
-    work: "Je bent op Work. Vraag me wat er nu moet gebeuren, of waar iemand op wacht.",
-    "idea-lab": "Je bent in de Idea Lab. Vraag me wat de moeite waard is om te maken.",
-    lookbook: "Je bent in de Lookbook. Ik kan beschrijven wat je hebt opgeslagen, of een foto maken.",
-    decisions: "Je bent op Decisions. Vraag me wat we hebben afgesproken, of leg iets nieuws vast.",
-    fallback: "Vraag me alles over de werkruimte. Ik leg ook uit wat een knop doet.",
-  },
+/* Claude — 2026-09-01: built from the nav dictionary rather than written out,
+   so the greeting can never name a page differently from the button the person
+   is looking at. The Dutch version used to say "Je bent op Home" beside a nav
+   item reading "Start". */
+const GREETING_KEYS = {
+  home: "assistant.here_home",
+  work: "assistant.here_work",
+  "idea-lab": "assistant.here_ideas",
+  lookbook: "assistant.here_lookbook",
+  designs: "assistant.here_designs",
+  decisions: "assistant.here_decisions",
 };
 const language = () => {
   try { return localStorage.getItem(LANG_KEY) || "en"; } catch { return "en"; }
@@ -97,7 +96,7 @@ export function createAssistant(config) {
   root.innerHTML = `
     <button id="as-open" class="as-open" type="button" aria-label="Ask the assistant">
       <span aria-hidden="true">✳</span>
-      <span class="as-open-text">${OPENER[language()] || "Ask"}</span>
+      <span class="as-open-text">${esc(t("assistant.open"))}</span>
     </button>
     <section id="as-panel" class="as-panel" role="dialog" aria-modal="false"
              aria-labelledby="as-title" hidden>
@@ -135,7 +134,7 @@ export function createAssistant(config) {
        setLanguage is what actually rewrites the page; storing the preference is
        something it already does. */
     setLanguage(e.target.value);
-    document.querySelector(".as-open-text").textContent = OPENER[e.target.value] || "Ask";
+    document.querySelector(".as-open-text").textContent = t("assistant.open");
     lastGreetedSection = "";
     log.replaceChildren();
     greet();
@@ -157,10 +156,12 @@ export function createAssistant(config) {
      does not run — while function declarations are hoisted and work fine.
      That mismatch is what made greet() and the action buttons throw. */
   let lastGreetedSection = "";
-  const prettySection = (id) => ({
-    home: "Home", work: "Work", "idea-lab": "the Idea Lab",
-    lookbook: "the Lookbook", decisions: "Decisions",
-  }[id] || id);
+  /* Claude — 2026-09-01, after Codex flagged the drift: this held its own
+     English list, so a Dutch interface offered "Take me to Decisions" for a
+     nav item reading "Besluiten". The person then looks for a page that is not
+     on their screen. Read the same dictionary the nav renders from — one
+     source, and it cannot fall behind a rename. */
+  const prettySection = (id) => t(`nav.${String(id).replace(/-/g, "_")}`);
 
   return { open, close, destroy: () => root.remove() };
 
@@ -180,16 +181,9 @@ export function createAssistant(config) {
     const here = currentSection();
     if (here === lastGreetedSection && log.childElementCount) return;
     lastGreetedSection = here;
-    const where = {
-      home: "You are on Home. I can tell you what needs attention, or take you anywhere.",
-      work: "You are on Work. Ask me what to do next, or what is waiting on someone.",
-      "idea-lab": "You are in the Idea Lab. Ask me what is worth turning into something.",
-      lookbook: "You are in the Lookbook. I can describe what you have saved, or make a picture.",
-      decisions: "You are on Decisions. Ask me what we agreed, or record something new.",
-    }[here] || "Ask me anything about the workspace.";
-    const translated = GREETING[language()];
-    const line = translated ? (translated[here] || translated.fallback) : where;
-    say("assistant", line);
+    const key = GREETING_KEYS[here];
+    say("assistant", key ? t(key, { page: t(`nav.${here.replace(/-/g, "_")}`) })
+                         : t("assistant.here_any"));
   }
 
   function say(role, text, extra = "") {
@@ -258,9 +252,9 @@ export function createAssistant(config) {
   /* An action is always a button. Nothing happens until it is pressed. */
   function offerAction(action) {
     const labels = {
-      navigate: `Take me to ${prettySection(action.section)}`,
-      compose: `Open the ${prettySection(action.section)} form`,
-      image: "Make that picture",
+      navigate: t("assistant.take_me_to", { page: prettySection(action.section) }),
+      compose: t("assistant.open_form", { page: prettySection(action.section) }),
+      image: t("assistant.make_picture"),
     };
     const label = labels[action.action];
     if (!label) return;
