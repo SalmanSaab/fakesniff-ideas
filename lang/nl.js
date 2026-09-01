@@ -343,6 +343,8 @@ export default {
   "work.items_shown_other": "{n} items in {stage} getoond",
   "work.board_items_one": "{n} werkitem getoond.",
   "work.board_items_other": "{n} werkitems getoond.",
+  "work.nav_items_one": "{n} werkitem op het bord",
+  "work.nav_items_other": "{n} werkitems op het bord",
   "work.active_items_one": "{n} actief werkitem",
   "work.active_items_other": "{n} actieve werkitems",
   "work.discard_confirm": "Wil je je niet-opgeslagen wijzigingen weggooien?",

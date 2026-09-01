@@ -3947,7 +3947,7 @@ a.stat-card .stat-label {
     padding: 0 4px;
     place-items: center;
     border: 1px solid var(--bg);
-    background: var(--yellow);
+    background: var(--ink);
     color: var(--bg);
     font-size: 9px;
   }

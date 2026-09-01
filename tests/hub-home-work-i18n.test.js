@@ -62,6 +62,15 @@ test("every literal Home and Work runtime key exists in both dictionaries", () =
   }
 });
 
+test("the Work board count is truthful in English and Dutch", () => {
+  setLanguage("en");
+  assert.equal(t("work.nav_items_one", { n: "1" }), "1 work item on the board");
+  assert.equal(t("work.nav_items_other", { n: "2" }), "2 work items on the board");
+  setLanguage("nl");
+  assert.equal(t("work.nav_items_one", { n: "1" }), "1 werkitem op het bord");
+  assert.equal(t("work.nav_items_other", { n: "2" }), "2 werkitems op het bord");
+});
+
 test("Work validation and repository failures are useful Dutch without database language", () => {
   setLanguage("nl");
   const validation = validateWorkValues({

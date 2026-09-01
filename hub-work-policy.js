@@ -12,6 +12,16 @@ addTranslations("nl", nl);
 export const WORK_STATUSES = ["backlog", "this_week", "doing", "review", "waiting", "done"];
 export const ACTIVE_WORK_STATUSES = new Set(["this_week", "doing", "review", "waiting"]);
 
+/* Codex — 2026-09-01: the Work navigation badge is board inventory, while
+   Home's summary remains active work. Keep that distinction pure and testable. */
+export function workBoardCounts(tasks = []) {
+  const boardTasks = (Array.isArray(tasks) ? tasks : []).filter((task) => task && !task.archived_at);
+  return {
+    total: boardTasks.length,
+    active: boardTasks.filter((task) => ACTIVE_WORK_STATUSES.has(task.status)).length
+  };
+}
+
 /* Codex — 2026-08-30: database status codes never double as display copy. */
 const WORK_STATUS_KEYS = Object.freeze({
   backlog: "work.status_backlog",
