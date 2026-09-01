@@ -21,6 +21,7 @@ import {
   selectHomeFocus,
   translateWorkRepositoryError,
   validateWorkValues,
+  workBoardCounts,
   workStatusLabel,
   workApprovalPermissions
 } from "./hub-work-policy.js";
@@ -570,7 +571,7 @@ function clearWorkspaceState() {
   get("home-changes-note").hidden = true;
   hideAppError();
   get("work-nav-count").textContent = "0";
-  get("work-nav-count").setAttribute("aria-label", t("work.active_items_other", { n: localNumber(0) }));
+  get("work-nav-count").setAttribute("aria-label", t("work.nav_items_other", { n: localNumber(0) }));
   get("home-active-work-count").textContent = localStatNumber(0);
   get("home-active-work-note").textContent = t("home.no_active_owners");
   get("home-week-count").textContent = localStatNumber(0);
@@ -1145,15 +1146,19 @@ function renderHomeFocus() {
 }
 
 function renderSummary() {
+  const { total, active: activeCount } = workBoardCounts(state.tasks);
   const active = state.tasks.filter((task) => ACTIVE_STATUSES.has(task.status));
   const week = state.tasks.filter((task) => task.status === "this_week");
   const review = state.tasks.filter((task) => task.status === "review");
   const waiting = state.tasks.filter((task) => task.status === "waiting");
   const owners = new Set(active.map((task) => task.owner_id).filter(Boolean));
 
-  get("work-nav-count").textContent = localNumber(active.length);
-  get("work-nav-count").setAttribute("aria-label", t(pluralKey("work.active_items", active.length), { n: localNumber(active.length) }));
-  get("home-active-work-count").textContent = localStatNumber(active.length);
+  /* Codex — 2026-09-01: the number attached to Work reads as the number of
+     saved cards. Salman's first real use exposed that counting only active
+     lanes made one Backlog plus one Done card misleadingly display as zero. */
+  get("work-nav-count").textContent = localNumber(total);
+  get("work-nav-count").setAttribute("aria-label", t(pluralKey("work.nav_items", total), { n: localNumber(total) }));
+  get("home-active-work-count").textContent = localStatNumber(activeCount);
   get("home-active-work-note").textContent = owners.size
     ? t(pluralKey("home.across_owners", owners.size), { n: localNumber(owners.size) })
     : t("home.no_active_owners");

@@ -341,6 +341,8 @@ export default {
   "work.items_shown_other": "{n} {stage} items shown",
   "work.board_items_one": "{n} work item shown.",
   "work.board_items_other": "{n} work items shown.",
+  "work.nav_items_one": "{n} work item on the board",
+  "work.nav_items_other": "{n} work items on the board",
   "work.active_items_one": "{n} active work item",
   "work.active_items_other": "{n} active work items",
   "work.discard_confirm": "Discard your unsaved changes?",

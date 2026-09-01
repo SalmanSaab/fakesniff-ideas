@@ -8,12 +8,29 @@ import {
   selectHomeFocus,
   translateWorkRepositoryError,
   validateWorkValues,
+  workBoardCounts,
   workApprovalPermissions
 } from "../hub-work-policy.js";
 
 const MEMBER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const editableMemberIds = new Set([MEMBER, OTHER]);
+
+test("board inventory includes Backlog and Done while Home active work stays separate", () => {
+  const firstUse = workBoardCounts([
+    { status: "backlog" },
+    { status: "done" }
+  ]);
+  assert.deepEqual(firstUse, { total: 2, active: 0 });
+
+  const withActiveAndArchived = workBoardCounts([
+    { status: "backlog" },
+    { status: "done" },
+    { status: "doing" },
+    { status: "review", archived_at: "2026-09-01T12:00:00Z" }
+  ]);
+  assert.deepEqual(withActiveAndArchived, { total: 3, active: 1 });
+});
 
 function values(overrides = {}) {
   return {

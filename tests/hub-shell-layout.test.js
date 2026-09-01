@@ -123,6 +123,18 @@ test("global Work refresh does not pretend to refresh registered modules", () =>
   assert.deepEqual([...source.matchAll(/const CORE_REFRESH_SECTIONS = new Set\(\[([^\]]+)\]\)/g)].length, 1);
 });
 
+test("the Work nav badge counts saved cards while Home keeps its active-work metric", () => {
+  const reset = functionSource("clearWorkspaceState", "hasEditRole");
+  const summary = functionSource("renderSummary", "appendOption");
+  assert.match(html, /id="work-nav-count"[^>]*aria-label="0 work items on the board"/);
+  assert.match(reset, /t\("work\.nav_items_other", \{ n: localNumber\(0\) \}\)/);
+  assert.match(summary, /\{ total, active: activeCount \} = workBoardCounts\(state\.tasks\)/);
+  assert.match(summary, /work-nav-count"\)\.textContent = localNumber\(total\)/);
+  assert.match(summary, /pluralKey\("work\.nav_items", total\)/);
+  assert.match(summary, /home-active-work-count"\)\.textContent = localStatNumber\(activeCount\)/);
+  assert.match(css, /\.primary-nav \.nav-count\s*\{[\s\S]*background:\s*var\(--ink\);[\s\S]*color:\s*var\(--bg\);/);
+});
+
 test("access and shell chrome use the shared language dictionaries", () => {
   for (const marker of [
     'data-t="shell.skip_workspace"', 'data-t="auth.private_workspace"',
