@@ -123,6 +123,29 @@ test("global Work refresh does not pretend to refresh registered modules", () =>
   assert.deepEqual([...source.matchAll(/const CORE_REFRESH_SECTIONS = new Set\(\[([^\]]+)\]\)/g)].length, 1);
 });
 
+// Codex — 2026-09-05: thin wiring checks supplement the executed lifecycle
+// tests and local browser smoke. Empty roots never embed company content.
+test("daily updates live on Home with explicit roots, not a new navigation section", () => {
+  const home = html.slice(html.indexOf('<section id="home"'), html.indexOf('<section id="work"'));
+  for (const id of ["home-update-compose", "home-update-feed"]) {
+    assert.match(home, new RegExp(`<div id="${id}"><\\/div>`));
+  }
+  assert.match(home, /id="home-write-update"[^>]*data-t="home.write_update"/);
+  assert.match(home, /data-t="home.updates_delivery"/);
+  assert.doesNotMatch(html, /href="#updates"|id="updates" class="page-section"/);
+  assert.match(source, /url.search = new URL\(import.meta.url\).search/);
+});
+
+test("each installed membership snapshot reconciles updates before using the new permissions", () => {
+  const render = functionSource("renderWorkspace", "setSyncState");
+  assert.match(render, /homeUpdates.sync\(\{ active: false \}\)/);
+  const reload = functionSource("reloadLatestConflict", "startMutation");
+  assert.match(reload, /homeUpdates.sync\(/);
+  assert.ok(reload.indexOf("homeUpdates.sync(") < reload.indexOf("const latest = taskById"));
+  assert.match(functionSource("clearWorkspaceState", "hasEditRole"), /homeUpdates.destroy\(\)/);
+  assert.match(functionSource("reconcileSession", "startConnectedMode"), /homeUpdates.destroy\(\)/);
+});
+
 test("the Work nav badge counts saved cards while Home keeps its active-work metric", () => {
   const reset = functionSource("clearWorkspaceState", "hasEditRole");
   const summary = functionSource("renderSummary", "appendOption");

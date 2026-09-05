@@ -193,6 +193,10 @@
             <p id="home-member-kicker" class="kicker" data-t="home.workspace_overview">Workspace overview</p>
             <h1 id="home-title"><span data-t="home.hero_lead">What needs</span><br><em data-t="home.hero_emphasis">you.</em></h1>
             <p class="hero-note" data-t="home.hero_note">Your next move, new activity and the team’s work — without hunting through every page.</p>
+            <div class="home-update-shortcut">
+              <button id="home-write-update" class="primary-button" type="button" aria-controls="home-update-compose" hidden data-t="home.write_update">Write update</button>
+              <button id="home-read-updates" class="secondary-button" type="button" aria-controls="home-update-feed" hidden data-t="home.read_updates">Read team updates</button>
+            </div>
           </div>
           <div class="week-signal home-focus" role="group" aria-label="Your next move" data-t-aria="home.next_move_aria">
             <span id="home-focus-date" class="signal-label" data-t="home.today">Today</span>
@@ -268,6 +272,34 @@
             </article>
           </div>
         </div>
+
+        <!-- Codex — 2026-09-05: explicit mount roots stay empty in source.
+             Current work comes first; reports stay in one dated team feed. -->
+        <section id="home-updates-panel" class="panel home-updates-panel" aria-labelledby="home-updates-title" hidden>
+          <div class="panel-heading home-updates-heading">
+            <div>
+              <p class="eyebrow" data-t="home.updates_eyebrow">Keep each other up to date</p>
+              <h2 id="home-updates-title" data-t="home.updates_heading">Daily updates</h2>
+            </div>
+            <button id="home-updates-refresh" class="micro-link" type="button" data-t="home.updates_refresh">Refresh updates</button>
+          </div>
+          <p class="home-updates-help" data-t="home.updates_delivery">Your team sees these when they open or refresh Home. No notifications are sent.</p>
+          <div class="home-updates-feedback">
+            <p id="home-updates-status" role="status" hidden></p>
+            <button id="home-updates-retry" class="secondary-button" type="button" hidden data-t="home.retry">Try again</button>
+          </div>
+          <div class="home-updates-grid">
+            <section id="home-update-compose-area" aria-labelledby="home-update-compose-title">
+              <h3 id="home-update-compose-title" data-t="home.your_update">Your update</h3>
+              <p class="home-updates-help" data-t="home.updates_hint">A few lines are enough. Share what is done, what is still open and what comes next.</p>
+              <div id="home-update-compose"></div>
+            </section>
+            <section class="home-updates-team" aria-labelledby="home-update-feed-title">
+              <h3 id="home-update-feed-title" tabindex="-1" data-t="home.team_updates">From the team</h3>
+              <div id="home-update-feed"></div>
+            </section>
+          </div>
+        </section>
 
         <div id="home-stat-grid" class="stat-grid" aria-label="Workspace snapshot" data-t-aria="home.snapshot_aria">
           <a class="stat-card" href="#work">
