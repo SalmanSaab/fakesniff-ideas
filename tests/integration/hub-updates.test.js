@@ -165,6 +165,79 @@ test("an uncertain POST retry never clears changed text unless that text was sto
   );
 });
 
+test("cancelling a reconciled correction lets the next report use a fresh identity", async (t) => {
+  const stored = new Map();
+  let attempts = 0;
+  const ui = mount(t, async (rawUrl, options = {}) => {
+    const url = new URL(rawUrl);
+    if (options.method === "POST") {
+      attempts += 1;
+      const report = JSON.parse(options.body);
+      if (stored.has(report.id)) {
+        return response({ code: "23505", message: "duplicate key value violates unique constraint" }, 409);
+      }
+      stored.set(report.id, { ...existing, ...report });
+      if (attempts === 1) throw new Error("Failed to fetch");
+      return response(null, 201);
+    }
+    if (options.method === "PATCH") {
+      const id = url.searchParams.get("id")?.replace(/^eq\./, "");
+      const record = stored.get(id);
+      if (!record) return response([]);
+      Object.assign(record, JSON.parse(options.body));
+      return response([record]);
+    }
+    if (url.pathname.endsWith("/members")) return members();
+    const id = url.searchParams.get("id")?.replace(/^eq\./, "");
+    return response([...stored.values()].filter((record) => !id || record.id === id));
+  });
+  const morning = "Morning: selected the photographs";
+  type(ui, morning);
+  submit(ui);
+  await settle();
+  type(ui, "Correction to the morning report");
+  submit(ui);
+  await settle();
+
+  const cancel = namedButton(ui.compose, en["common.cancel"]);
+  assert.ok(cancel, "the already-stored report is available for correction");
+  cancel.click();
+  const afternoon = "Afternoon: sent the selected photographs to Emiel";
+  type(ui, afternoon);
+  submit(ui);
+  await settle();
+
+  assert.equal(stored.size, 2, "the new working block creates its own report");
+  assert.deepEqual([...stored.values()].map((row) => row.done).sort(), [morning, afternoon].sort(),
+    "the earlier report stays unchanged and the separate report is stored once");
+});
+
+test("opening another correction does not discard an unfinished new report", async (t) => {
+  const previousConfirm = Object.getOwnPropertyDescriptor(globalThis, "confirm");
+  globalThis.confirm = () => false;
+  t.after(() => {
+    if (previousConfirm) Object.defineProperty(globalThis, "confirm", previousConfirm);
+    else delete globalThis.confirm;
+  });
+
+  const ui = mount(t, async (url) => String(url).includes("/members") ? members() : response([existing]));
+  await ui.handle.refresh();
+  const unfinished = "Selected today's photographs; still writing the next step";
+  type(ui, unfinished);
+  const edit = namedButton(ui.feed, en["updates.correct"]);
+  assert.ok(edit, "the earlier report offers a correction");
+  edit.click();
+
+  // Keeping the writer in their current draft is safe. So is opening the
+  // correction while retaining that draft, provided Cancel brings it back.
+  if (field(ui).value !== unfinished) {
+    const cancel = namedButton(ui.compose, en["common.cancel"]);
+    assert.ok(cancel, "a temporary correction can be cancelled");
+    cancel.click();
+  }
+  assert.equal(field(ui).value, unfinished, "the unfinished new report is still available");
+});
+
 test("a delayed correction cannot erase a new draft opened while it is saving", async (t) => {
   const delayed = deferred();
   let patchStarted = false;
