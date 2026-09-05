@@ -19,7 +19,8 @@ const TRANSLATED = [
   "hub-designs.js",
   "hub-idea-lab.js",
   "hub-work-policy.js",
-  "hub-work-repository.js"
+  "hub-work-repository.js",
+  "hub-updates.js"
 ];
 
 const read = (f) => fs.readFileSync(path.join(webRoot, f), "utf8");

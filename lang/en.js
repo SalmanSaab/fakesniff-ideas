@@ -695,4 +695,34 @@ export default {
   "assistant.here_designs": "You are on {page}. Describe a graphic and I will show it on the garment.",
   "assistant.here_decisions": "You are on {page}. Ask me what we agreed, or record something new.",
   "assistant.here_any": "Ask me anything about the workspace. I can also explain what a button does.",
+
+  /* Claude — 2026-09-05: the daily update. Marco reads these more than anyone,
+   * so the Dutch is the version that matters. The three prompts stay one word
+   * each; the moment they become questions the form reads as a questionnaire
+   * and nobody fills it in twice. */
+  "updates.done": "Done",
+  "updates.open": "Open",
+  "updates.next": "Next",
+  "updates.done_hint": "What actually got finished",
+  "updates.open_hint": "What is waiting or stuck, and on whom",
+  "updates.next_hint": "What happens next",
+  "updates.post": "Post update",
+  "updates.posted": "Update posted.",
+  "updates.posted_stale": "Update saved. The list below could not be refreshed — reload to see it.",
+  "updates.saved": "Correction saved.",
+  "updates.saved_stale": "Correction saved. The list below could not be refreshed — reload to see it.",
+  /* Codex, 5 Sep: after a network failure on a write we do not know whether the
+     row was stored, so we must not claim it was not. */
+  "updates.err_unconfirmed": "That could not be confirmed. Your text is still here — check the list below before posting it again.",
+  "updates.err_already_saved": "An earlier version of this update was already saved. Your newer text is still here and the saved update is now open — press Save to apply it.",
+  "updates.correct": "Correct",
+  "updates.edited": "edited",
+  "updates.someone": "Someone",
+  "updates.empty": "No updates yet. The first one can be three lines.",
+  "updates.err_empty": "Write at least one line before posting.",
+  "updates.err_long": "That is longer than an update should be. Keep each part to at most 1,000 characters.",
+  "updates.err_readonly": "You have view-only access, so you can read updates but not post them. Ask Marco or Salman for edit access.",
+  "updates.err_changed_elsewhere": "This update was changed somewhere else since you opened it. Your text is still here — reload the page and make the correction again.",
+  "updates.err_network": "The updates could not be loaded just now. Try again.",
+  "updates.err_unknown": "Something went wrong there. Your text is still here — try again, and tell Salman if it keeps happening.",
 };

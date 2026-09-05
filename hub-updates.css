@@ -1,0 +1,200 @@
+/* FAKESNIFF Hub — the daily update. Owner: Claude.
+ *
+ * Deliberately plain. Codex cut presentation time first to protect correction,
+ * access checks and failed-save recovery inside the six-hour budget, and that
+ * was the right cut. This reuses the shell's tokens and adds nothing decorative.
+ *
+ * The one thing that is not negotiable here is the phone. The agreed test is
+ * Emiel posting a real update from his phone in about two minutes, so the three
+ * fields and the button have to fit without hunting. */
+
+.hu-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hu-label,
+.hu-line-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--fs-accent-rgb), 0.85);
+}
+
+.hu-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.25);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.hu-input:focus-visible {
+  outline: 2px solid rgba(var(--fs-accent-rgb), 0.7);
+  outline-offset: 1px;
+}
+
+.hu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 44px minimum on both, because this is used one-handed on a phone. */
+.hu-post,
+.hu-cancel,
+.hu-edit {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Codex, 5 Sep: white on the accent green fails contrast. --fs-accent-ink is
+   the token the shell already uses for text sitting on the accent. */
+.hu-post {
+  border: 0;
+  background: rgba(var(--fs-accent-rgb), 0.9);
+  color: var(--fs-accent-ink);
+}
+
+.hu-post[disabled] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.hu-cancel {
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.35);
+  background: transparent;
+  color: inherit;
+}
+
+.hu-notice {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* The shell owns what "wrong" looks like. A hand-picked red here would drift
+   from the rest of the Hub the first time that token changes. */
+.hu-notice-error { color: var(--fs-danger); }
+.hu-notice-ok    { color: rgba(var(--fs-accent-rgb), 0.95); }
+
+.hu-notice:empty { display: none; }
+
+.hu-retry {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.35);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+/* ------------------------------------------------------------------- feed */
+
+.hu-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hu-empty {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.hu-day {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.hu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.18);
+  border-radius: 10px;
+}
+
+.hu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hu-who  { font-weight: 700; }
+.hu-when { opacity: 0.7; font-size: 13px; }
+
+.hu-edited {
+  font-size: 12px;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.hu-edit {
+  margin-inline-start: auto;
+  padding: 0 10px;
+  border: 1px solid rgba(var(--fs-accent-rgb), 0.3);
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+
+/* Label above the text rather than beside it: the labels are one word and the
+   text is a sentence, so a two-column layout wastes most of a phone's width. */
+.hu-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hu-line-text {
+  /* Reports are typed in a textarea, so newlines are meaningful. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+@media (min-width: 720px) {
+  .hu-line {
+    flex-direction: row;
+    gap: 10px;
+  }
+  .hu-line-label {
+    flex: 0 0 5.5rem;
+    padding-top: 3px;
+  }
+}

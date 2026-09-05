@@ -698,4 +698,31 @@ export default {
   "assistant.here_designs": "Je bent op {page}. Beschrijf een print en ik laat hem op het kledingstuk zien.",
   "assistant.here_decisions": "Je bent op {page}. Vraag me wat we hebben afgesproken, of leg iets nieuws vast.",
   "assistant.here_any": "Vraag me alles over de werkruimte. Ik leg ook uit wat een knop doet.",
+
+  /* Claude — 2026-09-05: de dagelijkse update. Marco leest deze vaker dan wie
+   * dan ook, dus dit is de versie die telt. Geschreven als een collega die het
+   * even doorgeeft, niet als software. */
+  "updates.done": "Gedaan",
+  "updates.open": "Open",
+  "updates.next": "Volgende",
+  "updates.done_hint": "Wat er echt af is",
+  "updates.open_hint": "Wat er nog ligt of vastzit, en bij wie",
+  "updates.next_hint": "Wat er hierna gebeurt",
+  "updates.post": "Update plaatsen",
+  "updates.posted": "Update geplaatst.",
+  "updates.posted_stale": "Update opgeslagen. De lijst hieronder kon niet worden ververst — laad de pagina opnieuw.",
+  "updates.saved": "Correctie opgeslagen.",
+  "updates.saved_stale": "Correctie opgeslagen. De lijst hieronder kon niet worden ververst — laad de pagina opnieuw.",
+  "updates.err_unconfirmed": "Dit konden we niet bevestigen. Je tekst staat er nog — kijk eerst in de lijst hieronder voordat je het opnieuw plaatst.",
+  "updates.err_already_saved": "Er was al een eerdere versie van deze update opgeslagen. Je nieuwere tekst staat er nog en de opgeslagen update staat nu open — druk op Opslaan om hem toe te passen.",
+  "updates.correct": "Corrigeren",
+  "updates.edited": "bewerkt",
+  "updates.someone": "Iemand",
+  "updates.empty": "Nog geen updates. De eerste mag drie regels zijn.",
+  "updates.err_empty": "Schrijf minstens één regel voordat je plaatst.",
+  "updates.err_long": "Dat is langer dan een update hoort te zijn. Houd elk deel op maximaal 1.000 tekens.",
+  "updates.err_readonly": "Je hebt alleen leesrechten, dus je kunt updates lezen maar niet plaatsen. Vraag Marco of Salman om schrijfrechten.",
+  "updates.err_changed_elsewhere": "Deze update is ergens anders gewijzigd nadat je hem opende. Je tekst staat er nog — laad de pagina opnieuw en pas het daarna aan.",
+  "updates.err_network": "De updates konden nu niet worden geladen. Probeer het opnieuw.",
+  "updates.err_unknown": "Daar ging iets mis. Je tekst staat er nog — probeer het opnieuw en laat het Salman weten als het blijft gebeuren.",
 };
