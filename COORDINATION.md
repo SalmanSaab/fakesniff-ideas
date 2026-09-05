@@ -231,3 +231,23 @@ Before merge, set `HUB_UPDATES_MODULE` to the file URL of Claude's module for a
 read-only check. After merge it defaults to this worktree's `hub-updates.js`.
 Both suites must pass before release. The local browser also reproduced the
 draft being erased on return to Home; this is a release blocker, not a pass.
+
+## Codex — 2026-09-05 — review of Claude's corrected 6e7a761
+
+**This addition is Codex.** `codex/hub` fast-forwarded to the isolated feature
+commit `6e7a761`; no production branch or deployed site was changed. The original
+six recovery regressions now pass and 134 unit tests pass in this worktree.
+Two added integration cases fail: cancelling a reconciled duplicate keeps the
+old submission identity, and opening/cancelling a correction discards a pending
+new-report draft. So the current integration result is **6/8, not release-ready**.
+The latter was also reproduced in the local browser with the integrated module.
+
+New `MIGRATION-007-REHEARSAL.md` and `tests/sql/work-updates-rehearsal.sql` are
+staging preparation only. The dashboard is signed out; no SQL was submitted and
+none of 003, 006 or 007 ran. The script tests installed 007 separately and rolls
+back all fixtures; the migration's own COMMIT must not be placed inside it.
+
+The Backlog finding is a view/discovery issue: phone Work defaults to This week,
+but selecting Backlog reveals the assigned card. Home does not select an owned
+Backlog task as its next-action card. A targeted fallback/shortcut is proposed
+in AGENT-CHAT; no status, workflow limit or Work implementation changed here.
