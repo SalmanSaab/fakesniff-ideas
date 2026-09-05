@@ -3,6 +3,7 @@
 import { createHubAuth, validateHubConfig } from "./hub-auth.js";
 import { createConnectedWorkRepository, HubRepositoryError } from "./hub-work-repository.js";
 import { composeHomeActivity, normalizeHomeChanges } from "./hub-home-activity.js";
+import { createHomeUpdatesLifecycle } from "./hub-home-updates.js";
 import {
   addTranslations,
   currentLanguage,
@@ -161,6 +162,37 @@ const primaryNav = document.querySelector(".primary-nav");
 const navLinks = [...document.querySelectorAll('.nav-link[href^="#"]')];
 let restoreMobileMoreFocus = true;
 
+/* Codex — 2026-09-05: Updates is a Home component, not a self-registering
+   screen. No module import or data request before verified membership. */
+const homeUpdates = createHomeUpdatesLifecycle({
+  loadModule() {
+    const url = new URL("./hub-updates.js", import.meta.url);
+    url.search = new URL(import.meta.url).search;
+    return import(url.href);
+  },
+  getContext() {
+    if (!state.auth || !state.workspace || !state.membership || appShell.hidden
+      || state.user?.id !== state.membership.user_id) return null;
+    return { key: sectionContextKey(), ctx: buildSectionContext() };
+  },
+  getRoots: () => ({ compose: get("home-update-compose"), feed: get("home-update-feed") }),
+  onState(status, ctx) {
+    const panel = get("home-updates-panel");
+    panel.hidden = status === "idle";
+    panel.classList.toggle("is-readonly", ctx?.member.role === "viewer");
+    get("home-update-compose-area").hidden = ctx?.member.role === "viewer";
+    get("home-write-update").hidden = !["member", "admin", "owner"].includes(ctx?.member.role);
+    get("home-read-updates").hidden = ctx?.member.role !== "viewer";
+    const message = get("home-updates-status");
+    const key = status === "loading" ? "home.updates_loading" : status === "error" ? "home.updates_unavailable" : "";
+    message.hidden = !key;
+    if (key) message.dataset.t = key;
+    else delete message.dataset.t;
+    message.textContent = key ? t(key) : "";
+    get("home-updates-retry").hidden = status !== "error";
+  }
+});
+
 function hubLocale() {
   return HUB_LOCALES[currentLanguage()] || HUB_LOCALES.en;
 }
@@ -240,6 +272,7 @@ function sectionContextIsCurrent(generation, userId) {
 
 function buildSectionContext() {
   const generation = state.generation;
+  const contextKey = sectionContextKey();
   const userId = state.membership.user_id;
   const auth = state.auth;
   const config = state.config;
@@ -252,9 +285,9 @@ function buildSectionContext() {
   return Object.freeze({
     restUrl: `${config.supabaseUrl}/rest/v1`,
     async getAccessToken() {
-      if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
+      if (!sectionContextIsCurrent(generation, userId) || contextKey !== sectionContextKey()) throw new Error("The Hub session changed.");
       const token = await auth.getAccessToken(userId);
-      if (!sectionContextIsCurrent(generation, userId)) throw new Error("The Hub session changed.");
+      if (!sectionContextIsCurrent(generation, userId) || contextKey !== sectionContextKey()) throw new Error("The Hub session changed.");
       return token;
     },
     anonKey: config.supabasePublishableKey,
@@ -376,6 +409,7 @@ function activateSection(sectionId, { focus = false } = {}) {
   mobileRefreshButton.hidden = !canRefreshHere;
   if (mobileMoreMenu.open) closeMobileMoreNavigation(false);
   void mountRegisteredSection(normalized);
+  void homeUpdates.sync({ active: normalized === "home", refresh: sectionChanged });
   if (normalized !== "home") {
     disconnectHomeActivityObserver();
   } else if (
@@ -496,6 +530,7 @@ function showAccessDenied() {
 }
 
 function clearWorkspaceState() {
+  homeUpdates.destroy();
   state.refreshSequence += 1;
   state.mutationSequence += 1;
   state.homeActivityRequestSequence += 1;
@@ -1256,6 +1291,9 @@ function renderWorkspace({ focus = false } = {}) {
   appShell.hidden = false;
   accessScreen.hidden = true;
   document.querySelector(".skip-link")?.setAttribute("href", "#main-content");
+  // Reconcile even when a different page is open: a role/account/workspace
+  // change must dispose the old Home component before it can be revisited.
+  void homeUpdates.sync({ active: false });
   activateSection(sectionIdFromHash());
   state.lastRefreshedAt = Date.now();
   setSyncState("shell.loaded_now", false);
@@ -1342,7 +1380,8 @@ async function requestWorkspaceRefresh() {
   state.formBaseline = null;
   state.formBaselineValues = null;
   if (dialog.open) dialog.close();
-  await refreshTasks();
+  const refreshed = await refreshTasks();
+  if (refreshed && state.activeSectionId === "home") void homeUpdates.sync({ active: true, refresh: true });
 }
 
 function refreshAfterReturning() {
@@ -1365,6 +1404,9 @@ function refreshAfterReturning() {
 }
 
 function refreshHomeAfterReturning() {
+  if (document.visibilityState === "visible" && state.activeSectionId === "home") {
+    void homeUpdates.sync({ active: true, refresh: true });
+  }
   const workRefreshOwnsReturn = refreshAfterReturning();
   if (
     !workRefreshOwnsReturn
@@ -1921,6 +1963,7 @@ async function reloadLatestConflict() {
     state.tasks = workspaceData.tasks;
     state.stale = false;
     state.lastRefreshedAt = Date.now();
+    void homeUpdates.sync({ active: state.activeSectionId === "home" });
     const latest = taskById(conflict.id);
     if (!latest) {
       state.conflictDraft = { ...conflict, removed: true };
@@ -2211,6 +2254,7 @@ async function reconcileSession(session, event = "MANUAL") {
   const sameKnownUser = Boolean(incomingUserId && incomingUserId === state.user?.id && state.membership);
   if (sameKnownUser && ["TOKEN_REFRESHED", "SIGNED_IN"].includes(event)) return;
 
+  homeUpdates.destroy();
   const generation = ++state.generation;
   state.refreshSequence += 1;
   state.mutationSequence += 1;
@@ -2518,6 +2562,15 @@ function bindEvents() {
   });
   accessSignOutButton.addEventListener("click", signOut);
   refreshButton.addEventListener("click", requestWorkspaceRefresh);
+  get("home-write-update").addEventListener("click", async () => {
+    if (await homeUpdates.openComposer()) get("home-update-compose-area").scrollIntoView({ block: "start" });
+  });
+  get("home-read-updates").addEventListener("click", () => {
+    get("home-update-feed-title").scrollIntoView({ block: "start" });
+    get("home-update-feed-title").focus({ preventScroll: true });
+  });
+  get("home-updates-retry").addEventListener("click", () => { void homeUpdates.sync({ active: true, refresh: true }); });
+  get("home-updates-refresh").addEventListener("click", () => { void homeUpdates.sync({ active: true, refresh: true }); });
   get("dismiss-app-error").addEventListener("click", hideAppError);
   get("dismiss-hub-notice").addEventListener("click", clearNotice);
   newWorkButton.addEventListener("click", openNewTask);

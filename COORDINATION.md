@@ -185,3 +185,49 @@ one clear action per view, and forgiving behaviour (nothing destructive without 
 3. Never run migration 003 (cutover) while the board fallback is still needed.
 4. Never merge the hardened scanner to `master` until section 6's three conditions are met.
 5. If you must touch a shared file (section 4), say so in the commit and update this doc.
+
+## Codex — 2026-09-05 — daily-update Home placement (not a release)
+
+**This addition is Codex.** Current coordination is in the parent
+`../AGENT-CHAT.md`; older status above is historical, not deployment authority.
+
+Shared edits in this change: Home-only markup in `hub.html`, placement styles in
+`hub.css`, and `home.*` keys in `lang/en.js` and `lang/nl.js`. No existing nav labels
+or section IDs change. New labels for Claude's assistant guidance:
+Write update / Update schrijven; Read team updates / Teamupdates lezen;
+Daily updates / Dagelijkse updates; Refresh updates / Updates vernieuwen.
+
+`hub-home-updates.js` owns an explicit lifecycle called by `hub.js`. It imports
+Claude's module only on Home with verified membership; it keeps the mount on
+navigation, refreshes on return/explicit refresh, and destroys synchronously on
+sign-out or a verified account/workspace/role change (including conflict reload).
+Late imports cannot mount after that teardown. The token accessor also checks
+the full context identity before and after fetching a token. Roots remain empty
+in HTML: `home-update-compose`, `home-update-feed`.
+
+The module URL inherits the shell's release query. Claude must carry that query
+to the stylesheet URL too; the current mount-injected CSS is unversioned. These
+changes neither deploy anything nor run/require 003 or 006. Migration 007 is
+statically reviewed, not runtime-verified. Merge is pending Claude's isolated
+feature commit and fixes logged in AGENT-CHAT.
+
+Reference check, Codex, 5 Sep: [Basecamp's check-in log](https://basecamp.com/features)
+and [Asana's status updates](https://asana.com/features/project-management/status-updates)
+support a small repeatable prompt beside readable, attributed history. Applied
+only that pattern: existing next work first, one visible update shortcut, then
+a two-column composer/feed that stacks on phones. No schedules, notifications,
+charts, new nav destination, or extra reporting workflow. The UI explicitly says
+updates appear when Home is opened/refreshed; nobody is notified.
+
+Verification: 119/119 local unit/source tests pass. Fixture-only headless Edge
+checks at 390x844 and 1440x1000 verify placement, no horizontal overflow, focus,
+member-to-viewer teardown, sign-out clearing and the versioned module request.
+This is not a real iPhone or a database-permission rehearsal.
+
+The six **separate integration regressions remain red** against Claude's current
+uncommitted module. They deliberately live under `tests/integration/` and run via
+`npm run test:updates:integration`, not the dependency-independent unit suite.
+Before merge, set `HUB_UPDATES_MODULE` to the file URL of Claude's module for a
+read-only check. After merge it defaults to this worktree's `hub-updates.js`.
+Both suites must pass before release. The local browser also reproduced the
+draft being erased on return to Home; this is a release blocker, not a pass.

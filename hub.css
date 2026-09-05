@@ -4104,3 +4104,41 @@ a.stat-card .stat-label {
     grid-template-columns: 1fr;
   }
 }
+
+/* Codex — 2026-09-05: Home's daily-update placement. The module owns its
+   form/cards; this is only hierarchy, spacing and responsive containment. */
+.home-update-shortcut { margin-top: 18px; }
+.home-updates-panel { min-width: 0; margin-top: 24px; }
+.home-updates-heading { gap: 16px; flex-wrap: wrap; }
+.home-updates-heading button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+}
+.home-updates-heading button:hover { background: var(--green-dark); }
+.home-updates-heading button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.home-updates-grid {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.3fr);
+  gap: 28px;
+  align-items: start;
+}
+.home-updates-grid > section { min-width: 0; }
+.home-updates-grid h3 { margin: 0 0 12px; font-size: 17px; }
+.home-updates-help { margin: 0 0 18px; color: var(--muted); line-height: 1.55; font-size: 14px; }
+.home-updates-feedback { color: var(--fs-danger); }
+.home-updates-feedback:has(p:not([hidden])) { margin-bottom: 18px; }
+.home-updates-panel.is-readonly .home-updates-grid { grid-template-columns: minmax(0, 1fr); }
+#home-update-compose-area,
+#home-update-feed-title { scroll-margin-top: calc(var(--topbar-height) + var(--safe-top) + 20px); }
+.home-updates-team { padding-inline-start: 28px; border-inline-start: 1px solid var(--line); }
+.home-updates-panel.is-readonly .home-updates-team { padding-inline-start: 0; border-inline-start: 0; }
+
+@media (max-width: 1080px) {
+  .home-updates-grid { grid-template-columns: minmax(0, 1fr); }
+  .home-updates-team { padding-inline-start: 0; border-inline-start: 0; padding-top: 24px; border-top: 1px solid var(--line); }
+  .home-updates-panel.is-readonly .home-updates-team { padding-top: 0; border-top: 0; }
+}
