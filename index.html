@@ -28,7 +28,12 @@
   /* ---------- header ---------- */
   header{position:sticky; top:0; z-index:40; background:rgba(15,15,14,.96);
     backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
-  .bar{display:flex; align-items:center; gap:14px; padding:13px 16px; max-width:1100px; margin:0 auto}
+  /* Claude — 2026-09-11: the row must wrap. It never did, and with three items
+     it got away with it; the Hub link is a fourth and pushed the name and switch
+     off the right edge, clipped its own label and gave the page a horizontal
+     scrollbar. Wrapping is the fix — nothing is hidden or removed. */
+  .bar{display:flex; align-items:center; gap:14px; padding:13px 16px; max-width:1100px; margin:0 auto;
+    flex-wrap:wrap; row-gap:10px}
   .mark{font-family:Georgia,serif; font-style:italic; font-size:21px; line-height:1}
   .mark small{font-style:normal; font-family:inherit; font-size:10px; letter-spacing:.22em;
     text-transform:uppercase; color:var(--mut); display:block; margin-top:3px}
@@ -126,6 +131,7 @@
 
   /* ---------- how it works ---------- */
   #howbtn{background:none; border:1px solid var(--line); color:var(--mut); font-size:11px;
+    white-space:nowrap;
     padding:5px 10px; border-radius:20px; cursor:pointer; margin-left:10px}
   #howbtn:hover{border-color:var(--green); color:var(--green)}
   .how h3{font-size:19px; margin:0 0 4px}
@@ -150,6 +156,13 @@
   .empty{color:var(--mut); text-align:center; padding:50px 20px; font-size:14.5px}
   .err{background:#2a1a17; border:1px solid var(--bad); color:#e8a79e; padding:10px 13px;
     font-size:13px; margin-bottom:14px; border-radius:2px}
+  /* Narrow: the mark and the guide button hold the first row, the Hub link and
+     the name sit on the second. Both rows stay inside the viewport. */
+  @media (max-width:720px){
+    .bar{gap:10px}
+    .hublink{margin-left:0}
+    .me{margin-left:auto}
+  }
   @media (max-width:560px){ .sheet{padding:18px} .sheet .line{font-size:22px} }
 </style>
 </head>

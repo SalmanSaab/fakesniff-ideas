@@ -93,6 +93,29 @@ check("the guide link opens the Hub's Idea Lab", () => {
   assert.ok(href[1].endsWith(SECTION), `guide link ends in the wrong section: ${href[1]}`);
 });
 
+/* Salman's narrow-window screenshot, 11 Sep: the Hub label clipped, the name and
+   switch off the right edge, a horizontal scrollbar. .bar had never wrapped —
+   with three items it got away with it, and the Hub link is a fourth.
+   This pins the mechanism, not the pixels. It cannot prove a layout; only a
+   person looking at it can, which is how this was found. */
+check("the header row is allowed to wrap", () => {
+  const bar = html.match(/\.bar\{[^}]*\}/);
+  assert.ok(bar, ".bar rule is gone");
+  assert.match(bar[0], /flex-wrap\s*:\s*wrap/,
+    ".bar does not wrap, so a fourth control pushes the others off the edge");
+});
+
+check("no header control is hidden or clipped away instead of reflowed", () => {
+  /* Codex: do not conceal with page-wide overflow hiding or remove controls. */
+  const header = html.slice(html.indexOf("/* ---------- header ---------- */"),
+                            html.indexOf("/* ---------- header ---------- */") + 1400);
+  assert.doesNotMatch(header, /overflow\s*:\s*hidden/,
+    "a header rule hides overflow rather than reflowing");
+  for (const id of ['id="howbtn"', 'class="hublink"', 'id="whoami"', 'id="switch"']) {
+    assert.ok(html.includes(id), `${id} was removed rather than made to fit`);
+  }
+});
+
 /* ------------------------------------------------- behaviour, in a fake DOM */
 
 const requests = [];
