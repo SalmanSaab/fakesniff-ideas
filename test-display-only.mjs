@@ -67,9 +67,30 @@ check("browsing, search and copy survive", () => {
   }
 });
 
-check("the Hub is offered for the things this page no longer does", () => {
-  assert.match(html, /fakesniff-hub\/hub\.html#ideas/, "no link to the Hub's Idea Lab");
-  assert.match(html, /class="hublink"/, "the Hub link has no styling hook");
+/* Codex, 11 Sep: this check used to match any occurrence of the Hub URL in the
+   whole file, and it required the wrong route. So it passed while the header
+   still pointed at #ideas — and once the guide gained a correct link, the guide
+   would have concealed a bad header indefinitely. The header and the guide are
+   now asserted separately, each on its own element's href. */
+const SECTION = "#idea-lab";   // hub.html's real section id; anything else routes to Home
+
+check("the header link opens the Hub's Idea Lab", () => {
+  const anchor = html.match(/<a class="hublink"[^>]*>/);
+  assert.ok(anchor, "the header Hub link is gone");
+  const href = anchor[0].match(/href="([^"]+)"/);
+  assert.ok(href, "the header Hub link has no href");
+  assert.ok(href[1].includes("fakesniff-hub/hub.html"), `header points elsewhere: ${href[1]}`);
+  assert.ok(href[1].endsWith(SECTION),
+    `the header link ends in "${href[1].slice(href[1].indexOf("#"))}", not "${SECTION}"; ` +
+    "hub.js returns Home for any hash that is not a real section id");
+});
+
+check("the guide link opens the Hub's Idea Lab", () => {
+  const inGuide = html.slice(html.indexOf("<h3>Where you write</h3>"));
+  assert.ok(inGuide, "the guide no longer says where writing happens");
+  const href = inGuide.match(/href="([^"]*fakesniff-hub[^"]*)"/);
+  assert.ok(href, "the guide offers no link to the Hub");
+  assert.ok(href[1].endsWith(SECTION), `guide link ends in the wrong section: ${href[1]}`);
 });
 
 /* ------------------------------------------------- behaviour, in a fake DOM */
