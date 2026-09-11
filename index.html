@@ -32,7 +32,10 @@
   .mark{font-family:Georgia,serif; font-style:italic; font-size:21px; line-height:1}
   .mark small{font-style:normal; font-family:inherit; font-size:10px; letter-spacing:.22em;
     text-transform:uppercase; color:var(--mut); display:block; margin-top:3px}
-  .me{margin-left:auto; font-size:12px; color:var(--mut); display:flex; align-items:center; gap:8px}
+  .hublink{margin-left:auto; font-size:12px; color:var(--green); text-decoration:none;
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px; white-space:nowrap}
+  .hublink:hover{border-color:var(--green)}
+  .me{margin-left:12px; font-size:12px; color:var(--mut); display:flex; align-items:center; gap:8px}
   .me b{color:var(--ink); font-weight:600}
   .me button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:11px;
     text-decoration:underline; padding:0}
@@ -83,6 +86,10 @@
   .shirtbox span{font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:var(--mut);
     display:block; margin-top:7px}
   .setline{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+  .setline span{background:transparent; border:1px solid var(--line); color:var(--mut);
+    border-radius:999px; padding:4px 12px; font-size:12px}
+  .setline span.on{border-color:var(--green); color:var(--green)}
+  .setline.readonly{opacity:.85}
   .setline button{background:transparent; border:1px solid var(--line); color:var(--mut);
     padding:8px 13px; font-size:12.5px; cursor:pointer; border-radius:2px}
   .setline button:hover{border-color:var(--ink); color:var(--ink)}
@@ -107,9 +114,6 @@
   .act span{float:right; font-size:11px}
 
   /* ---------- add ---------- */
-  #add{position:fixed; right:18px; bottom:18px; z-index:45; background:var(--green); color:#0f0f0e;
-    border:none; width:54px; height:54px; border-radius:50%; font-size:28px; cursor:pointer;
-    box-shadow:0 6px 20px rgba(0,0,0,.45); line-height:1}
   form.new{display:grid; gap:11px; margin-top:6px}
   form.new input, form.new textarea, form.new select{
     background:#0f0f0e; border:1px solid var(--line); color:var(--ink); padding:11px 12px;
@@ -165,6 +169,7 @@
   <div class="bar">
     <div class="mark">fakesniff.<small>ideas</small></div>
     <button id="howbtn">how this works</button>
+    <a class="hublink" href="https://salmansaab.github.io/fakesniff-hub/hub.html#ideas">add or edit in the Hub &rsaquo;</a>
     <div class="me"><span>you're <b id="whoami"></b></span><button id="switch">switch</button></div>
   </div>
   <nav>
@@ -193,7 +198,6 @@
   </section>
 </main>
 
-<button id="add" title="new idea">+</button>
 
 <div id="detail"><div class="sheet" id="sheet"></div></div>
 
@@ -265,11 +269,6 @@ async function load(){
     document.getElementById("err").innerHTML = "";
     render();
   }catch(e){ showErr("could not reach the database. " + e.message.slice(0,120)); }
-}
-
-async function log(what, idea_id){
-  try{ await api("activity", {method:"POST", body:JSON.stringify([{who:me, what, idea_id}])}); }
-  catch(e){}
 }
 
 /* ---------------- shirt preview ---------------- */
@@ -393,12 +392,12 @@ function openIdea(id){
     ${i.sparked_by?`<div class="src">sparked by: ${esc(i.sparked_by)}
       ${i.source_url?`<br><a href="${esc(i.source_url)}" target="_blank" rel="noopener">${esc(i.source_url)}</a>`:""}</div>`:""}
     <div class="lbl">status</div>
-    <div class="setline" id="setstatus">
-      ${STATUSES.map(s=>`<button data-v="${s}" class="${i.status===s?"on":""}">${s}</button>`).join("")}
+    <div class="setline readonly">
+      ${STATUSES.map(s=>`<span class="${i.status===s?"on":""}">${s}</span>`).join("")}
     </div>
     <div class="lbl">risk</div>
-    <div class="setline" id="setrisk">
-      ${["clean","check","avoid"].map(r=>`<button data-v="${r}" class="${i.risk===r?"on":""}">${r}</button>`).join("")}
+    <div class="setline readonly">
+      ${["clean","check","avoid"].map(r=>`<span class="${i.risk===r?"on":""}">${r}</span>`).join("")}
     </div>
     <div class="src" style="margin-top:18px">
       added by ${esc(i.added_by||"—")}${i.updated_by?` · last touched by ${esc(i.updated_by)}`:""}
@@ -410,23 +409,8 @@ function openIdea(id){
   drawShirt(document.getElementById("sv-c"), i.line, sub, "cream");
 
   sheet.querySelector(".close").onclick = closeDetail;
-  sheet.querySelectorAll("#setstatus button").forEach(b=> b.onclick = async ()=>{
-    await update(i.id, {status:b.dataset.v, updated_by:me});
-    log(`marked "${i.line.slice(0,40)}" as ${b.dataset.v}`, i.id);
-    closeDetail(); await load();
-  });
-  sheet.querySelectorAll("#setrisk button").forEach(b=> b.onclick = async ()=>{
-    await update(i.id, {risk:b.dataset.v, updated_by:me});
-    log(`flagged "${i.line.slice(0,40)}" as ${b.dataset.v}`, i.id);
-    closeDetail(); await load();
-  });
 }
 function closeDetail(){ document.getElementById("detail").classList.remove("open"); }
-
-async function update(id, patch){
-  try{ await api(`ideas?id=eq.${id}`, {method:"PATCH", body:JSON.stringify(patch)}); }
-  catch(e){ showErr("could not save. " + e.message.slice(0,100)); }
-}
 
 function renderTriggers(){
   const el = document.getElementById("triggers");
@@ -453,10 +437,8 @@ function renderTriggers(){
       </div>
       <div class="btns">
         <button class="copyai" data-ai="${t.id}">copy for AI</button>
-        <button data-mk="${t.id}">write it myself</button>
       </div>
     </div>`).join("") || `<div class="empty">${tQuery ? "nothing matches \""+esc(tQuery)+"\"" : "nothing collected yet"}</div>`;
-  el.querySelectorAll("[data-mk]").forEach(b=> b.onclick=()=> newIdea(+b.dataset.mk));
   el.querySelectorAll("[data-ai]").forEach(b=> b.onclick=()=> copyForAI(+b.dataset.ai, b));
 }
 
@@ -466,44 +448,6 @@ function renderActivity(){
     <div class="act"><b>${esc(a.who)}</b> ${esc(a.what)}
       <span>${new Date(a.at).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>
   `).join("") : `<div class="empty">nothing yet</div>`;
-}
-
-/* ---------------- new idea ---------------- */
-function newIdea(triggerId){
-  const t = triggerId ? triggers.find(x=>x.id===triggerId) : null;
-  const sheet = document.getElementById("sheet");
-  sheet.innerHTML = `
-    <button class="close">&times;</button>
-    <div class="line" style="font-size:20px">new idea</div>
-    ${t?`<div class="src" style="margin-top:10px">from: ${esc(t.title)}</div>`:""}
-    <form class="new" id="nf">
-      <input name="line" placeholder="the line that goes on the shirt" required autocomplete="off">
-      <textarea name="concept" placeholder="what you'd see, one sentence"></textarea>
-      <div class="row">
-        <select name="category">${CATS.map(c=>`<option ${t&&t.category===c?"selected":""}>${c}</option>`).join("")}</select>
-        <select name="risk"><option>clean</option><option>check</option><option>avoid</option></select>
-      </div>
-      <button type="submit">save</button>
-    </form>`;
-  document.getElementById("detail").classList.add("open");
-  sheet.querySelector(".close").onclick = closeDetail;
-  sheet.querySelector("#nf").onsubmit = async ev=>{
-    ev.preventDefault();
-    const f = new FormData(ev.target);
-    const row = {
-      line:f.get("line"), concept:f.get("concept")||"",
-      category:f.get("category"), risk:f.get("risk"), status:"new",
-      added_by:me,
-      sparked_by: t? `${t.source}: ${t.title.slice(0,70)}` : "",
-      source_url: t? (t.url||"") : ""
-    };
-    try{
-      await api("ideas", {method:"POST", body:JSON.stringify([row])});
-      if(t) await api(`triggers?id=eq.${t.id}`, {method:"PATCH", body:JSON.stringify({used:true})});
-      log(`added "${row.line.slice(0,40)}"`);
-      closeDetail(); await load();
-    }catch(e){ showErr("could not save. " + e.message.slice(0,100)); }
-  };
 }
 
 /* ---------------- copy for AI ---------------- */
@@ -574,7 +518,6 @@ document.querySelectorAll("nav button").forEach(b=> b.onclick=()=>{
   ["ideas","triggers","activity"].forEach(t=>
     document.getElementById("tab-"+t).hidden = (t!==b.dataset.tab));
 });
-document.getElementById("add").onclick = ()=> newIdea(null);
 document.getElementById("detail").onclick = e=>{ if(e.target.id==="detail") closeDetail(); };
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeDetail(); });
 document.getElementById("switch").onclick = ()=>{
