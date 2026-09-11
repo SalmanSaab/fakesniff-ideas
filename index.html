@@ -259,6 +259,11 @@ async function api(path, opts={}) {
 }
 function showErr(m){ document.getElementById("err").innerHTML = `<div class="err">${m}</div>`; }
 
+/* Legacy rows carry triggers.used; rows linked from the Hub carry
+   ideas.trigger_id instead. Either counts as used. */
+let linkedTriggerIds = new Set();
+const isUsed = (t) => t.used === true || linkedTriggerIds.has(t.id);
+
 async function load(){
   try{
     [ideas, triggers, activity] = await Promise.all([
@@ -266,6 +271,16 @@ async function load(){
       api("triggers?select=*&order=id.desc&limit=400"),
       api("activity?select=*&order=at.desc&limit=60"),
     ]);
+    /* Claude — 2026-09-11: one read-side predicate for "used".
+       The Hub records the link on the idea as `trigger_id` and deliberately
+       never sets `triggers.used`, because authenticated members have no write
+       on scanner-owned rows. Now that every idea is created there, a trigger
+       somebody already used would read as unused here forever, and the
+       "not used" count would keep offering material that is taken.
+       Used therefore means the legacy flag OR an idea pointing at it. Both are
+       already on screen; this reads them and writes nothing. */
+    linkedTriggerIds = new Set(
+      (ideas || []).map(i => i.trigger_id).filter(v => v !== null && v !== undefined));
     document.getElementById("err").innerHTML = "";
     render();
   }catch(e){ showErr("could not reach the database. " + e.message.slice(0,120)); }
@@ -335,7 +350,7 @@ function drawShirt(cv, line, sub, mode){
 /* ---------------- render ---------------- */
 function render(){
   document.getElementById("c-ideas").textContent = ideas.length;
-  document.getElementById("c-trig").textContent  = triggers.filter(t=>!t.used).length;
+  document.getElementById("c-trig").textContent  = triggers.filter(t=>!isUsed(t)).length;
   renderFilters(); renderIdeas(); renderTriggers(); renderActivity();
 }
 
@@ -415,13 +430,13 @@ function closeDetail(){ document.getElementById("detail").classList.remove("open
 function renderTriggers(){
   const el = document.getElementById("triggers");
   const tf = document.getElementById("tfilters");
-  const unused = triggers.filter(t=>!t.used).length;
+  const unused = triggers.filter(t=>!isUsed(t)).length;
   tf.innerHTML =
     `<button class="chip ${fTrigUsed==="unused"?"on":""}" data-t="unused">not used ${unused}</button>
      <button class="chip ${fTrigUsed==="all"?"on":""}" data-t="all">everything ${triggers.length}</button>`;
   tf.querySelectorAll("[data-t]").forEach(b=> b.onclick=()=>{ fTrigUsed=b.dataset.t; render(); });
 
-  let list = fTrigUsed==="unused" ? triggers.filter(t=>!t.used) : triggers;
+  let list = fTrigUsed==="unused" ? triggers.filter(t=>!isUsed(t)) : triggers;
   if(tQuery){
     const q = tQuery.toLowerCase();
     list = list.filter(t=>
@@ -430,7 +445,7 @@ function renderTriggers(){
       (t.category||"").toLowerCase().includes(q));
   }
   el.innerHTML = list.slice(0,150).map(t=>`
-    <div class="trig ${t.used?"used":""}">
+    <div class="trig ${isUsed(t)?"used":""}">
       <div class="t">${esc(t.title)}
         <div class="s">${esc(t.source)} · ${t.category}
           ${t.url?` · <a href="${esc(t.url)}" target="_blank" rel="noopener">open</a>`:""}</div>
@@ -485,15 +500,20 @@ function showHow(){
          culture and the internet. That is the raw material. We turn the good bits into lines
          for shirts. It collects everything and judges nothing, we do the filtering.</p>
 
-      <h3>What to do</h3>
+      <h3>What to do here</h3>
       <ol>
         <li><b>Raw material</b> — have a scroll. Something will spark an idea.</li>
         <li><b>Copy for AI</b> — one click puts the trigger and our house rules on your
-            clipboard. Paste it into ChatGPT or whatever you use and it writes lines in our voice.
-            Paste the good ones back in here.</li>
-        <li><b>Ideas</b> — open one to see it on an actual shirt, then mark it
-            interesting, develop, or rejected.</li>
+            clipboard. Paste it into ChatGPT or whatever you use and it writes lines in our voice.</li>
+        <li><b>Ideas</b> — open one to see it on an actual shirt, with its status and risk.</li>
       </ol>
+
+      <h3>Where you write</h3>
+      <p>This page shows and copies. <b>Adding an idea, or changing a status or risk, happens in
+         the Hub</b>, where you sign in and the work is attributed to you.
+         <a href="https://salmansaab.github.io/fakesniff-hub/hub.html#idea-lab">Open the Hub &rsaquo;</a></p>
+      <p>This page has no sign-in, so it cannot tell one person from another. Anything written
+         from here would be written by nobody in particular, which is why it only reads.</p>
       <p><b>Nothing gets deleted.</b> Rejected stays rejected, so the same idea does not come back
          round in three weeks.</p>
 

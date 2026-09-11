@@ -31,7 +31,11 @@ function check(name, fn) {
 /* ---------------------------------------------------- static guarantees */
 
 check("no write verb reaches the database layer", () => {
-  const writes = [...html.matchAll(/method\s*:\s*"(POST|PATCH|PUT|DELETE)"/g)].map((m) => m[1]);
+  /* Both quote styles. Codex, 11 Sep: a dormant helper written as method:'POST'
+     passed this check while the identical double-quoted literal failed it.
+     This is still a text search and cannot see a verb built at runtime — the
+     recorded-fetch assertions below are what cover that. */
+  const writes = [...html.matchAll(/method\s*:\s*["'`](POST|PATCH|PUT|DELETE)["'`]/g)].map((m) => m[1]);
   assert.deepEqual(writes, [], `the page still issues: ${writes.join(", ")}`);
 });
 
@@ -132,11 +136,19 @@ const IDEAS = [
     sparked_by: "", source_url: "", created_at: "2026-09-01T10:00:00Z" },
   { id: 2, line: "I WALK THE LINE", concept: "", category: "statement",
     risk: "check", status: "shortlist", added_by: "Emiel", updated_by: "Marco",
-    sparked_by: "", source_url: "", created_at: "2026-09-02T10:00:00Z" },
+    sparked_by: "", source_url: "", created_at: "2026-09-02T10:00:00Z",
+    trigger_id: 9 },                       // the Hub's way of recording the link
 ];
 const TRIGGERS = [
+  /* Linked from the Hub, flag never set — the case that would read as unused. */
   { id: 9, title: "a headline", source: "somewhere", url: "https://example.test",
     category: "statement", used: false, created_at: "2026-09-03T10:00:00Z" },
+  /* Legacy: flagged by the old board, no idea points at it. */
+  { id: 10, title: "an older headline", source: "somewhere", url: "",
+    category: "statement", used: true, created_at: "2026-08-03T10:00:00Z" },
+  /* Genuinely untouched. */
+  { id: 11, title: "a fresh headline", source: "somewhere", url: "",
+    category: "statement", used: false, created_at: "2026-09-04T10:00:00Z" },
 ];
 
 globalThis.fetch = async (url, opts = {}) => {
@@ -157,10 +169,11 @@ const scriptStart = html.indexOf(">", open) + 1;
 const script = html.slice(scriptStart, html.lastIndexOf("</script>"));
 if (open === -1 || !script.trim()) { console.log("  FAIL  could not extract the page script"); process.exit(1); }
 globalThis.localStorage.setItem("fs_who", "Salman");   // past the who-are-you gate
+let pageError = null;
 try {
   await import("data:text/javascript," + encodeURIComponent(script));
 } catch (e) {
-  console.log(`  NOTE  the page threw while running: ${e.message}`);
+  pageError = e;
 }
 await new Promise((r) => setTimeout(r, 60));
 
@@ -185,11 +198,43 @@ check("it issued no write of any kind", () => {
 
 /* Fetching is not showing. This is the one behavioural check that the board
    still does its job after the removal. */
+/* Codex, 11 Sep: this file used to print a startup exception as a NOTE and carry
+   on. A candidate with a deliberate throw after startup still scored 9 passes and
+   exit 0 — the page was broken and the suite said it was fine. An exception is a
+   failure. */
+check("the page ran without throwing", () => {
+  assert.equal(pageError, null,
+    `the page threw during startup: ${pageError && pageError.message}`);
+});
+
 check("the fetched ideas actually reach the page", () => {
   const painted = [...registry.values()].map((n) => n.innerHTML).join("");
   assert.ok(painted.includes("NOTHING IS REAL"),
     "an idea was fetched but never rendered; the board would look empty");
   assert.ok(painted.includes("I WALK THE LINE"), "the second idea never rendered");
+});
+
+/* Codex, 11 Sep: the Hub records the link as ideas.trigger_id and never sets
+   triggers.used. With creation moved there, material somebody already used would
+   keep showing as available here. Both branches are exercised: trigger 9 is
+   linked with the flag false, trigger 10 carries the legacy flag with no link,
+   trigger 11 is neither. */
+check("material used from the Hub stops being offered as available", () => {
+  /* The board opens on "not used", so this is the view that matters: if the
+     predicate still read triggers.used alone, trigger 9 — linked from the Hub
+     with the flag never set — would sit here as free material. */
+  const shown = (registry.get("triggers") || { innerHTML: "" }).innerHTML;
+  assert.ok(shown, "the trigger list never rendered");
+  assert.ok(!shown.includes("a headline"),
+    "a trigger linked from the Hub is still offered as not used");
+  assert.ok(!shown.includes("an older headline"),
+    "a trigger with the legacy used flag is still offered as not used");
+  assert.ok(shown.includes("a fresh headline"),
+    "an untouched trigger vanished from the list");
+
+  const count = registry.get("c-trig");
+  assert.equal(String(count && count.textContent), "1",
+    `the "not used" count is ${count && count.textContent}; only trigger 11 is free`);
 });
 
 console.log(`\n  ${requests.length} requests, ` +
