@@ -116,6 +116,32 @@ check("no header control is hidden or clipped away instead of reflowed", () => {
   }
 });
 
+/* The other anonymous surface, removed 11 September.
+ *
+ * ilab-standalone.html was a dev harness — its own header said "not part of the
+ * hub" — that nobody retired. It stayed publicly served, importing a copy of
+ * hub-idea-lab.js five kilobytes behind the Hub's, mounted with no context so
+ * its anonymous fallback ran: POST ideas, PATCH ideas, PATCH triggers.used and
+ * POST activity.
+ *
+ * Codex found it while reviewing the revoke, after I had written that no
+ * anonymous ideas caller remained. It was the counterexample to my own claim.
+ *
+ * The revoke made those buttons fail. This removes the page that offers them,
+ * which is the difference between a broken control and no control.
+ */
+check("the standalone harness and its stale module are gone", () => {
+  for (const gone of ["ilab-standalone.html", "hub-idea-lab.js"]) {
+    assert.ok(!fs.existsSync(path.join(here, gone)),
+      `${gone} is back; it is a publicly served anonymous write surface`);
+  }
+});
+
+check("the board does not depend on either of them", () => {
+  assert.ok(!html.includes("hub-idea-lab"), "index.html imports the removed module");
+  assert.ok(!html.includes("ilab-standalone"), "index.html links to the removed harness");
+});
+
 /* ------------------------------------------------- behaviour, in a fake DOM */
 
 const requests = [];

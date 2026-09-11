@@ -57,7 +57,10 @@ unless all three of us explicitly decide it.
 - `scan_cloud.py`, `.github/workflows/scan.yml`
 
 ### Claude owns
-- `hub-idea-lab.js` (Idea Lab module), `ilab-standalone.html` (its dev harness)
+- ~~`hub-idea-lab.js`, `ilab-standalone.html`~~ — **both removed from this repo on
+  11 September.** The harness was publicly served and still offered four anonymous
+  write paths through a copy of the module five kilobytes behind the Hub's. The Idea
+  Lab module lives in the Hub repo and only there.
 - `index.html` (legacy public board — the two-week fallback). **Note:** Codex made good XSS
   hardening edits to `index.html` (uncommitted). Commit those onto `codex/hub`; Claude will pull
   them into `claude/idea-lab` and own `index.html` from then on. After that Codex stops touching it.
